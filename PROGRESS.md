@@ -42,10 +42,10 @@
 - [x] **1A.2** `.golangci.yml` with strict config — 2026-04-10
 - [x] **1A.3** `backend/.env.example` with all required vars documented — 2026-04-10
 - [x] **1A.4** Config loader (`internal/config/`) — env vars via caarlos0/env — 2026-04-10
-- [ ] **1A.5** Postgres setup — migration 0001 (accounts, refresh_tokens, email_verification_tokens)
-- [ ] **1A.6** sqlc config + initial queries for accounts
-- [ ] **1A.7** HTTP server with chi router + middleware chain (RequestID, Logger, Recoverer, Timeout, SecureHeaders, CORS)
-- [ ] **1A.8** `/health` and `/ready` endpoints
+- [x] **1A.5** Postgres setup — migration 0001 (accounts, refresh_tokens, email_verification_tokens) — 2026-04-10
+- [x] **1A.6** sqlc config + initial queries for accounts — 2026-04-10
+- [x] **1A.7** HTTP server with chi router + middleware chain (RequestID, Logger, Recoverer, Timeout, SecureHeaders, CORS) — 2026-04-10
+- [x] **1A.8** `/health` and `/ready` endpoints — 2026-04-10
 - [ ] **1A.9** Account creation (`POST /v1/accounts`) with double-hashing
 - [ ] **1A.10** Email verification (`GET /v1/accounts/verify`)
 - [ ] **1A.11** Login (`POST /v1/sessions`) — Paseto v4, constant-time, dummy hash for non-existent users
@@ -318,3 +318,4 @@
 | 2026-04-10 | 0.7–0.10 | Moved 5 spec docs to docs/, updated CLAUDE.md+PROGRESS.md refs, bootstrap.sh, doctor.sh, run-backend-local.sh. 128/128 tests pass. |
 | 2026-04-10 | 0.11–0.13 | run-phone.sh (all flags + ADB), release.sh (semver bump, changelog, dry-run), rollback.sh (android/backend/ota/all). **PHASE 0 COMPLETE.** 189/189 tests pass. |
 | 2026-04-10 | 1A.1–1A.4 | Go module (github.com/nikhil/scanvault-api), all internal/ dirs, .golangci.yml (strict, errcheck+gosec+revive+gofumpt+...), .env.example (all 14 vars documented), config loader (caarlos0/env, required vars, environment validation, Argon2 param validation). 19/19 tests pass. |
+| 2026-04-10 | 1A.5–1A.8 | GCC installed (MSYS2/MinGW-w64 15.2), go test -race now works. Migration 0001 (accounts+refresh_tokens+email_verification_tokens, CITEXT, CHECK, cascade). sqlc.yaml + 13 SQL queries generated. chi server (RequestID, echoRequestID, RealIP, slog logger, Recoverer, Timeout 60s, SecureHeaders, CORS). /health 200+JSON, /ready checks Postgres 200/503. 6 migration integration tests + 12 server tests, all pass with -race. |
