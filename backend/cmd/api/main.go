@@ -10,13 +10,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nikhil/scanvault-api/internal/accounts"
 	"github.com/nikhil/scanvault-api/internal/config"
 	"github.com/nikhil/scanvault-api/internal/server"
 )
 
 func main() {
 	// -------------------------------------------------------------------------
-	// Logger — JSON structured logging, no secrets ever emitted
+	// Logger — JSON structured, no secrets ever emitted
 	// -------------------------------------------------------------------------
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -24,13 +25,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	// -------------------------------------------------------------------------
-	// Config — crash loudly on misconfiguration so the process never starts silently broken
+	// Config — crash loudly on misconfiguration
 	// -------------------------------------------------------------------------
 	cfg := config.MustLoad()
 	logger.Info("config loaded", slog.String("env", cfg.Environment), slog.String("port", cfg.ServerPort))
 
 	// -------------------------------------------------------------------------
-	// Database — pgxpool with a 10-second connection timeout
+	// Database — pgxpool, 10-second connection timeout at startup
 	// -------------------------------------------------------------------------
 	ctx := context.Background()
 	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -49,12 +50,19 @@ func main() {
 	logger.Info("database connected")
 
 	// -------------------------------------------------------------------------
+	// Services
+	// -------------------------------------------------------------------------
+	accountsSvc, err := accounts.New(pool, cfg, logger)
+	if err != nil {
+		logger.Error("failed to initialize accounts service", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// -------------------------------------------------------------------------
 	// Server
 	// -------------------------------------------------------------------------
-	srv := server.New(cfg, pool, logger)
+	srv := server.New(cfg, pool, logger, accountsSvc)
 
-	// Graceful shutdown: wait for SIGTERM or SIGINT, then give in-flight
-	// requests up to 30 seconds to complete before forcibly closing.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 
@@ -75,6 +83,5 @@ func main() {
 		logger.Error("shutdown error", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-
 	logger.Info("server stopped cleanly")
 }

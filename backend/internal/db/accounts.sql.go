@@ -91,6 +91,34 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account,
 	return i, err
 }
 
+const getAccountByEmailIfFresh = `-- name: GetAccountByEmailIfFresh :one
+SELECT id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at FROM accounts
+WHERE email = $1
+  AND created_at > NOW() - INTERVAL '1 minute'
+LIMIT 1
+`
+
+// Returns the account only if it was created within the last 1 minute (DB-side check).
+func (q *Queries) GetAccountByEmailIfFresh(ctx context.Context, email string) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByEmailIfFresh, email)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Email,
+		&i.EmailVerified,
+		&i.AuthHash,
+		&i.AuthParams,
+		&i.WrappedKey,
+		&i.KdfSalt,
+		&i.KdfParams,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAccountByID = `-- name: GetAccountByID :one
 SELECT id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at FROM accounts
 WHERE id = $1
@@ -145,9 +173,9 @@ func (q *Queries) GetAccountByUUID(ctx context.Context, uuid pgtype.UUID) (Accou
 
 const updateAccountAuthHash = `-- name: UpdateAccountAuthHash :one
 UPDATE accounts
-SET auth_hash = $2,
+SET auth_hash   = $2,
     auth_params = $3,
-    updated_at = NOW()
+    updated_at  = NOW()
 WHERE id = $1
 RETURNING id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at
 `
@@ -208,7 +236,7 @@ func (q *Queries) UpdateAccountEmailVerified(ctx context.Context, id int64) (Acc
 
 const updateAccountStatus = `-- name: UpdateAccountStatus :one
 UPDATE accounts
-SET status = $2,
+SET status     = $2,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at

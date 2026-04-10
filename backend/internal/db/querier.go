@@ -17,6 +17,8 @@ type Querier interface {
 	DeleteAccount(ctx context.Context, id int64) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	GetAccountByEmail(ctx context.Context, email string) (Account, error)
+	// Returns the account only if it was created within the last 1 minute (DB-side check).
+	GetAccountByEmailIfFresh(ctx context.Context, email string) (Account, error)
 	GetAccountByID(ctx context.Context, id int64) (Account, error)
 	GetAccountByUUID(ctx context.Context, uuid pgtype.UUID) (Account, error)
 	GetEmailVerificationTokenByHash(ctx context.Context, tokenHash []byte) (EmailVerificationToken, error)

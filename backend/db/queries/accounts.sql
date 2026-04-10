@@ -30,18 +30,25 @@ RETURNING *;
 
 -- name: UpdateAccountAuthHash :one
 UPDATE accounts
-SET auth_hash = $2,
+SET auth_hash   = $2,
     auth_params = $3,
-    updated_at = NOW()
+    updated_at  = NOW()
 WHERE id = $1
 RETURNING *;
 
 -- name: UpdateAccountStatus :one
 UPDATE accounts
-SET status = $2,
+SET status     = $2,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
 -- name: DeleteAccount :exec
 DELETE FROM accounts WHERE id = $1;
+
+-- name: GetAccountByEmailIfFresh :one
+-- Returns the account only if it was created within the last 1 minute (DB-side check).
+SELECT * FROM accounts
+WHERE email = $1
+  AND created_at > NOW() - INTERVAL '1 minute'
+LIMIT 1;

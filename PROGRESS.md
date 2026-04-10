@@ -46,10 +46,10 @@
 - [x] **1A.6** sqlc config + initial queries for accounts â€” 2026-04-10
 - [x] **1A.7** HTTP server with chi router + middleware chain (RequestID, Logger, Recoverer, Timeout, SecureHeaders, CORS) â€” 2026-04-10
 - [x] **1A.8** `/health` and `/ready` endpoints â€” 2026-04-10
-- [ ] **1A.9** Account creation (`POST /v1/accounts`) with double-hashing
-- [ ] **1A.10** Email verification (`GET /v1/accounts/verify`)
-- [ ] **1A.11** Login (`POST /v1/sessions`) â€” Paseto v4, constant-time, dummy hash for non-existent users
-- [ ] **1A.12** Token refresh (`POST /v1/sessions/refresh`) with rotation + replay detection
+- [x] **1A.9** Account creation (`POST /v1/accounts`) with double-hashing — 2026-04-10
+- [x] **1A.10** Email verification (`GET /v1/accounts/verify`) — 2026-04-10
+- [x] **1A.11** Login (`POST /v1/sessions`) â€” Paseto v4, constant-time, dummy hash for non-existent users
+- [x] **1A.12** Token refresh (`POST /v1/sessions/refresh`) with rotation + replay detection — 2026-04-10
 - [ ] **1A.13** Logout (`DELETE /v1/sessions`)
 - [ ] **1A.14** Get account (`GET /v1/accounts/me`)
 - [ ] **1A.15** Change password (`POST /v1/accounts/me/password`)

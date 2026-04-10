@@ -14,21 +14,28 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nikhil/scanvault-api/internal/accounts"
 	"github.com/nikhil/scanvault-api/internal/config"
 )
 
 // Server holds the HTTP server and its dependencies.
 type Server struct {
-	httpServer *http.Server
-	router     http.Handler
-	cfg        *config.Config
-	db         *pgxpool.Pool
-	logger     *slog.Logger
+	httpServer  *http.Server
+	router      http.Handler
+	cfg         *config.Config
+	db          *pgxpool.Pool
+	logger      *slog.Logger
+	accountsSvc *accounts.Service
 }
 
 // New constructs a Server with the full middleware chain and routes wired up.
-func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger) *Server {
-	s := &Server{cfg: cfg, db: db, logger: logger}
+// accountsSvc may be nil (e.g. in tests that don't need auth routes).
+func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger, accountsSvc ...*accounts.Service) *Server {
+	var svc *accounts.Service
+	if len(accountsSvc) > 0 {
+		svc = accountsSvc[0]
+	}
+	s := &Server{cfg: cfg, db: db, logger: logger, accountsSvc: svc}
 
 	r := chi.NewRouter()
 
@@ -50,9 +57,15 @@ func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger) *Server {
 	r.Get("/health", s.handleHealth)
 	r.Get("/ready", s.handleReady)
 
-	// v1 API (populated in later tasks)
+	// v1 API
 	r.Route("/v1", func(r chi.Router) {
-		// placeholder — filled in by 1A.9+
+		if s.accountsSvc != nil {
+			h := accounts.NewHandler(s.accountsSvc)
+			r.Post("/accounts", h.HandleCreateAccount)
+			r.Get("/accounts/verify", h.HandleVerifyEmail)
+			r.Post("/sessions", h.HandleLogin)
+			r.Post("/sessions/refresh", h.HandleRefresh)
+		}
 	})
 
 	s.router = r
