@@ -1,0 +1,39 @@
+# =============================================================================
+# ScanVault — Pre-commit hooks
+# Install: pip install pre-commit && pre-commit install --hook-type commit-msg
+# =============================================================================
+
+default_install_hook_types:
+  - commit-msg
+  - pre-commit
+
+repos:
+  # ---------------------------------------------------------------------------
+  # Commitlint — enforce conventional commit format
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.18.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        additional_dependencies:
+          - '@commitlint/config-conventional'
+
+  # ---------------------------------------------------------------------------
+  # General file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']

@@ -1,0 +1,109 @@
+name: Intelligence CI
+
+on:
+  pull_request:
+    paths: ['intelligence/**', '.github/workflows/intelligence-ci.yml']
+  push:
+    branches: [main]
+    paths: ['intelligence/**']
+
+concurrency:
+  group: intelligence-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('intelligence/pyproject.toml') }}
+
+      - name: Install dependencies
+        run: |
+          cd intelligence
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: |
+          cd intelligence
+          ruff check src/ tests/
+
+      - name: Ruff format check
+        run: |
+          cd intelligence
+          ruff format --check src/ tests/
+
+      - name: Pyright type check
+        run: |
+          cd intelligence
+          pyright src/
+
+      - name: Run tests
+        env:
+          INTEL_REDIS_URL: redis://localhost:6379/0
+          INTEL_DEBUG: "true"
+        run: |
+          cd intelligence
+          pytest tests/ -v --tb=short --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-test-results
+          path: intelligence/test-results.xml
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: |
+          cd intelligence
+          docker build -f docker/Dockerfile -t scanvault-intelligence:test .
+
+      - name: Build Worker image
+        run: |
+          cd intelligence
+          docker build -f docker/Dockerfile.worker -t scanvault-intelligence-worker:test .
+
+      - name: Verify API container starts
+        run: |
+          docker run -d --name test-api -p 8100:8100 \
+            -e INTEL_DEBUG=true \
+            -e INTEL_REDIS_URL=redis://host.docker.internal:6379/0 \
+            scanvault-intelligence:test
+          sleep 5
+          docker logs test-api
+          docker stop test-api

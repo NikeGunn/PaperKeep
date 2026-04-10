@@ -1,0 +1,113 @@
+# =============================================================================
+# ScanVault — Root .gitignore
+# Covers: Android, Go, Python, IDE, Secrets, OS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Android
+# -----------------------------------------------------------------------------
+android/build/
+android/**/build/
+android/.gradle/
+android/**/.gradle/
+*.apk
+*.aab
+*.ap_
+android/local.properties
+android/**/*.iml
+android/captures/
+android/.externalNativeBuild/
+android/**/.externalNativeBuild/
+android/.cxx/
+android/**/.cxx/
+
+# -----------------------------------------------------------------------------
+# Go
+# -----------------------------------------------------------------------------
+backend/bin/
+backend/vendor/
+*.test
+*.out
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.venv/
+venv/
+env/
+.env.local
+*.egg-info/
+dist/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+intelligence/models/*.bin
+intelligence/models/*.pt
+intelligence/models/*.onnx
+intelligence/models/*.tflite
+htmlcov/
+.coverage
+coverage.xml
+
+# -----------------------------------------------------------------------------
+# IDE
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.ijwb/
+.clwb/
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------------------------------
+# Secrets & Credentials
+# -----------------------------------------------------------------------------
+.env
+*.env
+*.jks
+*.keystore
+play-service-account.json
+google-services.json
+GoogleService-Info.plist
+secrets/
+*.p12
+*.pem
+*.key
+service-account*.json
+
+# -----------------------------------------------------------------------------
+# OS
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# -----------------------------------------------------------------------------
+# Gradle wrapper jars (not needed if using wrapper in repo)
+# -----------------------------------------------------------------------------
+gradle/wrapper/gradle-wrapper.jar
+
+# -----------------------------------------------------------------------------
+# Generated / build artifacts
+# -----------------------------------------------------------------------------
+*.class
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo

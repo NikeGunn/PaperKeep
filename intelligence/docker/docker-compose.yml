@@ -1,0 +1,55 @@
+# Local development compose for the intelligence layer.
+# Run from intelligence/ directory: docker compose -f docker/docker-compose.yml up
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  intelligence-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8100:8100"
+    environment:
+      - INTEL_REDIS_URL=redis://redis:6379/0
+      - INTEL_DEBUG=true
+      - INTEL_R2_ENDPOINT=${R2_ENDPOINT:-}
+      - INTEL_R2_ACCESS_KEY=${R2_ACCESS_KEY:-}
+      - INTEL_R2_SECRET_KEY=${R2_SECRET_KEY:-}
+      - INTEL_R2_BUCKET=${R2_BUCKET:-scanvault-processing}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - model-cache:/app/models
+    restart: unless-stopped
+
+  intelligence-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - INTEL_REDIS_URL=redis://redis:6379/0
+      - INTEL_R2_ENDPOINT=${R2_ENDPOINT:-}
+      - INTEL_R2_ACCESS_KEY=${R2_ACCESS_KEY:-}
+      - INTEL_R2_SECRET_KEY=${R2_SECRET_KEY:-}
+      - INTEL_R2_BUCKET=${R2_BUCKET:-scanvault-processing}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - model-cache:/app/models
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  model-cache:
