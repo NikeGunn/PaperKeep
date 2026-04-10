@@ -269,6 +269,88 @@ check "run-backend-local.sh leaves docker up" "grep -qi 'containers stay running
 check "run-backend-local.sh has --migrate-only" "grep -q 'migrate-only\|MIGRATE_ONLY' '$ROOT/scripts/run-backend-local.sh'"
 
 # =============================================================================
+# TASK 0.11 — run-phone.sh
+# =============================================================================
+echo ""
+printf "${YELLOW}Task 0.11 — scripts/run-phone.sh${NC}\n"
+
+check "run-phone.sh exists"                 "[ -f '$ROOT/scripts/run-phone.sh' ]"
+check "run-phone.sh is executable"          "[ -x '$ROOT/scripts/run-phone.sh' ]"
+check "run-phone.sh has set -euo pipefail"  "grep -q 'set -euo pipefail' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh has shebang"            "head -1 '$ROOT/scripts/run-phone.sh' | grep -q '#!/usr/bin/env bash'"
+check "run-phone.sh --help exits 0"         "bash '$ROOT/scripts/run-phone.sh' --help"
+check "run-phone.sh --help prints USAGE"    "bash '$ROOT/scripts/run-phone.sh' --help | grep -q 'USAGE'"
+check "run-phone.sh has --wifi flag"        "bash '$ROOT/scripts/run-phone.sh' --help | grep -q '\-\-wifi'"
+check "run-phone.sh has --clean flag"       "bash '$ROOT/scripts/run-phone.sh' --help | grep -q '\-\-clean'"
+check "run-phone.sh has --release flag"     "bash '$ROOT/scripts/run-phone.sh' --help | grep -q '\-\-release'"
+check "run-phone.sh has --profile flag"     "bash '$ROOT/scripts/run-phone.sh' --help | grep -q '\-\-profile'"
+check "run-phone.sh has --backend flag"     "bash '$ROOT/scripts/run-phone.sh' --help | grep -q '\-\-backend'"
+check "run-phone.sh handles --wifi"         "grep -q 'DO_WIFI\|--wifi' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh calls ADB install"      "grep -q 'adb.*install\|ADB.*install' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh launches activity"      "grep -q 'am start' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh streams logcat"         "grep -q 'logcat' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh trap for Ctrl+C"        "grep -q 'trap.*INT\|trap.*TERM' '$ROOT/scripts/run-phone.sh'"
+check "run-phone.sh uses gradlew"           "grep -q 'gradlew' '$ROOT/scripts/run-phone.sh'"
+
+# =============================================================================
+# TASK 0.12 — release.sh
+# =============================================================================
+echo ""
+printf "${YELLOW}Task 0.12 — scripts/release.sh${NC}\n"
+
+check "release.sh exists"                   "[ -f '$ROOT/scripts/release.sh' ]"
+check "release.sh is executable"            "[ -x '$ROOT/scripts/release.sh' ]"
+check "release.sh has set -euo pipefail"    "grep -q 'set -euo pipefail' '$ROOT/scripts/release.sh'"
+check "release.sh has shebang"              "head -1 '$ROOT/scripts/release.sh' | grep -q '#!/usr/bin/env bash'"
+check "release.sh --help exits 0"           "bash '$ROOT/scripts/release.sh' --help"
+check "release.sh --help prints USAGE"      "bash '$ROOT/scripts/release.sh' --help | grep -q 'USAGE'"
+check "release.sh --help shows patch"       "bash '$ROOT/scripts/release.sh' --help | grep -q 'patch'"
+check "release.sh --help shows minor"       "bash '$ROOT/scripts/release.sh' --help | grep -q 'minor'"
+check "release.sh --help shows major"       "bash '$ROOT/scripts/release.sh' --help | grep -q 'major'"
+check "release.sh rejects bad bump type"    "! bash '$ROOT/scripts/release.sh' badtype 2>/dev/null"
+check "release.sh requires arg"             "! bash '$ROOT/scripts/release.sh' 2>/dev/null"
+check "release.sh reads VERSION file"       "grep -q 'VERSION_FILE\|VERSION\b' '$ROOT/scripts/release.sh'"
+check "release.sh bumps patch correctly"    "grep -q 'PATCH.*+.*1\|patch.*bump' '$ROOT/scripts/release.sh'"
+check "release.sh bumps minor correctly"    "grep -q 'MINOR.*+.*1\|minor.*bump' '$ROOT/scripts/release.sh'"
+check "release.sh bumps major correctly"    "grep -q 'MAJOR.*+.*1\|major.*bump' '$ROOT/scripts/release.sh'"
+check "release.sh generates changelog"      "grep -qi 'changelog\|CHANGELOG' '$ROOT/scripts/release.sh'"
+check "release.sh creates git tag"          "grep -q 'git tag' '$ROOT/scripts/release.sh'"
+check "release.sh pushes tag"               "grep -q 'git push.*origin' '$ROOT/scripts/release.sh'"
+check "release.sh asks confirmation"        "grep -q 'read.*CONFIRM\|Proceed\|confirm' '$ROOT/scripts/release.sh'"
+check "release.sh has --dry-run flag"       "bash '$ROOT/scripts/release.sh' --help | grep -q 'dry-run'"
+check "release.sh verifies clean tree"      "grep -q 'porcelain\|dirty\|DIRTY' '$ROOT/scripts/release.sh'"
+check "release.sh verifies main branch"     "grep -q 'main\b' '$ROOT/scripts/release.sh'"
+check "release.sh dry-run with patch works" "bash '$ROOT/scripts/release.sh' patch --dry-run --force 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -qi 'dry run\|would'"
+
+# =============================================================================
+# TASK 0.13 — rollback.sh
+# =============================================================================
+echo ""
+printf "${YELLOW}Task 0.13 — scripts/rollback.sh${NC}\n"
+
+check "rollback.sh exists"                  "[ -f '$ROOT/scripts/rollback.sh' ]"
+check "rollback.sh is executable"           "[ -x '$ROOT/scripts/rollback.sh' ]"
+check "rollback.sh has set -euo pipefail"   "grep -q 'set -euo pipefail' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh has shebang"             "head -1 '$ROOT/scripts/rollback.sh' | grep -q '#!/usr/bin/env bash'"
+check "rollback.sh --help exits 0"          "bash '$ROOT/scripts/rollback.sh' --help"
+check "rollback.sh --help prints USAGE"     "bash '$ROOT/scripts/rollback.sh' --help | grep -q 'USAGE'"
+check "rollback.sh --help shows android"    "bash '$ROOT/scripts/rollback.sh' --help | grep -q 'android'"
+check "rollback.sh --help shows backend"    "bash '$ROOT/scripts/rollback.sh' --help | grep -q 'backend'"
+check "rollback.sh --help shows ota"        "bash '$ROOT/scripts/rollback.sh' --help | grep -q 'ota'"
+check "rollback.sh --help shows all"        "bash '$ROOT/scripts/rollback.sh' --help | grep -q '\ball\b'"
+check "rollback.sh rejects bad subcommand"  "! bash '$ROOT/scripts/rollback.sh' badtarget 2>/dev/null"
+check "rollback.sh requires subcommand"     "! bash '$ROOT/scripts/rollback.sh' 2>/dev/null"
+check "rollback.sh has backend subcommand"  "grep -q 'rollback_backend\|backend)' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh has android subcommand"  "grep -q 'rollback_android\|android)' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh has ota subcommand"      "grep -q 'rollback_ota\|ota)' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh has all subcommand"      "grep -q 'all)' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh has --dry-run flag"      "bash '$ROOT/scripts/rollback.sh' --help | grep -q 'dry-run'"
+check "rollback.sh asks confirmation"       "grep -q 'CONFIRM\|confirm\|rollback' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh does SSH for backend"    "grep -q 'SSH\|ssh' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh uses systemctl"          "grep -q 'systemctl' '$ROOT/scripts/rollback.sh'"
+check "rollback.sh backend dry-run works"   "bash '$ROOT/scripts/rollback.sh' backend --dry-run --yes 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -qi 'dry run\|would'"
+
+# =============================================================================
 # Results
 # =============================================================================
 TOTAL=$((PASS + FAIL))

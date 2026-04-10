@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-10
-**Last completed task:** 0.10
+**Last completed task:** 0.13
 
 ---
 
@@ -25,9 +25,9 @@
 - [x] **0.8** Create `scripts/bootstrap.sh` (dev environment setup) — 2026-04-10
 - [x] **0.9** Create `scripts/doctor.sh` (health check) — 2026-04-10
 - [x] **0.10** Create `scripts/run-backend-local.sh` — 2026-04-10
-- [ ] **0.11** Create `scripts/run-phone.sh` (Android dev loop)
-- [ ] **0.12** Create `scripts/release.sh` (version bump + tag + push)
-- [ ] **0.13** Create `scripts/rollback.sh`
+- [x] **0.11** Create `scripts/run-phone.sh` (Android dev loop) — 2026-04-10
+- [x] **0.12** Create `scripts/release.sh` (version bump + tag + push) — 2026-04-10
+- [x] **0.13** Create `scripts/rollback.sh` — 2026-04-10
 
 **Acceptance:** `scripts/doctor.sh` runs and reports status. All scripts have `--help`. Conventional commit hook rejects bad messages.
 
@@ -316,3 +316,4 @@
 | 2026-04-10 | test-gate added | CLAUDE.md test-gate rule, PROGRESS.md header, prompt-guide.txt fully rewritten with test-first enforcement |
 | 2026-04-10 | 0.1–0.6 | DevOps skeleton: dirs, VERSION, .gitignore, Makefile, .editorconfig, .pre-commit-config.yaml + commitlint.config.js. 71/71 tests pass. |
 | 2026-04-10 | 0.7–0.10 | Moved 5 spec docs to docs/, updated CLAUDE.md+PROGRESS.md refs, bootstrap.sh, doctor.sh, run-backend-local.sh. 128/128 tests pass. |
+| 2026-04-10 | 0.11–0.13 | run-phone.sh (all flags + ADB), release.sh (semver bump, changelog, dry-run), rollback.sh (android/backend/ota/all). **PHASE 0 COMPLETE.** 189/189 tests pass. |
