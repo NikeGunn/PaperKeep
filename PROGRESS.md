@@ -38,10 +38,10 @@
 > **Spec:** docs/BACKEND_MVP.md section 6 → Phase 1
 > **Depends on:** Phase 0 completed
 
-- [ ] **1A.1** Go module init (`backend/go.mod`), directory structure per spec section 2
-- [ ] **1A.2** `.golangci.yml` with strict config
-- [ ] **1A.3** `backend/.env.example` with all required vars documented
-- [ ] **1A.4** Config loader (`internal/config/`) — env vars via caarlos0/env
+- [x] **1A.1** Go module init (`backend/go.mod`), directory structure per spec section 2 — 2026-04-10
+- [x] **1A.2** `.golangci.yml` with strict config — 2026-04-10
+- [x] **1A.3** `backend/.env.example` with all required vars documented — 2026-04-10
+- [x] **1A.4** Config loader (`internal/config/`) — env vars via caarlos0/env — 2026-04-10
 - [ ] **1A.5** Postgres setup — migration 0001 (accounts, refresh_tokens, email_verification_tokens)
 - [ ] **1A.6** sqlc config + initial queries for accounts
 - [ ] **1A.7** HTTP server with chi router + middleware chain (RequestID, Logger, Recoverer, Timeout, SecureHeaders, CORS)
@@ -317,3 +317,4 @@
 | 2026-04-10 | 0.1–0.6 | DevOps skeleton: dirs, VERSION, .gitignore, Makefile, .editorconfig, .pre-commit-config.yaml + commitlint.config.js. 71/71 tests pass. |
 | 2026-04-10 | 0.7–0.10 | Moved 5 spec docs to docs/, updated CLAUDE.md+PROGRESS.md refs, bootstrap.sh, doctor.sh, run-backend-local.sh. 128/128 tests pass. |
 | 2026-04-10 | 0.11–0.13 | run-phone.sh (all flags + ADB), release.sh (semver bump, changelog, dry-run), rollback.sh (android/backend/ota/all). **PHASE 0 COMPLETE.** 189/189 tests pass. |
+| 2026-04-10 | 1A.1–1A.4 | Go module (github.com/nikhil/scanvault-api), all internal/ dirs, .golangci.yml (strict, errcheck+gosec+revive+gofumpt+...), .env.example (all 14 vars documented), config loader (caarlos0/env, required vars, environment validation, Argon2 param validation). 19/19 tests pass. |

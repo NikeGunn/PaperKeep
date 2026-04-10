@@ -1,0 +1,50 @@
+# ScanVault — Caddyfile
+# Caddy acts as TLS-terminating reverse proxy in front of the Go binary.
+# Docs: https://caddyserver.com/docs/caddyfile
+#
+# Production usage:
+#   1. Replace api.scanvault.app with your actual domain
+#   2. Copy to /etc/caddy/Caddyfile on your VPS
+#   3. Run: systemctl reload caddy
+#
+# Caddy automatically obtains and renews TLS via Let's Encrypt.
+# No manual certificate management required.
+
+api.scanvault.app {
+    # Reverse proxy to Go API binary
+    reverse_proxy localhost:8080 {
+        # Health check: only route to healthy upstream
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+
+        # Pass real client IP to Go (for rate limiting and logging)
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # TLS configuration — Caddy handles Let's Encrypt automatically
+    tls {
+        protocols tls1.2 tls1.3
+        ciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    }
+
+    # Security headers (defense in depth — Go also sets these, belt-and-suspenders)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Request logging via Caddy (separate from Go's structured logging)
+    log {
+        output file /var/log/caddy/scanvault-access.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+        format json
+    }
+}
