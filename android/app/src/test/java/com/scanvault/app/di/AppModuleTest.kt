@@ -24,7 +24,8 @@ class AppModuleTest {
     fun `AppModule is an object singleton`() {
         // Confirms AppModule is a Kotlin object (not a class), which is the correct
         // pattern for providing stateless bindings in Hilt.
-        val moduleClass = AppModule::class
-        assertNotNull(moduleClass.objectInstance)
+        // Kotlin objects expose a static INSTANCE field via Java reflection (no kotlin-reflect needed).
+        val instanceField = AppModule::class.java.getDeclaredField("INSTANCE")
+        assertNotNull(instanceField)
     }
 }
