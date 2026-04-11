@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-11
-**Last completed task:** 1B.20 — Phase 1B COMPLETE
+**Last completed task:** 2A.4 — Vault R2 storage, migration 0002, create/list/get endpoints
 
 ---
 
@@ -117,10 +117,10 @@
 > **Spec:** docs/BACKEND_MVP.md section 6 → Phase 2
 > **Depends on:** Phase 1A completed
 
-- [ ] **2A.1** R2 integration (`internal/vault/storage.go`) — presigned URLs, CRUD
-- [ ] **2A.2** Migration 0002 (vault_documents, vault_pages tables)
-- [ ] **2A.3** Create document endpoint
-- [ ] **2A.4** List/Get document endpoints with cursor pagination
+- [x] **2A.1** R2 integration (`internal/vault/storage.go`) — presigned URLs, CRUD — 2026-04-11
+- [x] **2A.2** Migration 0002 (vault_documents, vault_pages, account_quotas tables) — 2026-04-11
+- [x] **2A.3** Create document endpoint — 2026-04-11
+- [x] **2A.4** List/Get document endpoints with cursor pagination — 2026-04-11
 - [ ] **2A.5** Update document metadata (optimistic concurrency)
 - [ ] **2A.6** Delete document (soft delete)
 - [ ] **2A.7** Page upload flow (request URL → upload to R2 → confirm)
@@ -323,4 +323,5 @@
 | 2026-04-11 | 1B.1–1B.4 | Android multi-module project (13 modules: :app + 8 :core + 4 :feature). libs.versions.toml (compileSdk=36, Kotlin 2.0.21, Compose BOM, Hilt 2.53.1, Room 2.7, CameraX 1.4.1, Ktor 3.0.3, Robolectric). detekt.yml + proguard-rules.pro. @HiltAndroidApp ScanVaultApplication, @AndroidEntryPoint MainActivity, AppModule. Hilt injection verified with Robolectric (HiltContextInjectionTest). 5/5 unit tests pass. ./gradlew projects lists all 13 modules. |
 | 2026-04-11 | 1B.5–1B.14 | Sessions 11-15. Theme, splash, icon, permissions, CameraX, controls, edge detection, perspective transform, crop screen. 85/85 tests pass. |
 | 2026-04-11 | 1C.1–1C.5 | **PHASE 1C COMPLETE.** android-ci.yml (lint+test+assemble+artifact+instrumented matrix api 26/30/34). backend-ci.yml (vet+staticcheck+gosec SARIF+govulncheck+race test+coverage). backend-deploy-staging.yml (CGO_ENABLED=0 cross-compile, SSH deploy, migration, smoke test, Telegram notify). security-scan.yml (OWASP SARIF, govulncheck, TruffleHog --only-verified). intelligence-ci.yml verified. scripts/validate-workflows.py: 87/87 checks pass (YAML valid, no tabs, concurrency cancel-in-progress, path filters, cron schedule, timeout-minutes on every job, action version pinning, no hardcoded credentials). Fixed PyYAML 1.1 gotcha: bare `on:` key parses as boolean True. |
+| 2026-04-11 | 2A.1–2A.4 | R2 storage wrapper (ObjectStorage interface + R2Storage + mockStorage). Migration 0002 (vault_documents, vault_pages, account_quotas with indexes + constraints). POST /v1/vault/documents (v7 UUID validation, duplicate 409, quota row init). GET /v1/vault/documents (cursor pagination, excludes soft-deleted). GET /v1/vault/documents/{uuid} (404 for other user, 404 for non-existent). 30 tests pass across 8 packages. |
 | 2026-04-11 | 1B.15–1B.20 | Session 16. **PHASE 1B COMPLETE.** AesGcmImageStore (AES-256-GCM, random IV per write, tamper detection). KeyStoreKeyProvider (hardware-backed Android Keystore). ScanEntity + ScanDao (Room in-memory tests, unicode, ordering, replace-on-conflict). RecentScansViewModel + RecentScansThumbnailStrip (placeholder thumbnails, empty state). AppRoutes (type-safe @Serializable routes: Scanner/Crop/Library/Reader/Settings). AppNavHost (Navigation 2.8.5 type-safe API). ScannerScreen (camera permission gate + preview + controls + thumbnail strip). ScreenRotationTest (SavedStateHandle survives recreation). ScanFlowTest (full 10-step journey across 5 ViewModels). 137/137 tests pass. | Theme (ScanAmber palette, light/dark, dynamic color fallback). Splash screen (≤300ms, brand amber bg). Adaptive icon (foreground+background drawables). Camera permissions state machine (CameraPermissionViewModel: NotRequested/ShowRationale/Granted/PermanentlyDenied). CameraX PreviewView (4:3 aspect, safe-area insets). Camera controls (CameraControlsViewModel: torch, grid, zoom clamp, tap-to-focus). EdgeDetector interface + FakeEdgeDetector (deterministic for tests) + OpenCvEdgeDetector (graceful no-op without native lib). EdgeDetectionOverlay (green/amber/invisible, spring animation). CaptureViewModel (edge detect → perspective warp pipeline, SavedStateHandle). CropScreen (4 draggable corners, rotate, retake/next). Switched core:imaging + core:common + feature:scanner to KSP (fixes Windows KAPT path bug). CommonModule provides AppDispatchers. 85/85 unit tests pass. |

@@ -19,6 +19,7 @@ import (
 	"github.com/nikhil/scanvault-api/internal/config"
 	"github.com/nikhil/scanvault-api/internal/db"
 	appmiddleware "github.com/nikhil/scanvault-api/internal/middleware"
+	"github.com/nikhil/scanvault-api/internal/vault"
 )
 
 // Server holds the HTTP server and its dependencies.
@@ -29,11 +30,10 @@ type Server struct {
 	db          *pgxpool.Pool
 	logger      *slog.Logger
 	accountsSvc *accounts.Service
+	vaultSvc    *vault.Service
 	rateLimiter *appmiddleware.RateLimiter
 }
 
-// New constructs a Server with the full middleware chain and routes wired up.
-// accountsSvc may be nil (e.g. in tests that don't need auth routes).
 // New constructs a Server with the full middleware chain and routes wired up.
 // accountsSvc may be nil (e.g. in tests that don't need auth routes).
 func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accountsSvc ...*accounts.Service) *Server {
@@ -86,6 +86,16 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 			r.Post("/sessions/refresh", h.HandleRefresh)
 			r.With(authMW).Delete("/sessions", h.HandleLogout)
 		}
+
+		// Vault routes — all require authentication.
+		// Vault service is wired separately from accounts to keep concerns separated.
+		if s.vaultSvc != nil {
+			authMW := s.buildAuthMiddleware()
+			vh := vault.NewHandler(s.vaultSvc)
+			r.With(authMW).Route("/", func(r chi.Router) {
+				vh.RegisterRoutes(r)
+			})
+		}
 	})
 
 	s.router = r
@@ -98,6 +108,13 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	return s
+}
+
+// WithVaultService attaches the vault service to the server after construction.
+// Call this before Start().
+func (s *Server) WithVaultService(svc *vault.Service) *Server {
+	s.vaultSvc = svc
 	return s
 }
 

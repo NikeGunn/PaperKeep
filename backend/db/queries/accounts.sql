@@ -52,3 +52,13 @@ SELECT * FROM accounts
 WHERE email = $1
   AND created_at > NOW() - INTERVAL '1 minute'
 LIMIT 1;
+
+
+-- name: UpdateAccountKeyMaterial :one
+UPDATE accounts
+SET wrapped_key = $2,
+    kdf_salt    = $3,
+    kdf_params  = $4,
+    updated_at  = NOW()
+WHERE id = $1
+RETURNING *;

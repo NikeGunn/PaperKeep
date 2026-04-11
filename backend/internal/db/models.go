@@ -23,6 +23,15 @@ type Account struct {
 	UpdatedAt     pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type AccountQuota struct {
+	AccountID         int64              `db:"account_id" json:"account_id"`
+	StorageBytesUsed  int64              `db:"storage_bytes_used" json:"storage_bytes_used"`
+	StorageBytesLimit int64              `db:"storage_bytes_limit" json:"storage_bytes_limit"`
+	DocumentsCount    int32              `db:"documents_count" json:"documents_count"`
+	DocumentsLimit    int32              `db:"documents_limit" json:"documents_limit"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type EmailVerificationToken struct {
 	ID        int64              `db:"id" json:"id"`
 	AccountID int64              `db:"account_id" json:"account_id"`
@@ -41,4 +50,32 @@ type RefreshToken struct {
 	ExpiresAt   pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 	RevokedAt   pgtype.Timestamptz `db:"revoked_at" json:"revoked_at"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type VaultDocument struct {
+	ID                int64              `db:"id" json:"id"`
+	Uuid              pgtype.UUID        `db:"uuid" json:"uuid"`
+	AccountID         int64              `db:"account_id" json:"account_id"`
+	EncryptedMetadata []byte             `db:"encrypted_metadata" json:"encrypted_metadata"`
+	MetadataNonce     []byte             `db:"metadata_nonce" json:"metadata_nonce"`
+	Version           int64              `db:"version" json:"version"`
+	PageCount         int32              `db:"page_count" json:"page_count"`
+	TotalSizeBytes    int64              `db:"total_size_bytes" json:"total_size_bytes"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+}
+
+type VaultPage struct {
+	ID            int64              `db:"id" json:"id"`
+	Uuid          pgtype.UUID        `db:"uuid" json:"uuid"`
+	DocumentID    int64              `db:"document_id" json:"document_id"`
+	PageIndex     int32              `db:"page_index" json:"page_index"`
+	R2Key         string             `db:"r2_key" json:"r2_key"`
+	EncryptedSize int64              `db:"encrypted_size" json:"encrypted_size"`
+	Checksum      []byte             `db:"checksum" json:"checksum"`
+	Status        string             `db:"status" json:"status"`
+	Version       int64              `db:"version" json:"version"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	DeletedAt     pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }

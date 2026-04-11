@@ -11,9 +11,19 @@ import (
 )
 
 type Querier interface {
+	ConfirmPage(ctx context.Context, uuid pgtype.UUID) (VaultPage, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	// =========================================================================
+	// vault_documents queries
+	// =========================================================================
+	CreateDocument(ctx context.Context, arg CreateDocumentParams) (VaultDocument, error)
 	CreateEmailVerificationToken(ctx context.Context, arg CreateEmailVerificationTokenParams) (EmailVerificationToken, error)
+	// =========================================================================
+	// vault_pages queries
+	// =========================================================================
+	CreatePage(ctx context.Context, arg CreatePageParams) (VaultPage, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	DecrementQuotaUsage(ctx context.Context, arg DecrementQuotaUsageParams) (AccountQuota, error)
 	DeleteAccount(ctx context.Context, id int64) error
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	GetAccountByEmail(ctx context.Context, email string) (Account, error)
@@ -21,16 +31,40 @@ type Querier interface {
 	GetAccountByEmailIfFresh(ctx context.Context, email string) (Account, error)
 	GetAccountByID(ctx context.Context, id int64) (Account, error)
 	GetAccountByUUID(ctx context.Context, uuid pgtype.UUID) (Account, error)
+	GetDocumentByUUID(ctx context.Context, arg GetDocumentByUUIDParams) (VaultDocument, error)
+	GetDocumentByUUIDIncludeDeleted(ctx context.Context, arg GetDocumentByUUIDIncludeDeletedParams) (VaultDocument, error)
 	GetEmailVerificationTokenByHash(ctx context.Context, tokenHash []byte) (EmailVerificationToken, error)
+	GetExpiredSoftDeletedDocuments(ctx context.Context, limit int32) ([]VaultDocument, error)
+	GetExpiredSoftDeletedPages(ctx context.Context, limit int32) ([]GetExpiredSoftDeletedPagesRow, error)
+	// =========================================================================
+	// Sync manifest query
+	// =========================================================================
+	GetManifestSince(ctx context.Context, arg GetManifestSinceParams) ([]GetManifestSinceRow, error)
+	// =========================================================================
+	// account_quotas queries
+	// =========================================================================
+	GetOrCreateQuota(ctx context.Context, accountID int64) (AccountQuota, error)
+	GetPageByUUID(ctx context.Context, uuid pgtype.UUID) (GetPageByUUIDRow, error)
+	GetPagesByDocument(ctx context.Context, documentID int64) ([]VaultPage, error)
+	GetQuota(ctx context.Context, accountID int64) (AccountQuota, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
+	HardDeleteDocument(ctx context.Context, id int64) error
+	HardDeletePage(ctx context.Context, id int64) error
+	IncrementDocumentPageCount(ctx context.Context, arg IncrementDocumentPageCountParams) (VaultDocument, error)
+	IncrementQuotaUsage(ctx context.Context, arg IncrementQuotaUsageParams) (AccountQuota, error)
 	ListActiveRefreshTokensForAccount(ctx context.Context, accountID int64) ([]RefreshToken, error)
+	ListDocuments(ctx context.Context, arg ListDocumentsParams) ([]VaultDocument, error)
 	MarkEmailVerificationTokenUsed(ctx context.Context, id int64) error
+	PageIndexExists(ctx context.Context, arg PageIndexExistsParams) (bool, error)
 	RevokeAllRefreshTokensForAccount(ctx context.Context, accountID int64) error
 	RevokeRefreshToken(ctx context.Context, id int64) error
+	SoftDeleteDocument(ctx context.Context, arg SoftDeleteDocumentParams) (VaultDocument, error)
+	SoftDeletePage(ctx context.Context, uuid pgtype.UUID) (VaultPage, error)
 	UpdateAccountAuthHash(ctx context.Context, arg UpdateAccountAuthHashParams) (Account, error)
 	UpdateAccountEmailVerified(ctx context.Context, id int64) (Account, error)
 	UpdateAccountKeyMaterial(ctx context.Context, arg UpdateAccountKeyMaterialParams) (Account, error)
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) (Account, error)
+	UpdateDocumentMetadata(ctx context.Context, arg UpdateDocumentMetadataParams) (VaultDocument, error)
 	UpdateRefreshTokenLastUsed(ctx context.Context, id int64) (RefreshToken, error)
 }
 

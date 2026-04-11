@@ -244,7 +244,6 @@ WHERE id = $1
 RETURNING id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at
 `
 
-// UpdateAccountKeyMaterialParams holds the new key-wrapping material for a password change.
 type UpdateAccountKeyMaterialParams struct {
 	ID         int64       `db:"id" json:"id"`
 	WrappedKey []byte      `db:"wrapped_key" json:"wrapped_key"`
@@ -253,7 +252,12 @@ type UpdateAccountKeyMaterialParams struct {
 }
 
 func (q *Queries) UpdateAccountKeyMaterial(ctx context.Context, arg UpdateAccountKeyMaterialParams) (Account, error) {
-	row := q.db.QueryRow(ctx, updateAccountKeyMaterial, arg.ID, arg.WrappedKey, arg.KdfSalt, arg.KdfParams)
+	row := q.db.QueryRow(ctx, updateAccountKeyMaterial,
+		arg.ID,
+		arg.WrappedKey,
+		arg.KdfSalt,
+		arg.KdfParams,
+	)
 	var i Account
 	err := row.Scan(
 		&i.ID,
