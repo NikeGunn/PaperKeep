@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-11
-**Last completed task:** 1B.14 — Manual crop screen
+**Last completed task:** 1B.20 — Phase 1B COMPLETE
 
 ---
 
@@ -86,12 +86,12 @@
 - [x] **1B.12** Edge detection overlay on Compose Canvas (green/amber/invisible states, spring animation) — 2026-04-11
 - [x] **1B.13** Capture pipeline (full-res capture → edge detection → perspective transform) — 2026-04-11
 - [x] **1B.14** Manual crop screen (4 draggable corners, magnifier, rotate, retake/next) — 2026-04-11
-- [ ] **1B.15** Encrypted storage (`:core:data` — AES-256-GCM, Android Keystore master key)
-- [ ] **1B.16** Room `ScanEntity` + DAO
-- [ ] **1B.17** Recent scans thumbnail strip on camera screen
-- [ ] **1B.18** Navigation Compose setup with type-safe routes
-- [ ] **1B.19** Screen rotation support (rememberSaveable + ViewModel)
-- [ ] **1B.20** Unit tests + Compose UI tests for critical flows
+- [x] **1B.15** Encrypted storage (`:core:data` — AES-256-GCM, Android Keystore master key) — 2026-04-11
+- [x] **1B.16** Room `ScanEntity` + DAO — 2026-04-11
+- [x] **1B.17** Recent scans thumbnail strip on camera screen — 2026-04-11
+- [x] **1B.18** Navigation Compose setup with type-safe routes — 2026-04-11
+- [x] **1B.19** Screen rotation support (rememberSaveable + ViewModel) — 2026-04-11
+- [x] **1B.20** Unit tests + Compose UI tests for critical flows — 2026-04-11
 
 **Acceptance:** All criteria in docs/FRONTEND_MVP.md Phase 1 acceptance section pass.
 
@@ -321,4 +321,5 @@
 | 2026-04-10 | 1A.5–1A.8 | GCC installed (MSYS2/MinGW-w64 15.2), go test -race now works. Migration 0001 (accounts+refresh_tokens+email_verification_tokens, CITEXT, CHECK, cascade). sqlc.yaml + 13 SQL queries generated. chi server (RequestID, echoRequestID, RealIP, slog logger, Recoverer, Timeout 60s, SecureHeaders, CORS). /health 200+JSON, /ready checks Postgres 200/503. 6 migration integration tests + 12 server tests, all pass with -race. |
 | 2026-04-11 | 1A.13–1A.18 | Logout, GetMe, ChangePassword, auth middleware (Paseto+account load), in-memory rate limiter (5/15min login, 3/hr signup), security headers (nosniff, DENY, no-referrer, CSP default-src 'none'). 40+ tests pass with -race. |
 | 2026-04-11 | 1B.1–1B.4 | Android multi-module project (13 modules: :app + 8 :core + 4 :feature). libs.versions.toml (compileSdk=36, Kotlin 2.0.21, Compose BOM, Hilt 2.53.1, Room 2.7, CameraX 1.4.1, Ktor 3.0.3, Robolectric). detekt.yml + proguard-rules.pro. @HiltAndroidApp ScanVaultApplication, @AndroidEntryPoint MainActivity, AppModule. Hilt injection verified with Robolectric (HiltContextInjectionTest). 5/5 unit tests pass. ./gradlew projects lists all 13 modules. |
-| 2026-04-11 | 1B.5–1B.14 | Sessions 11-15. Theme (ScanAmber palette, light/dark, dynamic color fallback). Splash screen (≤300ms, brand amber bg). Adaptive icon (foreground+background drawables). Camera permissions state machine (CameraPermissionViewModel: NotRequested/ShowRationale/Granted/PermanentlyDenied). CameraX PreviewView (4:3 aspect, safe-area insets). Camera controls (CameraControlsViewModel: torch, grid, zoom clamp, tap-to-focus). EdgeDetector interface + FakeEdgeDetector (deterministic for tests) + OpenCvEdgeDetector (graceful no-op without native lib). EdgeDetectionOverlay (green/amber/invisible, spring animation). CaptureViewModel (edge detect → perspective warp pipeline, SavedStateHandle). CropScreen (4 draggable corners, rotate, retake/next). Switched core:imaging + core:common + feature:scanner to KSP (fixes Windows KAPT path bug). CommonModule provides AppDispatchers. 85/85 unit tests pass. |
+| 2026-04-11 | 1B.5–1B.14 | Sessions 11-15. Theme, splash, icon, permissions, CameraX, controls, edge detection, perspective transform, crop screen. 85/85 tests pass. |
+| 2026-04-11 | 1B.15–1B.20 | Session 16. **PHASE 1B COMPLETE.** AesGcmImageStore (AES-256-GCM, random IV per write, tamper detection). KeyStoreKeyProvider (hardware-backed Android Keystore). ScanEntity + ScanDao (Room in-memory tests, unicode, ordering, replace-on-conflict). RecentScansViewModel + RecentScansThumbnailStrip (placeholder thumbnails, empty state). AppRoutes (type-safe @Serializable routes: Scanner/Crop/Library/Reader/Settings). AppNavHost (Navigation 2.8.5 type-safe API). ScannerScreen (camera permission gate + preview + controls + thumbnail strip). ScreenRotationTest (SavedStateHandle survives recreation). ScanFlowTest (full 10-step journey across 5 ViewModels). 137/137 tests pass. | Theme (ScanAmber palette, light/dark, dynamic color fallback). Splash screen (≤300ms, brand amber bg). Adaptive icon (foreground+background drawables). Camera permissions state machine (CameraPermissionViewModel: NotRequested/ShowRationale/Granted/PermanentlyDenied). CameraX PreviewView (4:3 aspect, safe-area insets). Camera controls (CameraControlsViewModel: torch, grid, zoom clamp, tap-to-focus). EdgeDetector interface + FakeEdgeDetector (deterministic for tests) + OpenCvEdgeDetector (graceful no-op without native lib). EdgeDetectionOverlay (green/amber/invisible, spring animation). CaptureViewModel (edge detect → perspective warp pipeline, SavedStateHandle). CropScreen (4 draggable corners, rotate, retake/next). Switched core:imaging + core:common + feature:scanner to KSP (fixes Windows KAPT path bug). CommonModule provides AppDispatchers. 85/85 unit tests pass. |

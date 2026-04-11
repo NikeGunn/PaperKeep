@@ -1,9 +1,9 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
-    alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -23,15 +23,25 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
+    room {
+        schemaDirectory("$projectDir/schemas")
+    }
 }
 
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:common"))
 
-    // Hilt
+    // Hilt — KSP only (avoids Windows KAPT path bug)
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
 
     // Room
     implementation(libs.room.runtime)
@@ -41,7 +51,7 @@ dependencies {
     // DataStore
     implementation(libs.datastore.preferences)
 
-    // Security
+    // Security Crypto (for MasterKey reference; actual AES-GCM via javax.crypto)
     implementation(libs.androidx.security.crypto)
 
     implementation(libs.androidx.core.ktx)
@@ -50,5 +60,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     testImplementation(libs.room.testing)
 }

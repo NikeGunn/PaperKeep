@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -89,9 +90,10 @@ dependencies {
     // Lifecycle
     implementation(libs.bundles.lifecycle)
 
-    // Navigation
+    // Navigation + type-safe routes (serialization)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.kotlinx.serialization.json)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
