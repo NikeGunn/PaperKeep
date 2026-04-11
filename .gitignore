@@ -28,6 +28,7 @@ backend/bin/
 backend/vendor/
 *.test
 *.out
+coverage.html
 
 # -----------------------------------------------------------------------------
 # Python
