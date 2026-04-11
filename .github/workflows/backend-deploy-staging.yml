@@ -1,0 +1,74 @@
+name: Backend Deploy Staging
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', 'ota/**']
+
+concurrency:
+  group: backend-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Build binary
+        run: |
+          cd backend
+          VERSION=$(cat ../VERSION)
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-s -w -X main.Version=$VERSION -X main.Commit=$COMMIT -X main.BuildDate=$DATE" \
+            -o scanvault-api ./cmd/api
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          USER: ${{ secrets.STAGING_USER }}
+        run: |
+          scp backend/scanvault-api $USER@$HOST:/opt/scanvault/scanvault-api.new
+          ssh $USER@$HOST 'bash -s' << 'EOF'
+            set -euo pipefail
+            cd /opt/scanvault
+            cp scanvault-api scanvault-api.previous || true
+            mv scanvault-api.new scanvault-api
+            chmod +x scanvault-api
+            ./scanvault-api migrate up
+            sudo systemctl restart scanvault
+            sleep 3
+            curl -fsS http://localhost:8080/health
+            curl -fsS http://localhost:8080/ready
+          EOF
+
+      - name: Notify Telegram
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          STATUS="${{ job.status }}"
+          COMMIT=$(git rev-parse --short HEAD)
+          curl -s "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+            -d "chat_id=$TELEGRAM_CHAT" \
+            -d "text=Backend staging deploy ($COMMIT): $STATUS"
