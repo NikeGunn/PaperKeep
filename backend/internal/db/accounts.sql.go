@@ -234,6 +234,44 @@ func (q *Queries) UpdateAccountEmailVerified(ctx context.Context, id int64) (Acc
 	return i, err
 }
 
+const updateAccountKeyMaterial = `-- name: UpdateAccountKeyMaterial :one
+UPDATE accounts
+SET wrapped_key = $2,
+    kdf_salt    = $3,
+    kdf_params  = $4,
+    updated_at  = NOW()
+WHERE id = $1
+RETURNING id, uuid, email, email_verified, auth_hash, auth_params, wrapped_key, kdf_salt, kdf_params, status, created_at, updated_at
+`
+
+// UpdateAccountKeyMaterialParams holds the new key-wrapping material for a password change.
+type UpdateAccountKeyMaterialParams struct {
+	ID         int64       `db:"id" json:"id"`
+	WrappedKey []byte      `db:"wrapped_key" json:"wrapped_key"`
+	KdfSalt    []byte      `db:"kdf_salt" json:"kdf_salt"`
+	KdfParams  pgtype.Text `db:"kdf_params" json:"kdf_params"`
+}
+
+func (q *Queries) UpdateAccountKeyMaterial(ctx context.Context, arg UpdateAccountKeyMaterialParams) (Account, error) {
+	row := q.db.QueryRow(ctx, updateAccountKeyMaterial, arg.ID, arg.WrappedKey, arg.KdfSalt, arg.KdfParams)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Email,
+		&i.EmailVerified,
+		&i.AuthHash,
+		&i.AuthParams,
+		&i.WrappedKey,
+		&i.KdfSalt,
+		&i.KdfParams,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateAccountStatus = `-- name: UpdateAccountStatus :one
 UPDATE accounts
 SET status     = $2,

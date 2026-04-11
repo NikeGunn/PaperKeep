@@ -29,6 +29,7 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, id int64) error
 	UpdateAccountAuthHash(ctx context.Context, arg UpdateAccountAuthHashParams) (Account, error)
 	UpdateAccountEmailVerified(ctx context.Context, id int64) (Account, error)
+	UpdateAccountKeyMaterial(ctx context.Context, arg UpdateAccountKeyMaterialParams) (Account, error)
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) (Account, error)
 	UpdateRefreshTokenLastUsed(ctx context.Context, id int64) (RefreshToken, error)
 }

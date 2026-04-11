@@ -15,7 +15,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nikhil/scanvault-api/internal/accounts"
+	"github.com/nikhil/scanvault-api/internal/auth"
 	"github.com/nikhil/scanvault-api/internal/config"
+	"github.com/nikhil/scanvault-api/internal/db"
+	appmiddleware "github.com/nikhil/scanvault-api/internal/middleware"
 )
 
 // Server holds the HTTP server and its dependencies.
@@ -26,30 +29,34 @@ type Server struct {
 	db          *pgxpool.Pool
 	logger      *slog.Logger
 	accountsSvc *accounts.Service
+	rateLimiter *appmiddleware.RateLimiter
 }
 
 // New constructs a Server with the full middleware chain and routes wired up.
 // accountsSvc may be nil (e.g. in tests that don't need auth routes).
-func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger, accountsSvc ...*accounts.Service) *Server {
+// New constructs a Server with the full middleware chain and routes wired up.
+// accountsSvc may be nil (e.g. in tests that don't need auth routes).
+func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accountsSvc ...*accounts.Service) *Server {
 	var svc *accounts.Service
 	if len(accountsSvc) > 0 {
 		svc = accountsSvc[0]
 	}
-	s := &Server{cfg: cfg, db: db, logger: logger, accountsSvc: svc}
+	rl := appmiddleware.NewRateLimiter()
+	s := &Server{cfg: cfg, db: dbPool, logger: logger, accountsSvc: svc, rateLimiter: rl}
 
 	r := chi.NewRouter()
 
 	// -------------------------------------------------------------------------
 	// Middleware chain (order is significant)
 	// -------------------------------------------------------------------------
-	r.Use(middleware.RequestID)    // Attach X-Request-Id to every request
-	r.Use(s.echoRequestID())       // Echo X-Request-Id back on every response
-	r.Use(middleware.RealIP)       // Honour X-Forwarded-For / X-Real-IP from Caddy
-	r.Use(s.structuredLogger())    // JSON request log line via slog
-	r.Use(middleware.Recoverer)   // Recover from panics, return 500
+	r.Use(middleware.RequestID)                 // Attach X-Request-Id to every request
+	r.Use(s.echoRequestID())                    // Echo X-Request-Id back on every response
+	r.Use(middleware.RealIP)                    // Honour X-Forwarded-For / X-Real-IP from Caddy
+	r.Use(s.structuredLogger())                 // JSON request log line via slog
+	r.Use(middleware.Recoverer)                 // Recover from panics, return 500
 	r.Use(middleware.Timeout(60 * time.Second)) // Global request timeout
-	r.Use(s.secureHeaders())      // Security response headers
-	r.Use(s.corsMiddleware())     // CORS policy
+	r.Use(s.secureHeaders())                    // Security response headers (1A.18)
+	r.Use(s.corsMiddleware())                   // CORS policy
 
 	// -------------------------------------------------------------------------
 	// Routes
@@ -61,10 +68,23 @@ func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger, accountsSvc 
 	r.Route("/v1", func(r chi.Router) {
 		if s.accountsSvc != nil {
 			h := accounts.NewHandler(s.accountsSvc)
-			r.Post("/accounts", h.HandleCreateAccount)
+
+			// Auth middleware — requires a valid Paseto token.
+			// Built lazily here so the maker is derived from config.
+			authMW := s.buildAuthMiddleware()
+
+			// Rate-limited signup
+			r.With(appmiddleware.SignupRateLimit(rl)).Post("/accounts", h.HandleCreateAccount)
 			r.Get("/accounts/verify", h.HandleVerifyEmail)
-			r.Post("/sessions", h.HandleLogin)
+
+			// Authenticated account endpoints
+			r.With(authMW).Get("/accounts/me", h.HandleGetMe)
+			r.With(authMW).Post("/accounts/me/password", h.HandleChangePassword)
+
+			// Rate-limited login; logout requires auth
+			r.With(appmiddleware.LoginRateLimit(rl)).Post("/sessions", h.HandleLogin)
 			r.Post("/sessions/refresh", h.HandleRefresh)
+			r.With(authMW).Delete("/sessions", h.HandleLogout)
 		}
 	})
 
@@ -79,6 +99,21 @@ func New(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger, accountsSvc 
 	}
 
 	return s
+}
+
+// buildAuthMiddleware creates the Paseto auth middleware from the server config.
+// Returns a no-op if the DB pool is nil (test servers without accounts).
+func (s *Server) buildAuthMiddleware() func(http.Handler) http.Handler {
+	if s.db == nil {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	maker, err := auth.NewPasetoMaker(s.cfg.PasetoKey)
+	if err != nil {
+		s.logger.Error("failed to create paseto maker for auth middleware", slog.String("error", err.Error()))
+		return func(next http.Handler) http.Handler { return next }
+	}
+	store := db.New(s.db)
+	return appmiddleware.AuthMiddleware(maker, store)
 }
 
 // NewWithPanicRoute builds a server that also registers a route that panics —
@@ -182,15 +217,22 @@ func (s *Server) structuredLogger() func(http.Handler) http.Handler {
 	}
 }
 
-// secureHeaders sets standard security response headers on every response.
+// secureHeaders sets standard security response headers on every response (1A.18).
+// Per spec section 4 item 15:
+//   - X-Content-Type-Options: nosniff
+//   - X-Frame-Options: DENY
+//   - Referrer-Policy: no-referrer
+//   - Permissions-Policy: ()
+//   - Content-Security-Policy: default-src 'none'
 func (s *Server) secureHeaders() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
 			h.Set("X-Content-Type-Options", "nosniff")
 			h.Set("X-Frame-Options", "DENY")
-			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			h.Set("Referrer-Policy", "no-referrer")
 			h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+			h.Set("Content-Security-Policy", "default-src 'none'")
 			// HSTS is set by Caddy in production — skip in dev to avoid browser lock-in
 			if s.cfg.Environment == "prod" {
 				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")

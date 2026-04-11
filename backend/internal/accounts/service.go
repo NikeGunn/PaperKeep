@@ -80,6 +80,30 @@ type RefreshResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// LogoutRequest holds the refresh token to revoke.
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// AccountResponse is the safe public view of an account (no secret material).
+type AccountResponse struct {
+	UUID          string `json:"uuid"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Status        string `json:"status"`
+	CreatedAt     string `json:"created_at"`
+}
+
+// ChangePasswordRequest carries the current and new auth material.
+type ChangePasswordRequest struct {
+	CurrentAuthHash string `json:"current_auth_hash"`
+	NewAuthHash     string `json:"new_auth_hash"`
+	NewAuthParams   string `json:"new_auth_params"`
+	NewWrappedKey   []byte `json:"new_wrapped_key"`
+	NewKDFSalt      []byte `json:"new_kdf_salt"`
+	NewKDFParams    string `json:"new_kdf_params"`
+}
+
 // -------------------------------------------------------------------------
 // Service
 // -------------------------------------------------------------------------
@@ -420,6 +444,157 @@ func (s *Service) RefreshSession(ctx context.Context, req RefreshRequest) (*Refr
 		AccessToken:  accessToken,
 		RefreshToken: rawRefresh,
 	}, nil
+}
+
+// -------------------------------------------------------------------------
+// Logout (1A.13)
+// -------------------------------------------------------------------------
+
+// Logout revokes the given refresh token. The access token expires naturally.
+// Returns ErrBadCredentials if the token is not found (unknown or already fully gone).
+func (s *Service) Logout(ctx context.Context, req LogoutRequest) error {
+	hash := auth.HashRefreshToken(req.RefreshToken)
+
+	row, err := s.q.GetRefreshTokenByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrBadCredentials
+		}
+		return fmt.Errorf("fetching refresh token: %w", err)
+	}
+
+	// Revoking an already-revoked token is idempotent (client retries are fine).
+	if row.RevokedAt.Valid {
+		return nil
+	}
+
+	if err := s.q.RevokeRefreshToken(ctx, row.ID); err != nil {
+		return fmt.Errorf("revoking refresh token: %w", err)
+	}
+	return nil
+}
+
+// -------------------------------------------------------------------------
+// GetMe (1A.14)
+// -------------------------------------------------------------------------
+
+// GetMe returns the public account information for accountID.
+// The response never includes auth_hash or any secret material.
+func (s *Service) GetMe(ctx context.Context, accountID int64) (*AccountResponse, error) {
+	account, err := s.q.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, fmt.Errorf("fetching account: %w", err)
+	}
+
+	uuidStr, err := uuidToString(account.Uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AccountResponse{
+		UUID:          uuidStr,
+		Email:         account.Email,
+		EmailVerified: account.EmailVerified,
+		Status:        account.Status,
+		CreatedAt:     account.CreatedAt.Time.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// -------------------------------------------------------------------------
+// ChangePassword (1A.15)
+// -------------------------------------------------------------------------
+
+// ErrWrongCurrentPassword is returned when the supplied current_auth_hash does not match.
+var ErrWrongCurrentPassword = errors.New("current password is incorrect")
+
+// ChangePassword verifies the current password, atomically updates all auth
+// and key-wrapping material, and revokes all existing refresh tokens.
+func (s *Service) ChangePassword(ctx context.Context, accountID int64, req ChangePasswordRequest) error {
+	if req.CurrentAuthHash == "" || req.NewAuthHash == "" || req.NewAuthParams == "" ||
+		len(req.NewWrappedKey) == 0 || len(req.NewKDFSalt) == 0 || req.NewKDFParams == "" {
+		return fmt.Errorf("%w: missing required fields", ErrInvalidEmail)
+	}
+
+	account, err := s.q.GetAccountByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAccountNotFound
+		}
+		return fmt.Errorf("fetching account: %w", err)
+	}
+
+	// Verify the current password (constant-time).
+	ok, err := auth.VerifyPassword(req.CurrentAuthHash, account.AuthHash)
+	if err != nil {
+		return fmt.Errorf("verifying current password: %w", err)
+	}
+	if !ok {
+		return ErrWrongCurrentPassword
+	}
+
+	// Hash the new auth material server-side.
+	newServerHash, err := auth.HashPassword(
+		req.NewAuthHash,
+		s.cfg.Argon2Time,
+		s.cfg.Argon2Memory,
+		s.cfg.Argon2Threads,
+	)
+	if err != nil {
+		return fmt.Errorf("hashing new auth material: %w", err)
+	}
+
+	// Atomically update auth hash + revoke all refresh tokens in a transaction.
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring connection: %w", err)
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.q.WithTx(tx)
+
+	newAuthParams := pgtype.Text{String: req.NewAuthParams, Valid: true}
+	if _, err := qtx.UpdateAccountAuthHash(ctx, db.UpdateAccountAuthHashParams{
+		ID:         accountID,
+		AuthHash:   newServerHash,
+		AuthParams: newAuthParams,
+	}); err != nil {
+		return fmt.Errorf("updating auth hash: %w", err)
+	}
+
+	// Also update wrapped_key, kdf_salt, kdf_params atomically.
+	newKDFParams := pgtype.Text{String: req.NewKDFParams, Valid: true}
+	if _, err := qtx.UpdateAccountKeyMaterial(ctx, db.UpdateAccountKeyMaterialParams{
+		ID:         accountID,
+		WrappedKey: req.NewWrappedKey,
+		KdfSalt:    req.NewKDFSalt,
+		KdfParams:  newKDFParams,
+	}); err != nil {
+		return fmt.Errorf("updating key material: %w", err)
+	}
+
+	// Revoke all refresh tokens → forces re-login on all devices.
+	if err := qtx.RevokeAllRefreshTokensForAccount(ctx, accountID); err != nil {
+		return fmt.Errorf("revoking refresh tokens: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	s.logger.Info("password changed",
+		slog.Int64("account_id", accountID),
+	)
+
+	return nil
 }
 
 // -------------------------------------------------------------------------

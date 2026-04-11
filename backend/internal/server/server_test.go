@@ -266,9 +266,10 @@ func TestMiddleware_SecurityHeaders(t *testing.T) {
 	srv.Handler().ServeHTTP(w, req)
 
 	headers := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"Referrer-Policy":        "strict-origin-when-cross-origin",
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "DENY",
+		"Referrer-Policy":         "no-referrer",
+		"Content-Security-Policy": "default-src 'none'",
 	}
 	for header, want := range headers {
 		got := w.Header().Get(header)

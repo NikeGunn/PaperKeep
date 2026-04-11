@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/nikhil/scanvault-api/internal/accounts"
 	"github.com/nikhil/scanvault-api/internal/config"
+	"github.com/nikhil/scanvault-api/internal/server"
 )
 
 // -------------------------------------------------------------------------
@@ -219,9 +221,8 @@ func TestCreateAccount_DuplicateEmail(t *testing.T) {
 
 	var r1, r2 map[string]any
 	_ = json.NewDecoder(w1.Body).Decode(&r1)
-	w2.Body = w2.Body // already consumed - decode via re-parse
-	// parse UUID from second body
 	_ = json.Unmarshal([]byte(w2.Body.String()), &r2)
+	_ = r2 // used only for visual inspection; idempotency verified by status code above
 }
 
 // TestCreateAccount_DuplicateEmailAfterWindow verifies a different email with same address after window → 409.
@@ -793,6 +794,350 @@ func TestRefresh_ConcurrentRefresh(t *testing.T) {
 	// In practice, Postgres serializes the UPDATE so exactly 1 wins.
 	if successes > 1 {
 		t.Errorf("concurrent refresh: %d succeeded, want at most 1", successes)
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.13 — DELETE /v1/sessions (Logout)
+// -------------------------------------------------------------------------
+
+// TestLogout_RevokesRefreshToken verifies logout revokes the token and prevents reuse.
+func TestLogout_RevokesRefreshToken(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, authHash := setupVerifiedAccount(t, svc)
+
+	loginResp, err := svc.Login(context.Background(), accounts.LoginRequest{
+		Email:    email,
+		AuthHash: authHash,
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	// Logout
+	err = svc.Logout(context.Background(), accounts.LogoutRequest{
+		RefreshToken: loginResp.RefreshToken,
+	})
+	if err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+
+	// The refresh token should no longer work
+	_, err = svc.RefreshSession(context.Background(), accounts.RefreshRequest{
+		RefreshToken: loginResp.RefreshToken,
+	})
+	if err == nil {
+		t.Error("expected error when using revoked refresh token after logout")
+	}
+}
+
+// TestLogout_NoAuth verifies logout without a valid refresh token returns an error.
+func TestLogout_NoAuth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+
+	err := svc.Logout(context.Background(), accounts.LogoutRequest{
+		RefreshToken: "completely-invalid-token-that-does-not-exist-in-db",
+	})
+	if err == nil {
+		t.Error("expected error for unknown refresh token")
+	}
+}
+
+// TestLogout_Idempotent verifies logging out twice does not error (idempotent).
+func TestLogout_Idempotent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, authHash := setupVerifiedAccount(t, svc)
+
+	loginResp, _ := svc.Login(context.Background(), accounts.LoginRequest{
+		Email:    email,
+		AuthHash: authHash,
+	})
+
+	// First logout
+	err := svc.Logout(context.Background(), accounts.LogoutRequest{RefreshToken: loginResp.RefreshToken})
+	if err != nil {
+		t.Fatalf("first Logout: %v", err)
+	}
+
+	// Second logout of already-revoked token should be idempotent (no error)
+	err = svc.Logout(context.Background(), accounts.LogoutRequest{RefreshToken: loginResp.RefreshToken})
+	if err != nil {
+		t.Errorf("second Logout should be idempotent, got: %v", err)
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.14 — GET /v1/accounts/me
+// -------------------------------------------------------------------------
+
+// TestGetMe_ValidToken verifies GetMe returns correct fields for authenticated account.
+func TestGetMe_ValidToken(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, _ := setupVerifiedAccount(t, svc)
+
+	// Get account ID via login
+	pool, _ := getSharedPool(t)
+	var accountID int64
+	err := pool.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE email = $1`, email).Scan(&accountID)
+	if err != nil {
+		t.Fatalf("get account id: %v", err)
+	}
+
+	resp, err := svc.GetMe(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("GetMe: %v", err)
+	}
+
+	if resp.Email != email {
+		t.Errorf("email = %q, want %q", resp.Email, email)
+	}
+	if !resp.EmailVerified {
+		t.Error("EmailVerified should be true")
+	}
+	if resp.UUID == "" {
+		t.Error("UUID should not be empty")
+	}
+	if resp.Status != "active" {
+		t.Errorf("Status = %q, want active", resp.Status)
+	}
+	if resp.CreatedAt == "" {
+		t.Error("CreatedAt should not be empty")
+	}
+}
+
+// TestGetMe_ResponseHasNoSecretMaterial verifies the response never contains auth_hash.
+func TestGetMe_ResponseHasNoSecretMaterial(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, _ := setupVerifiedAccount(t, svc)
+
+	pool, _ := getSharedPool(t)
+	var accountID int64
+	_ = pool.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE email = $1`, email).Scan(&accountID)
+
+	resp, err := svc.GetMe(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("GetMe: %v", err)
+	}
+
+	// Marshal to JSON to verify no secret fields leak through
+	b, _ := json.Marshal(resp)
+	s := string(b)
+
+	secretFields := []string{"auth_hash", "wrapped_key", "kdf_salt", "kdf_params", "auth_params"}
+	for _, field := range secretFields {
+		if strings.Contains(s, field) {
+			t.Errorf("response JSON contains secret field %q", field)
+		}
+	}
+}
+
+// TestGetMe_HTTPWithoutAuth verifies GET /accounts/me without auth → 401.
+func TestGetMe_HTTPWithoutAuth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	h := newHandler(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/accounts/me", h.HandleGetMe)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/accounts/me", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", w.Code)
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.15 — POST /v1/accounts/me/password
+// -------------------------------------------------------------------------
+
+// TestChangePassword_OldPasswordStopsWorking verifies old password is rejected.
+func TestChangePassword_OldPasswordStopsWorking(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, oldHash := setupVerifiedAccount(t, svc)
+
+	pool, _ := getSharedPool(t)
+	var accountID int64
+	_ = pool.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE email = $1`, email).Scan(&accountID)
+
+	newHash := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	err := svc.ChangePassword(context.Background(), accountID, accounts.ChangePasswordRequest{
+		CurrentAuthHash: oldHash,
+		NewAuthHash:     newHash,
+		NewAuthParams:   `{"m":8192,"t":1,"p":1}`,
+		NewWrappedKey:   []byte("newwrappedkey!!!"),
+		NewKDFSalt:      []byte("newsaltsaltsalt!"),
+		NewKDFParams:    `{"m":8192,"t":1,"p":1}`,
+	})
+	if err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+
+	// Old password should no longer work
+	_, err = svc.Login(context.Background(), accounts.LoginRequest{
+		Email:    email,
+		AuthHash: oldHash,
+	})
+	if err == nil {
+		t.Error("expected error: old password should no longer work after change")
+	}
+
+	// New password should work
+	_, err = svc.Login(context.Background(), accounts.LoginRequest{
+		Email:    email,
+		AuthHash: newHash,
+	})
+	if err != nil {
+		t.Errorf("new password should work: %v", err)
+	}
+}
+
+// TestChangePassword_RevokesAllSessions verifies all refresh tokens are revoked.
+func TestChangePassword_RevokesAllSessions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, authHash := setupVerifiedAccount(t, svc)
+
+	pool, _ := getSharedPool(t)
+	var accountID int64
+	_ = pool.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE email = $1`, email).Scan(&accountID)
+
+	// Create multiple sessions
+	resp1, _ := svc.Login(context.Background(), accounts.LoginRequest{Email: email, AuthHash: authHash})
+	resp2, _ := svc.Login(context.Background(), accounts.LoginRequest{Email: email, AuthHash: authHash})
+
+	newHash := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	err := svc.ChangePassword(context.Background(), accountID, accounts.ChangePasswordRequest{
+		CurrentAuthHash: authHash,
+		NewAuthHash:     newHash,
+		NewAuthParams:   `{"m":8192,"t":1,"p":1}`,
+		NewWrappedKey:   []byte("newwrappedkey!!!"),
+		NewKDFSalt:      []byte("newsaltsaltsalt!"),
+		NewKDFParams:    `{"m":8192,"t":1,"p":1}`,
+	})
+	if err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+
+	// Both existing sessions should be revoked
+	_, err = svc.RefreshSession(context.Background(), accounts.RefreshRequest{RefreshToken: resp1.RefreshToken})
+	if err == nil {
+		t.Error("session 1 should be revoked after password change")
+	}
+	_, err = svc.RefreshSession(context.Background(), accounts.RefreshRequest{RefreshToken: resp2.RefreshToken})
+	if err == nil {
+		t.Error("session 2 should be revoked after password change")
+	}
+
+	// Verify in DB
+	var unrevokedCount int
+	_ = pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM refresh_tokens
+		WHERE account_id = $1 AND revoked_at IS NULL
+	`, accountID).Scan(&unrevokedCount)
+
+	if unrevokedCount != 0 {
+		t.Errorf("expected 0 active sessions after password change, got %d", unrevokedCount)
+	}
+}
+
+// TestChangePassword_WrongCurrentPassword verifies wrong current password → error.
+func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	svc := newService(t)
+	email, _ := setupVerifiedAccount(t, svc)
+
+	pool, _ := getSharedPool(t)
+	var accountID int64
+	_ = pool.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE email = $1`, email).Scan(&accountID)
+
+	err := svc.ChangePassword(context.Background(), accountID, accounts.ChangePasswordRequest{
+		CurrentAuthHash: "wronghashwronghashwronghashwronghashwronghashwronghashwronghash",
+		NewAuthHash:     "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		NewAuthParams:   `{"m":8192,"t":1,"p":1}`,
+		NewWrappedKey:   []byte("newwrappedkey!!!"),
+		NewKDFSalt:      []byte("newsaltsaltsalt!"),
+		NewKDFParams:    `{"m":8192,"t":1,"p":1}`,
+	})
+	if err == nil {
+		t.Error("expected error for wrong current password")
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.18 — Security headers (integration via server)
+// -------------------------------------------------------------------------
+
+// TestSecurityHeaders_PresentOnEveryResponse verifies all required headers are set.
+func TestSecurityHeaders_PresentOnEveryResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	cfg := testConfig()
+	pool, _ := getSharedPool(t)
+	svc, _ := accounts.New(pool, cfg, discardLogger())
+	srv := server.New(cfg, pool, discardLogger(), svc)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+
+	requiredHeaders := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":        "DENY",
+		"Referrer-Policy":        "no-referrer",
+	}
+	for header, want := range requiredHeaders {
+		got := resp.Header.Get(header)
+		if got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+
+	// CSP must be present and block inline scripts
+	csp := resp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Error("Content-Security-Policy header is missing")
+	}
+	if !strings.Contains(csp, "default-src") {
+		t.Errorf("CSP %q does not contain default-src", csp)
+	}
+	// "default-src 'none'" blocks inline scripts
+	if !strings.Contains(csp, "'none'") {
+		t.Errorf("CSP %q does not block inline scripts (missing 'none')", csp)
 	}
 }
 

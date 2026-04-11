@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	appmiddleware "github.com/nikhil/scanvault-api/internal/middleware"
 )
 
 // Handler exposes the accounts service over HTTP.
@@ -156,6 +158,110 @@ func (h *Handler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond(w, http.StatusOK, resp)
+}
+
+// -------------------------------------------------------------------------
+// DELETE /v1/sessions
+// -------------------------------------------------------------------------
+
+// HandleLogout revokes the current refresh token.
+//
+//	204 — logged out
+//	400 — missing refresh_token
+//	401 — not authenticated or token not found
+func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	var req LogoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondErr(w, http.StatusBadRequest, "sessions.bad_request", "Invalid JSON body")
+		return
+	}
+	if req.RefreshToken == "" {
+		respondErr(w, http.StatusBadRequest, "sessions.missing_token", "refresh_token is required")
+		return
+	}
+
+	err := h.svc.Logout(r.Context(), req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrBadCredentials):
+			respondErr(w, http.StatusUnauthorized, "sessions.invalid_token", "Refresh token not found")
+		default:
+			respondErr(w, http.StatusInternalServerError, "sessions.internal", "Internal server error")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// -------------------------------------------------------------------------
+// GET /v1/accounts/me
+// -------------------------------------------------------------------------
+
+// HandleGetMe returns the authenticated account's public information.
+//
+//	200 — account info (no secret material)
+//	401 — not authenticated
+func (h *Handler) HandleGetMe(w http.ResponseWriter, r *http.Request) {
+	claims := appmiddleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		respondErr(w, http.StatusUnauthorized, "auth.missing_claims", "Authentication required")
+		return
+	}
+
+	resp, err := h.svc.GetMe(r.Context(), claims.AccountID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAccountNotFound):
+			respondErr(w, http.StatusUnauthorized, "auth.invalid_token", "Account not found")
+		default:
+			respondErr(w, http.StatusInternalServerError, "accounts.internal", "Internal server error")
+		}
+		return
+	}
+
+	respond(w, http.StatusOK, resp)
+}
+
+// -------------------------------------------------------------------------
+// POST /v1/accounts/me/password
+// -------------------------------------------------------------------------
+
+// HandleChangePassword verifies the current password and updates auth material.
+// All existing sessions are revoked atomically.
+//
+//	204 — password changed, all sessions revoked
+//	400 — missing/invalid fields
+//	401 — wrong current password or not authenticated
+func (h *Handler) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := appmiddleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		respondErr(w, http.StatusUnauthorized, "auth.missing_claims", "Authentication required")
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondErr(w, http.StatusBadRequest, "accounts.bad_request", "Invalid JSON body")
+		return
+	}
+
+	err := h.svc.ChangePassword(r.Context(), claims.AccountID, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrWrongCurrentPassword):
+			respondErr(w, http.StatusUnauthorized, "accounts.wrong_password", "Current password is incorrect")
+		case errors.Is(err, ErrAccountNotFound):
+			respondErr(w, http.StatusUnauthorized, "auth.invalid_token", "Account not found")
+		case errors.Is(err, ErrInvalidEmail):
+			respondErr(w, http.StatusBadRequest, "accounts.missing_fields", "Missing required fields")
+		default:
+			respondErr(w, http.StatusInternalServerError, "accounts.internal", "Internal server error")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // -------------------------------------------------------------------------
