@@ -1,0 +1,17 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+
+style:
+  MagicNumber:
+    active: false
+
+complexity:
+  LongMethod:
+    threshold: 80
+
+naming:
+  FunctionNaming:
+    functionPattern: '[a-z][A-Za-z0-9]*'

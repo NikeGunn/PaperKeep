@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-11
-**Last completed task:** 1A.23 — Phase 1A complete
+**Last completed task:** 1B.4 — Hilt DI wired up
 
 ---
 
@@ -72,10 +72,10 @@
 > **Depends on:** Phase 0 completed
 > **Runs in PARALLEL with Phase 1A**
 
-- [ ] **1B.1** Multi-module Gradle setup (`:app`, `:core:*`, `:feature:*`) per spec section 2
-- [ ] **1B.2** Version catalog (`libs.versions.toml`)
-- [ ] **1B.3** Detekt config + R8 config + baseline ProGuard rules
-- [ ] **1B.4** Hilt DI wired up
+- [x] **1B.1** Multi-module Gradle setup (`:app`, `:core:*`, `:feature:*`) per spec section 2 — 2026-04-11
+- [x] **1B.2** Version catalog (`libs.versions.toml`) — 2026-04-11
+- [x] **1B.3** Detekt config + R8 config + baseline ProGuard rules — 2026-04-11
+- [x] **1B.4** Hilt DI wired up — 2026-04-11
 - [ ] **1B.5** Material 3 theme with dynamic color (colors from docs/DESIGN_SYSTEM.md section 2.2)
 - [ ] **1B.6** Splash screen API
 - [ ] **1B.7** Adaptive app icon placeholder

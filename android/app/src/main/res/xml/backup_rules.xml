@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude encrypted files from backup — keys are hardware-bound -->
+    <exclude domain="file" path="scans/" />
+    <exclude domain="database" path="scanvault.db" />
+</full-backup-content>
