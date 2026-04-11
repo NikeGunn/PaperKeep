@@ -40,6 +40,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.bundles.lifecycle)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.coil.compose)
+    implementation(project(":core:domain"))
 
     debugImplementation(libs.androidx.ui.tooling)
 

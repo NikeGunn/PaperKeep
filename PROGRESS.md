@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-11
-**Last completed task:** 2A.12 — PHASE 2A COMPLETE
+**Last completed task:** 2B.3 — Library screen, DocumentCard, LibraryViewModel, Folders complete
 
 ---
 
@@ -140,9 +140,9 @@
 > **Depends on:** Phase 1B completed
 > **Runs in PARALLEL with Phase 2A**
 
-- [ ] **2B.1** Document + Page Room entities with relations
-- [ ] **2B.2** Library screen (grid, cards from docs/DESIGN_SYSTEM.md 2.7, multi-select, sort)
-- [ ] **2B.3** Folders (one level deep, create/rename/delete)
+- [x] **2B.1** Document + Page Room entities with relations — 2026-04-11
+- [x] **2B.2** Library screen (grid, cards from docs/DESIGN_SYSTEM.md 2.7, multi-select, sort) — 2026-04-11
+- [x] **2B.3** Folders (one level deep, create/rename/delete) — 2026-04-11
 - [ ] **2B.4** Full-text search (Room FTS4)
 - [ ] **2B.5** Multi-page capture flow (batch mode, reorder screen)
 - [ ] **2B.6** Image filters (Original, Auto, Magic Color, Grayscale, B&W) in `:core:imaging`
