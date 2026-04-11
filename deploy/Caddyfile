@@ -1,0 +1,21 @@
+api.scanvault.app {
+	reverse_proxy localhost:8080
+
+	tls {
+		protocols tls1.3
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'none'"
+	}
+
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}

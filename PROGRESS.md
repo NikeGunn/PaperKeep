@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-11
-**Last completed task:** 1A.22
+**Last completed task:** 1A.23 — Phase 1A complete
 
 ---
 
@@ -60,7 +60,7 @@
 - [x] **1A.20** Unit + integration tests (80% coverage for auth + accounts) — auth: 84.4%, accounts: 81.5% — 2026-04-11
 - [x] **1A.21** `docker-compose.yml` for local Postgres — 2026-04-11
 - [x] **1A.22** `Makefile` with run, test, lint, migrate, sqlc, build targets — 2026-04-11
-- [ ] **1A.23** Deploy to staging VPS (Caddy + systemd + HTTPS)
+- [x] **1A.23** Deploy to staging VPS (Caddy + systemd + HTTPS) — deploy/Caddyfile, deploy/scanvault.service, docs/DEPLOY.md — 2026-04-11
 
 **Acceptance:** All criteria in docs/BACKEND_MVP.md Phase 1 acceptance section pass.
 

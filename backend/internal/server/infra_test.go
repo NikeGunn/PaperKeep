@@ -141,3 +141,173 @@ func TestMakefile_HasLDFLAGSForBuildMetadata(t *testing.T) {
 		}
 	}
 }
+
+// -------------------------------------------------------------------------
+// 1A.23 — deploy/Caddyfile
+// -------------------------------------------------------------------------
+
+// repoRoot returns the absolute path to the repo root (three levels above the test file).
+// backend/internal/server/infra_test.go → up 3 → ScanVault/
+func repoRoot() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "..", "..", "..")
+}
+
+// TestCaddyfile_Exists verifies deploy/Caddyfile is present.
+func TestCaddyfile_Exists(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "Caddyfile")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("deploy/Caddyfile not found at %s: %v", path, err)
+	}
+}
+
+// TestCaddyfile_HasCorrectDomainAndPort verifies the reverse-proxy target.
+func TestCaddyfile_HasCorrectDomainAndPort(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "Caddyfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read Caddyfile: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "api.scanvault.app") {
+		t.Error("Caddyfile missing domain api.scanvault.app")
+	}
+	if !strings.Contains(content, "localhost:8080") {
+		t.Error("Caddyfile missing reverse_proxy target localhost:8080")
+	}
+	if !strings.Contains(content, "reverse_proxy") {
+		t.Error("Caddyfile missing reverse_proxy directive")
+	}
+}
+
+// TestCaddyfile_HasTLS13Minimum verifies TLS 1.3 is enforced.
+func TestCaddyfile_HasTLS13Minimum(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "Caddyfile")
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "tls1.3") {
+		t.Error("Caddyfile missing TLS 1.3 minimum (tls1.3)")
+	}
+}
+
+// TestCaddyfile_HasHSTSWithPreload verifies HSTS header with preload is configured.
+func TestCaddyfile_HasHSTSWithPreload(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "Caddyfile")
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "Strict-Transport-Security") {
+		t.Error("Caddyfile missing Strict-Transport-Security header")
+	}
+	if !strings.Contains(content, "preload") {
+		t.Error("Caddyfile HSTS missing preload directive")
+	}
+	if !strings.Contains(content, "includeSubDomains") {
+		t.Error("Caddyfile HSTS missing includeSubDomains")
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.23 — deploy/scanvault.service
+// -------------------------------------------------------------------------
+
+// TestSystemdUnit_Exists verifies deploy/scanvault.service is present.
+func TestSystemdUnit_Exists(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "scanvault.service")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("deploy/scanvault.service not found at %s: %v", path, err)
+	}
+}
+
+// TestSystemdUnit_HasRequiredSections verifies [Unit], [Service], [Install] exist.
+func TestSystemdUnit_HasRequiredSections(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "scanvault.service")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read scanvault.service: %v", err)
+	}
+	content := string(data)
+
+	for _, section := range []string{"[Unit]", "[Service]", "[Install]"} {
+		if !strings.Contains(content, section) {
+			t.Errorf("scanvault.service missing section %q", section)
+		}
+	}
+}
+
+// TestSystemdUnit_HasRestartOnFailure verifies Restart=on-failure is set.
+func TestSystemdUnit_HasRestartOnFailure(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "scanvault.service")
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "Restart=on-failure") {
+		t.Error("scanvault.service missing Restart=on-failure")
+	}
+}
+
+// TestSystemdUnit_HasEnvironmentFile verifies EnvironmentFile is used (not hardcoded secrets).
+func TestSystemdUnit_HasEnvironmentFile(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "scanvault.service")
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "EnvironmentFile=") {
+		t.Error("scanvault.service missing EnvironmentFile directive")
+	}
+	// Must not hardcode common secret-looking env var names directly
+	for _, secret := range []string{"DATABASE_URL=postgres://", "PASETO_KEY="} {
+		if strings.Contains(content, secret) {
+			t.Errorf("scanvault.service appears to hardcode secret %q — use EnvironmentFile instead", secret)
+		}
+	}
+}
+
+// TestSystemdUnit_HasWantedBy verifies WantedBy=multi-user.target for auto-start.
+func TestSystemdUnit_HasWantedBy(t *testing.T) {
+	path := filepath.Join(repoRoot(), "deploy", "scanvault.service")
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "WantedBy=multi-user.target") {
+		t.Error("scanvault.service missing WantedBy=multi-user.target")
+	}
+}
+
+// -------------------------------------------------------------------------
+// 1A.23 — docs/DEPLOY.md
+// -------------------------------------------------------------------------
+
+// TestDeployDoc_Exists verifies docs/DEPLOY.md is present.
+func TestDeployDoc_Exists(t *testing.T) {
+	path := filepath.Join(repoRoot(), "docs", "DEPLOY.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("docs/DEPLOY.md not found at %s: %v", path, err)
+	}
+}
+
+// TestDeployDoc_HasRequiredSections verifies DEPLOY.md covers key operational areas.
+func TestDeployDoc_HasRequiredSections(t *testing.T) {
+	path := filepath.Join(repoRoot(), "docs", "DEPLOY.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read DEPLOY.md: %v", err)
+	}
+	content := string(data)
+
+	required := []string{
+		"Caddy",
+		"systemd",
+		"EnvironmentFile",
+		"chmod",
+		"0600",
+		"rollback",
+	}
+	for _, keyword := range required {
+		if !strings.Contains(content, keyword) {
+			t.Errorf("DEPLOY.md missing expected content %q", keyword)
+		}
+	}
+}
