@@ -12,23 +12,25 @@ import (
 
 	"github.com/nikhil/scanvault-api/internal/accounts"
 	"github.com/nikhil/scanvault-api/internal/config"
+	applogger "github.com/nikhil/scanvault-api/internal/logger"
 	"github.com/nikhil/scanvault-api/internal/server"
 )
 
 func main() {
 	// -------------------------------------------------------------------------
-	// Logger — JSON structured, no secrets ever emitted
+	// Logger — JSON structured, no secrets ever emitted, build metadata baked in
 	// -------------------------------------------------------------------------
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	logger := applogger.New(slog.LevelInfo)
 	slog.SetDefault(logger)
 
 	// -------------------------------------------------------------------------
 	// Config — crash loudly on misconfiguration
 	// -------------------------------------------------------------------------
 	cfg := config.MustLoad()
-	logger.Info("config loaded", slog.String("env", cfg.Environment), slog.String("port", cfg.ServerPort))
+	logger.Info("config loaded",
+		slog.String("env", cfg.Environment),
+		slog.String("port", cfg.ServerPort),
+	)
 
 	// -------------------------------------------------------------------------
 	// Database — pgxpool, 10-second connection timeout at startup

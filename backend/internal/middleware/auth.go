@@ -92,6 +92,17 @@ func AccountFromContext(ctx context.Context) *db.Account {
 	return v
 }
 
+// InjectClaimsForTest injects claims and an optional account into a context.
+// This is intended for use in tests that need to simulate authenticated requests
+// without running the full auth middleware stack.
+func InjectClaimsForTest(ctx context.Context, claims *auth.Claims, account *db.Account) context.Context {
+	ctx = context.WithValue(ctx, claimsKey, claims)
+	if account != nil {
+		ctx = context.WithValue(ctx, accountKey, account)
+	}
+	return ctx
+}
+
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------

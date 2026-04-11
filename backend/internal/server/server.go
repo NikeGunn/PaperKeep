@@ -198,6 +198,9 @@ func (s *Server) echoRequestID() func(http.Handler) http.Handler {
 }
 
 // structuredLogger returns middleware that emits one JSON log line per request.
+// Fields: request_id, method, path, status, bytes, duration_ms, remote_addr.
+// Secret fields (auth_hash, wrapped_key, …) are never logged here — they never
+// appear in the path or as named slog attributes.
 func (s *Server) structuredLogger() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +213,7 @@ func (s *Server) structuredLogger() func(http.Handler) http.Handler {
 				slog.String("path", r.URL.Path),
 				slog.Int("status", ww.Status()),
 				slog.Int64("bytes", int64(ww.BytesWritten())),
-				slog.Duration("duration", time.Since(start)),
+				slog.Float64("duration_ms", float64(time.Since(start).Microseconds())/1000.0),
 				slog.String("remote_addr", r.RemoteAddr),
 			)
 		})

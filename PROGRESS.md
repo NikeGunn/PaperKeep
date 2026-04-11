@@ -6,8 +6,8 @@
 ## Current Sprint: WEEK 1 — Foundation
 
 **Status:** IN PROGRESS
-**Last session:** 2026-04-10
-**Last completed task:** 0.13
+**Last session:** 2026-04-11
+**Last completed task:** 1A.22
 
 ---
 
@@ -56,10 +56,10 @@
 - [x] **1A.16** Auth middleware (Paseto verification, account loading) — 2026-04-11
 - [x] **1A.17** Rate limiting (in-memory for Phase 1) — 2026-04-11
 - [x] **1A.18** Security headers middleware — 2026-04-11
-- [ ] **1A.19** Structured logging with slog (JSON, no secrets in logs)
-- [ ] **1A.20** Unit + integration tests (80% coverage for auth + accounts)
-- [ ] **1A.21** `docker-compose.yml` for local Postgres
-- [ ] **1A.22** `Makefile` with run, test, lint, migrate, sqlc, build targets
+- [x] **1A.19** Structured logging with slog (JSON, no secrets in logs) — 2026-04-11
+- [x] **1A.20** Unit + integration tests (80% coverage for auth + accounts) — auth: 84.4%, accounts: 81.5% — 2026-04-11
+- [x] **1A.21** `docker-compose.yml` for local Postgres — 2026-04-11
+- [x] **1A.22** `Makefile` with run, test, lint, migrate, sqlc, build targets — 2026-04-11
 - [ ] **1A.23** Deploy to staging VPS (Caddy + systemd + HTTPS)
 
 **Acceptance:** All criteria in docs/BACKEND_MVP.md Phase 1 acceptance section pass.

@@ -1,0 +1,30 @@
+version: "3.9"
+
+# Local development Postgres for ScanVault backend.
+# Usage: docker compose up -d postgres
+#
+# The backend reads DATABASE_URL from .env — set it to:
+#   postgres://scanvault:scanvault@localhost:5432/scanvault?sslmode=disable
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scanvault
+      POSTGRES_PASSWORD: scanvault
+      POSTGRES_DB: scanvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scanvault -d scanvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
