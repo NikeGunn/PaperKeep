@@ -2,7 +2,10 @@
 <resources>
     <style name="Theme.ScanVault" parent="android:Theme.Material.Light.NoActionBar" />
     <style name="Theme.ScanVault.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <!-- Warm amber brand background — 300ms max as per spec -->
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimationDuration">300</item>
         <item name="postSplashScreenTheme">@style/Theme.ScanVault</item>
     </style>
 </resources>
