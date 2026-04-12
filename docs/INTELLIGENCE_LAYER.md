@@ -598,24 +598,49 @@ When the single VPS is insufficient:
 
 The intelligence layer is **Phase 4+** work. It doesn't block Phases 1-3 of the frontend or backend.
 
-### Intelligence Phase 1 (parallel with Backend Phase 4)
+> **Session mapping:**
+> - **Session 29** = Intelligence Phase 1 starts (3C.1–3C.4): Docker, health, classify, OCR, vision enhance
+> - **Session 30** = Intelligence Phase 1 finishes (3C.5–3C.8): Redis queue, R2, docker-compose, CI
+> - **Session 35** = Intelligence Phase 2 starts (4C.1–4C.3): layout, extraction, super-resolution
+> - **Session 36** = Intelligence Phase 2 finishes + **Go integration** (4C.4–4C.7): Go proxy package, migration 0004, API endpoints, metrics
+>
+> **Sessions 1–28 do not touch the intelligence layer.** Stubs in `intelligence/` are placeholders only — real code starts Session 29.
+
+### Integration Cross-Reference
+
+> **Go → Python wiring (Session 36, tasks 4C.4–4C.7):**
+> The Go backend `internal/intelligence/` package (see `docs/BACKEND_MVP.md` §2 directory map) is built in Session 36. Until that session, Python and Go are completely independent. Do NOT attempt to call Go from Python or Python from Go in any earlier session.
+>
+> **Key constants (use these exact values — do NOT invent alternatives):**
+> - Redis queue name: `scanvault:intelligence:tasks`
+> - Redis result channel: `scanvault:intelligence:results`
+> - Python service port: `8100` (Docker container, internal only — never exposed via Caddy)
+> - Python service URL (as seen from Go): `http://localhost:8100`
+> - R2 processing prefix: `processing/<account_uuid>/<task_uuid>/` (1-hour TTL, separate from vault prefix `vault/`)
+>
+> **Python port 8100 is NEVER exposed to the internet.** Caddy does NOT proxy to it. Only the Go backend on the same host can reach it. If you see any config that exposes port 8100 externally, it is wrong — fix it.
+
+### Intelligence Phase 1 (Sessions 29–30, parallel with Backend Phase 4 / PROGRESS.md tasks 3C.x)
 
 - Project skeleton, FastAPI app, Docker setup, CI pipeline
-- Health endpoint
+- Health endpoint (`GET /health` → `{"status": "healthy", "version": "...", "uptime": N}`)
 - Classification endpoint (lightweight, high value)
 - Enhanced OCR endpoint (PaddleOCR, single page)
-- Redis queue integration with Go backend
+- Redis queue integration (ARQ worker consuming from `scanvault:intelligence:tasks`)
 - Basic image enhancement pipeline (denoise, sharpen, balance)
 
-### Intelligence Phase 2 (parallel with Backend Phase 5)
+### Intelligence Phase 2 (Sessions 35–36, parallel with Backend Phase 5 / PROGRESS.md tasks 4C.x)
 
 - Layout analysis and table extraction
 - Structured field extraction (receipts, invoices, IDs)
 - Super-resolution for blurry captures
 - Async worker pool for batch processing
 - Prometheus metrics
+- **Go `internal/intelligence/` proxy package** (Session 36 only — wires Go to Python for the first time)
+- **Migration 0004** (`intelligence_tasks` table — see schema in §2.1 above)
+- **Go intelligence API endpoints** (`/v1/intelligence/classify`, `/v1/intelligence/tasks`, `/v1/intelligence/tasks/{id}`, `DELETE /v1/intelligence/tasks/{id}`)
 
-### Intelligence Phase 3 (post-launch, v2)
+### Intelligence Phase 3 (post-launch, v2 — no session number, future work)
 
 - Summarization (requires LLM or large model)
 - Semantic search embeddings

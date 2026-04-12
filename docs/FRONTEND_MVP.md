@@ -431,6 +431,85 @@ Phases are sequential. Do not start phase N+1 until phase N passes its acceptanc
 
 **Backend handshake:** This is where frontend meets `BACKEND_MVP.md` Phase 1–3. Before starting, the backend must have: account creation, login with Argon2id, encrypted blob upload/download, and sync manifest endpoints live on a staging environment.
 
+> **GATE (mandatory before 4B.1):** The Go backend MUST be deployed to staging with Backend Phase 1–3 complete. Check `PROGRESS.md` — tasks 1A.x, 1B.x, 1C.x, 2A.x, 2B.x, 3A.x must all be checked before writing any Ktor code.
+
+#### API Contract — Endpoints Android Calls
+
+Android communicates **only with the Go backend** over HTTPS. It never calls Python directly. All URLs below assume:
+- **Production:** `https://api.scanvault.app/v1`
+- **Staging:** `https://api-staging.scanvault.app/v1`
+
+Configure the base URL via a `BuildConfig` field injected by Gradle (`buildConfigField("String", "API_BASE_URL", ...)`).
+
+| Phase task | Method | Path | Go handler package | Notes |
+|---|---|---|---|---|
+| 4B.1 — AccountScreen | `POST` | `/accounts` | `internal/accounts` | Create account; body: `{email, password_hash, wrapped_key, argon2_params}` |
+| 4B.1 — Login | `POST` | `/sessions` | `internal/accounts` | Returns Paseto token (15 min) + refresh token (30 days) |
+| 4B.1 — Refresh | `PUT` | `/sessions` | `internal/accounts` | Rotate tokens |
+| 4B.2 — Upload blob | `POST` | `/vault/blobs` | `internal/vault` | Multipart; body is AES-256-GCM ciphertext — server stores opaque bytes |
+| 4B.2 — Download blob | `GET` | `/vault/blobs/{id}` | `internal/vault` | Returns raw ciphertext; client decrypts |
+| 4B.3 — Sync manifest | `GET` | `/vault/manifest` | `internal/vault` | Returns `[{doc_id, version, updated_at, size_encrypted}]` |
+| 4B.3 — Delete blob | `DELETE` | `/vault/blobs/{id}` | `internal/vault` | Marks tombstone; propagated to other devices via manifest |
+| 4B.6 — Delete account | `DELETE` | `/accounts/me` | `internal/accounts` | Purges all blobs; client wipes local data |
+| 4C.4 — Submit AI task | `POST` | `/intelligence/tasks` | `internal/intelligence` | Body: `{type, source_blob_id}`. Returns `{task_id, status:"queued"}` |
+| 4C.5 — Poll AI result | `GET` | `/intelligence/tasks/{id}` | `internal/intelligence` | Returns `{status, result_blob_id?, error?}` |
+
+**Auth header for all requests (except `/accounts` POST and `/sessions` POST):**
+```
+Authorization: Bearer <paseto_token>
+```
+
+**Error contract** (matches Go backend conventions):
+- `400` — invalid input; body: `{"error": "human readable message"}`
+- `401` — missing/expired token
+- `404` — resource not found (also returned for another user's resource — never `403`)
+- `429` — rate limited; `Retry-After` header present
+- `503` — backend or intelligence layer temporarily unavailable
+
+#### `:core:network` Module — Implementation Notes
+
+The module at `android/core/network/` is **intentionally stubbed until 4B.2**. When implementing:
+
+```
+core/network/
+├── src/main/java/com/scanvault/core/network/
+│   ├── NetworkModule.kt         ← Hilt: provides KtorHttpClient (OkHttp engine, cert pin)
+│   ├── ScanVaultApiClient.kt    ← All HTTP calls as suspend fns, one fn per endpoint above
+│   ├── model/                   ← Serializable request/response DTOs
+│   │   ├── AccountModels.kt
+│   │   ├── VaultModels.kt
+│   │   └── IntelligenceModels.kt
+│   └── auth/
+│       ├── TokenStore.kt        ← Stores Paseto token in EncryptedSharedPreferences
+│       └── AuthInterceptor.kt   ← Ktor feature: injects + auto-refreshes tokens
+```
+
+**Certificate pinning config** (add to `NetworkModule.kt`):
+```kotlin
+install(HttpTimeout) { requestTimeoutMillis = 30_000 }
+engine {
+    config {
+        certificatePinner(CertificatePinner.Builder()
+            .add("api.scanvault.app", "sha256/<PRIMARY_PIN>")
+            .add("api.scanvault.app", "sha256/<BACKUP_PIN>")
+            .build())
+    }
+}
+```
+Replace `<PRIMARY_PIN>` and `<BACKUP_PIN>` with real SHA-256 pins from the staging cert before 4B.1 tests run.
+
+#### Intelligence Feature — What Android Does in Phase 4C
+
+The intelligence flow is **user-opt-in per document**. Android never auto-uploads to AI.
+
+1. User taps "Cloud AI" on a document → Android shows consent dialog
+2. On consent: Android decrypts the document pages locally (using `K_master`)
+3. Android uploads plaintext images to Go: `POST /vault/blobs` tagged with `processing: true` (1-hour TTL)
+4. Android calls `POST /intelligence/tasks` with `{type: "ocr.enhance", source_blob_id: "..."}`
+5. Go enqueues to Redis (`scanvault:intelligence:tasks`) → Python processes → writes result blob
+6. Android polls `GET /intelligence/tasks/{id}` every 5 seconds until status = `completed` or `failed`
+7. On `completed`: Android downloads result blob, re-encrypts with `K_master`, stores locally; ephemeral processing blob is auto-deleted by Go after 1 hour
+
 #### Deliverables
 
 1. **Account screen**

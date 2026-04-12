@@ -118,6 +118,13 @@ scanvault-api/
 │   │   ├── repository.go          # Postgres access (sqlc-generated)
 │   │   └── storage.go             # R2 client wrapper
 │   ├── sync/                      # Manifest, conflict resolution
+│   ├── intelligence/              # Phase 4C: proxy to Python AI layer
+│   │   ├── handler.go             # /v1/intelligence/* HTTP handlers
+│   │   ├── service.go             # Quota check, task lifecycle
+│   │   ├── queue.go               # Redis publisher (enqueue tasks)
+│   │   ├── client.go              # HTTP client to Python :8100
+│   │   ├── models.go              # Task types, status enums, request/response structs
+│   │   └── repository.go          # sqlc queries for intelligence_tasks table
 │   ├── email/                     # Postmark client
 │   ├── ratelimit/                 # Rate limiter middleware
 │   ├── security/                  # Headers, CORS, HSTS
@@ -314,6 +321,73 @@ These are non-negotiable. Every phase must satisfy all of these before it is con
 - Pagination: cursor-based (`?after=<uuid>&limit=50`), not offset
 - Versioning: URL path (`/v1/`), never headers
 - Idempotency: `Idempotency-Key` header required on POST/PUT/DELETE
+
+### Full API Route Map (all phases, for reference)
+
+```
+# Phase 1 — Auth & Accounts
+POST   /v1/accounts                        → create account
+GET    /v1/accounts/verify                 → verify email
+GET    /v1/accounts/me                     → get account (auth required)
+POST   /v1/accounts/me/password            → change password (auth required)
+POST   /v1/sessions                        → login
+POST   /v1/sessions/refresh                → refresh token
+DELETE /v1/sessions                        → logout (auth required)
+
+# Phase 2 — Vault
+POST   /v1/vault/documents                 → create document
+GET    /v1/vault/documents                 → list documents (cursor paginated)
+GET    /v1/vault/documents/{uuid}          → get document + pages
+PUT    /v1/vault/documents/{uuid}          → update metadata (optimistic concurrency)
+DELETE /v1/vault/documents/{uuid}          → soft delete
+POST   /v1/vault/documents/{doc}/pages/upload-url      → request R2 presigned PUT URL
+POST   /v1/vault/documents/{doc}/pages/{page}/confirm  → confirm upload (HeadObject verify)
+GET    /v1/vault/documents/{doc}/pages/{page}/download-url → presigned GET URL
+GET    /v1/vault/manifest                  → sync manifest (since=timestamp)
+
+# Phase 3 — Sync & Conflict
+POST   /v1/vault/documents/batch           → batch create/update/delete
+GET    /v1/accounts/me/activity            → audit events
+GET    /v1/accounts/me/sessions            → active sessions
+DELETE /v1/accounts/me/sessions/{id}       → revoke session
+POST   /v1/accounts/me/delete              → initiate account deletion (7-day grace)
+
+# Phase 4C — Intelligence Proxy (Go proxies to Python :8100)
+POST   /v1/intelligence/classify           → sync classify (<200ms), returns doc type
+POST   /v1/intelligence/extract            → sync field extraction (<2s)
+POST   /v1/intelligence/enhance            → sync image enhancement (returns image bytes)
+POST   /v1/intelligence/tasks              → submit async task, returns task_id + 202
+GET    /v1/intelligence/tasks/{id}         → poll task status + result
+GET    /v1/intelligence/tasks              → list recent tasks for account
+DELETE /v1/intelligence/tasks/{id}         → cancel pending/processing task
+
+# Rate limits on intelligence endpoints:
+# - Sync endpoints (classify/extract/enhance): 20 requests/minute per account
+# - Async submit: 100 tasks/hour per account
+# - Poll (GET tasks/{id}): 60 requests/minute per account
+```
+
+### Intelligence Proxy — Architecture Note (Phase 4C)
+
+Android **never calls Python directly**. All AI requests go:
+`Android → POST /v1/intelligence/* → Go internal/intelligence/ → Python :8100`
+
+Go's `internal/intelligence/` package:
+1. Validates Paseto token (standard auth middleware)
+2. Checks per-account AI quota (stored in `intelligence_tasks` table)
+3. For sync ops: forwards HTTP request to Python `http://localhost:8100/api/v1/`
+4. For async ops: publishes JSON task to Redis queue `scanvault:intelligence:tasks`
+5. Python worker picks up task, processes, publishes result to `scanvault:intelligence:results`
+6. Go handler returns `202 Accepted` with `task_id` immediately
+
+**Processing data flow (zero-knowledge preserved):**
+1. User opts in per-document ("Enhance with AI" toggle)
+2. Android decrypts page locally (vault copy stays encrypted)
+3. Android uploads plaintext to R2 `processing/<account_uuid>/<task_uuid>/input.bin`
+4. Android calls `POST /v1/intelligence/tasks` with the R2 key
+5. Python reads from R2, processes, writes output to `processing/<account_uuid>/<task_uuid>/output.bin`
+6. Client gets result, re-encrypts, saves to vault
+7. TTL cleanup job deletes everything in `processing/` after 1 hour
 
 ---
 
@@ -867,25 +941,39 @@ BACKEND Phase 2 (vault + R2)
    │   → FRONTEND is in Phase 2-3 (still no integration)
    │
    ▼
-BACKEND Phase 3 (sync + abuse prevention)   ←── FIRST INTEGRATION POINT
-   │                                            FRONTEND Phase 4 starts integrating
+BACKEND Phase 3 (sync + abuse prevention)
    │   → Full sync protocol frozen
-   │   → Contract testing between FE and BE
+   │   → Account lockout, CAPTCHA, audit log, batch ops live
    │
    ▼
-BACKEND Phase 4 (observability + backups)   ←── FRONTEND Phase 4 deep testing
-   │
+BACKEND Phase 4 (observability + backups)   ←── FRONTEND Phase 4B (first integration!)
+   │                                         ←── INTELLIGENCE Phase 4C (Go↔Python wired)
    │   → Metrics, alerts, backups, load tested
-   │   → Real user flows exercised on staging
+   │   → Android first makes real API calls against staging
+   │   → Go internal/intelligence/ proxy wired to Python :8100
+   │   → intelligence_tasks migration (0004) applied
    │
    ▼
 BACKEND Phase 5 (production hardening)      ←── FRONTEND Phase 5 launch
    │
    │   → Prod environment live
-   │   → Ship both together
+   │   → Ship all three layers together
 ```
 
 **Key discipline:** the API contract is frozen at the end of Backend Phase 3. After that, only additive changes. Breaking changes require a `/v2/` path.
+
+### Intelligence Integration Checklist (Phase 4C)
+
+Before Phase 4C is done, ALL of these must be true:
+- [ ] `internal/intelligence/` package exists with `handler.go`, `service.go`, `queue.go`, `client.go`, `models.go`
+- [ ] Migration `0004_intelligence_tasks.sql` creates `intelligence_tasks` table
+- [ ] `POST /v1/intelligence/classify` proxies to Python `POST /api/v1/classify`
+- [ ] `POST /v1/intelligence/tasks` enqueues to Redis `scanvault:intelligence:tasks`
+- [ ] `GET /v1/intelligence/tasks/{id}` reads task status from Postgres
+- [ ] Rate limits enforced (20/min sync, 100/hr async)
+- [ ] All intelligence endpoints return 401 without valid Paseto token
+- [ ] Python service timeout (5s for sync, async goes to queue) handled gracefully
+- [ ] `go test -race ./...` passes ALL tests including intelligence package
 
 ---
 
