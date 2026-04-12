@@ -545,26 +545,38 @@ if [[ "$MODE" != "backend-only" && $DO_INSTALL == true ]]; then
   banner "Logcat — ${DEVICE_MODEL}"
   echo ""
 
-  # Wait a moment for the app to start so we get the right PID
-  sleep 2
-  APP_PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE_DEBUG" 2>/dev/null | tr -d '\r' || echo "")
-
-  if [[ -z "$APP_PID" ]]; then
-    # Try without .debug suffix (older launch)
-    APP_PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE" 2>/dev/null | tr -d '\r' || echo "")
-  fi
-
-  PID_FILTER=""
-  if [[ -n "$APP_PID" ]]; then
-    PID_FILTER="--pid=$APP_PID"
-    ok "Filtering logcat to PID $APP_PID (${APP_PACKAGE_DEBUG})"
-  else
-    warn "Could not get app PID — showing all logs (may be noisy)"
-  fi
-
+  # Poll for app PID up to 15s — the app takes a few seconds to start
+  info "Waiting for app to start..."
+  APP_PID=""
+  for i in $(seq 1 15); do
+    PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE_DEBUG" 2>/dev/null | tr -d '[:space:]' || true)
+    if [[ -z "$PID" ]]; then
+      PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE" 2>/dev/null | tr -d '[:space:]' || true)
+    fi
+    if [[ -n "$PID" && "$PID" =~ ^[0-9]+$ ]]; then
+      APP_PID="$PID"
+      ok "App running — PID $APP_PID"
+      break
+    fi
+    printf "\r  [%ds] waiting for app process..." "$i"
+    sleep 1
+  done
   echo ""
-  # Colourised logcat
-  adb_cmd -s "$DEVICE_SERIAL" logcat $PID_FILTER -v time 2>/dev/null \
+
+  # Build logcat filter — prefer PID filter; fall back to tag filter (never --pid=0)
+  LOGCAT_ARGS=("-v" "time")
+  if [[ -n "$APP_PID" ]]; then
+    LOGCAT_ARGS+=("--pid=$APP_PID")
+  else
+    warn "App PID not found — filtering by package name tag (may be slightly noisy)"
+    # Tag filter: show any log line containing the package name
+    LOGCAT_ARGS+=("-s" "ScanVault:V" "AndroidRuntime:E" "System.err:W")
+  fi
+
+  printf "${CYAN}  Streaming logs — Ctrl+C to stop (app keeps running on phone)${NC}\n\n"
+
+  # Colourised logcat — never exits until Ctrl+C
+  adb_cmd -s "$DEVICE_SERIAL" logcat "${LOGCAT_ARGS[@]}" 2>/dev/null \
     | while IFS= read -r line; do
         case "$line" in
           *" E "*)  printf "${RED}%s${NC}\n"    "$line" ;;
