@@ -112,9 +112,27 @@ if [[ "$METHOD" == "A" ]]; then
     ok "USB device: ${USB_MODEL} (${USB_SERIAL})"
   fi
 
-  # Get phone's Wi-Fi IP
-  PHONE_WIFI_IP=$("$ADB_BIN" -s "$USB_SERIAL" shell ip route 2>/dev/null \
-    | grep -oE 'src [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | grep -v '^127\.' | head -1 || true)
+  # Get phone's Wi-Fi IP — must use wlan0 specifically.
+  # 'ip route' picks up cellular (ccmni0/rmnet) before Wi-Fi on phones with mobile data.
+  PHONE_WIFI_IP=""
+
+  # Method 1: ifconfig wlan0 (most reliable — always the Wi-Fi interface)
+  PHONE_WIFI_IP=$("$ADB_BIN" -s "$USB_SERIAL" shell ifconfig wlan0 2>/dev/null \
+    | grep -oE 'inet addr:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+
+  # Method 2: ip addr show wlan0 (newer Android)
+  if [[ -z "$PHONE_WIFI_IP" ]]; then
+    PHONE_WIFI_IP=$("$ADB_BIN" -s "$USB_SERIAL" shell ip addr show wlan0 2>/dev/null \
+      | grep "inet " | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+  fi
+
+  # Method 3: ip route filtered to wlan0 only
+  if [[ -z "$PHONE_WIFI_IP" ]]; then
+    PHONE_WIFI_IP=$("$ADB_BIN" -s "$USB_SERIAL" shell ip route 2>/dev/null \
+      | grep wlan0 | grep -oE 'src [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' \
+      | awk '{print $2}' | head -1 || true)
+  fi
 
   if [[ -z "$PHONE_WIFI_IP" ]]; then
     echo ""
