@@ -75,12 +75,30 @@ NC='\033[0m'
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$ROOT/android"
 APP_PACKAGE="com.scanvault.app"
-MAIN_ACTIVITY="${APP_PACKAGE}/.MainActivity"
+APP_PACKAGE_DEBUG="${APP_PACKAGE}.debug"
 
 info()  { printf "${BLUE}[run-phone]${NC} %s\n" "$*"; }
 ok()    { printf "  ${GREEN}✓${NC} %s\n" "$*"; }
 warn()  { printf "  ${YELLOW}!${NC} %s\n" "$*"; }
 die()   { printf "  ${RED}✗${NC} %s\n" "$*"; exit 1; }
+
+resolve_launcher_component() {
+  local pkg=""
+  local resolved=""
+
+  for pkg in "$APP_PACKAGE_DEBUG" "$APP_PACKAGE"; do
+    resolved=$($ADB shell cmd package resolve-activity --brief \
+      -a android.intent.action.MAIN \
+      -c android.intent.category.LAUNCHER \
+      "$pkg" 2>/dev/null | tr -d '\r' | grep '/' | tail -1 || true)
+    if [[ -n "$resolved" ]]; then
+      echo "$resolved"
+      return 0
+    fi
+  done
+
+  return 1
+}
 
 # -----------------------------------------------------------------------------
 # Parse flags
@@ -271,9 +289,39 @@ ok "APK installed"
 # -----------------------------------------------------------------------------
 # Step 6: Launch app
 # -----------------------------------------------------------------------------
-info "Launching $APP_PACKAGE..."
-$ADB shell am start -n "$MAIN_ACTIVITY"
-ok "App launched"
+LAUNCH_COMPONENT="$(resolve_launcher_component || true)"
+ACTIVE_PACKAGE="$APP_PACKAGE_DEBUG"
+
+if [[ -z "$LAUNCH_COMPONENT" ]]; then
+  warn "Could not resolve launcher activity for $APP_PACKAGE_DEBUG or $APP_PACKAGE"
+  warn "APK installed, but auto-launch was skipped. Launch manually on device."
+else
+  ACTIVE_PACKAGE="${LAUNCH_COMPONENT%%/*}"
+  info "Launching $LAUNCH_COMPONENT..."
+
+  set +e
+  START_OUT=$($ADB shell am start -n "$LAUNCH_COMPONENT" --activity-clear-top 2>&1)
+  START_EXIT=$?
+  set -e
+  printf "%s\n" "$START_OUT" | sed 's/^/  /'
+
+  if [[ "$START_EXIT" -eq 0 ]]; then
+    ok "App launched"
+  else
+    warn "Component launch failed (exit $START_EXIT). Trying fallback launcher intent..."
+    set +e
+    MONKEY_OUT=$($ADB shell monkey -p "$ACTIVE_PACKAGE" -c android.intent.category.LAUNCHER 1 2>&1)
+    MONKEY_EXIT=$?
+    set -e
+    printf "%s\n" "$MONKEY_OUT" | sed 's/^/  /'
+
+    if [[ "$MONKEY_EXIT" -eq 0 ]]; then
+      ok "App launched (fallback)"
+    else
+      warn "Fallback launch failed (exit $MONKEY_EXIT)."
+    fi
+  fi
+fi
 
 # -----------------------------------------------------------------------------
 # Step 7: Perfetto profiling setup
@@ -295,7 +343,7 @@ fi
 info "Streaming logcat (Ctrl+C to stop)..."
 echo ""
 printf "${CYAN}══════════════════════════════════════════${NC}\n"
-printf "${CYAN}  App:     ${NC}$APP_PACKAGE\n"
+printf "${CYAN}  App:     ${NC}$ACTIVE_PACKAGE\n"
 printf "${CYAN}  Device:  ${NC}$DEVICE_MODEL (Android $ANDROID_VER)\n"
 [[ -n "$BACKEND_URL" ]] && printf "${CYAN}  Backend: ${NC}$BACKEND_URL\n"
 printf "${CYAN}══════════════════════════════════════════${NC}\n"
@@ -321,9 +369,16 @@ cleanup() {
 trap cleanup INT TERM
 
 # Colourised logcat — filter to our package, colourize by level
-$ADB logcat \
-  --pid="$($ADB shell pidof -s "$APP_PACKAGE" 2>/dev/null | tr -d '\r' || echo 0)" \
-  -v time 2>/dev/null \
+APP_PID="$($ADB shell pidof -s "$ACTIVE_PACKAGE" 2>/dev/null | tr -d '\r' || true)"
+LOGCAT_ARGS=("-v" "time")
+if [[ -n "$APP_PID" && "$APP_PID" =~ ^[0-9]+$ ]]; then
+  LOGCAT_ARGS+=("--pid=$APP_PID")
+else
+  warn "App PID not found yet — using tag filters"
+  LOGCAT_ARGS+=("-s" "ScanVault:V" "AndroidRuntime:E" "System.err:W")
+fi
+
+$ADB logcat "${LOGCAT_ARGS[@]}" 2>/dev/null \
   | while IFS= read -r line; do
     case "$line" in
       *" E "*) printf "${RED}%s${NC}\n" "$line" ;;

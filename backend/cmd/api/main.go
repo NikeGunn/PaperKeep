@@ -14,6 +14,7 @@ import (
 	"github.com/nikhil/scanvault-api/internal/config"
 	applogger "github.com/nikhil/scanvault-api/internal/logger"
 	"github.com/nikhil/scanvault-api/internal/server"
+	"github.com/nikhil/scanvault-api/internal/vault"
 )
 
 func main() {
@@ -35,7 +36,9 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Database — pgxpool, 10-second connection timeout at startup
 	// -------------------------------------------------------------------------
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
 	pool, err := pgxpool.New(dbCtx, cfg.DatabaseURL)
 	dbCancel()
@@ -60,10 +63,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	r2Storage, err := vault.NewR2Storage(ctx, cfg.R2Endpoint, cfg.R2AccessKey, cfg.R2SecretKey, cfg.R2Bucket)
+	if err != nil {
+		logger.Error("failed to initialize R2 storage", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	vaultSvc := vault.NewService(pool, r2Storage, logger)
+	vaultSvc.StartPurgeWorker(ctx, time.Hour)
+	logger.Info("vault service initialized", slog.String("bucket", cfg.R2Bucket))
+
 	// -------------------------------------------------------------------------
 	// Server
 	// -------------------------------------------------------------------------
-	srv := server.New(cfg, pool, logger, accountsSvc)
+	srv := server.New(cfg, pool, logger, accountsSvc).WithVaultService(vaultSvc)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
@@ -77,6 +90,7 @@ func main() {
 
 	<-quit
 	logger.Info("shutdown signal received")
+	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()

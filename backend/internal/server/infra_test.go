@@ -54,25 +54,33 @@ func TestDockerCompose_HasPostgresService(t *testing.T) {
 		t.Fatal("docker-compose.yml has no 'services' section")
 	}
 
-	if _, ok := services["postgres"]; !ok {
-		t.Errorf("docker-compose.yml missing 'postgres' service; found: %v", serviceNames(services))
+	if _, _, ok := postgresService(services); !ok {
+		t.Errorf("docker-compose.yml missing Postgres service ('db' or 'postgres'); found: %v", serviceNames(services))
 	}
 }
 
 // TestDockerCompose_PostgresUsesCorrectImage verifies postgres:16-alpine image.
 func TestDockerCompose_PostgresUsesCorrectImage(t *testing.T) {
 	path := filepath.Join(backendRoot(), "docker-compose.yml")
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
 
 	var compose map[string]any
-	_ = yaml.Unmarshal(data, &compose)
+	if err := yaml.Unmarshal(data, &compose); err != nil {
+		t.Fatalf("parse docker-compose.yml: %v", err)
+	}
 
 	services, _ := compose["services"].(map[string]any)
-	pg, _ := services["postgres"].(map[string]any)
+	pg, serviceName, ok := postgresService(services)
+	if !ok {
+		t.Fatalf("postgres service missing ('db' or 'postgres'); found: %v", serviceNames(services))
+	}
 
 	image, _ := pg["image"].(string)
 	if !strings.HasPrefix(image, "postgres:16") {
-		t.Errorf("postgres image = %q, want postgres:16-alpine", image)
+		t.Errorf("postgres image for %q = %q, want postgres:16-alpine", serviceName, image)
 	}
 }
 
@@ -104,6 +112,16 @@ func serviceNames(m map[string]any) []string {
 		names = append(names, k)
 	}
 	return names
+}
+
+func postgresService(services map[string]any) (map[string]any, string, bool) {
+	if pg, ok := services["postgres"].(map[string]any); ok {
+		return pg, "postgres", true
+	}
+	if dbSvc, ok := services["db"].(map[string]any); ok {
+		return dbSvc, "db", true
+	}
+	return nil, "", false
 }
 
 // -------------------------------------------------------------------------

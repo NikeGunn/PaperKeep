@@ -21,6 +21,7 @@
 #   ./scripts/dev.sh --wifi        # use Wi-Fi ADB instead of USB cable
 #   ./scripts/dev.sh --no-install  # build APK but don't install (for testing)
 #   ./scripts/dev.sh --watch       # rebuild APK on every Kotlin file save too
+#   ./scripts/dev.sh --backend-exit-policy always
 #   ./scripts/dev.sh --help
 # =============================================================================
 
@@ -45,6 +46,11 @@ OPTIONS:
   --device SERIAL     Target a specific ADB device serial
   --port PORT         Override backend port (default: 8080)
   --verbose           Show full Gradle output (default: quiet)
+  --backend-exit-policy POLICY
+                      Backend shutdown mode on script exit:
+                        auto   (default): stop on Ctrl+C/SIGTERM only
+                        always: always stop backend when script exits
+                        never : never stop backend automatically
 
 NETWORK:
   Your phone and laptop must be on the SAME network (LAN cable for laptop is fine,
@@ -78,7 +84,11 @@ WHAT'S RUNNING:
 
 STOPPING:
   Ctrl+C — stops Go API + logcat. Postgres + Redis keep running for fast restart.
+  If logcat/ADB disconnects unexpectedly, backend is kept alive by default.
   To also stop containers: docker compose -f backend/docker-compose.yml down
+
+ENV OVERRIDES:
+  DEV_BACKEND_EXIT_POLICY=auto|always|never
 EOF
   exit 0
 fi
@@ -100,6 +110,11 @@ die()     { printf "  ${RED}✗${NC} %s\n" "$*"; exit 1; }
 banner()  { echo ""; printf "${CYAN}${BOLD}══ %s ══${NC}\n" "$*"; }
 step()    { echo ""; printf "${YELLOW}▶ %s${NC}\n" "$*"; }
 
+LIFECYCLE_LIB="$ROOT/scripts/lib/dev-lifecycle.sh"
+[[ -f "$LIFECYCLE_LIB" ]] || die "Missing lifecycle helper: $LIFECYCLE_LIB"
+# shellcheck disable=SC1090
+source "$LIFECYCLE_LIB"
+
 # ── Parse flags ───────────────────────────────────────────────────────────────
 MODE="full"          # full | phone-only | backend-only
 DO_WIFI=false
@@ -109,6 +124,7 @@ DO_CLEAN=false
 DO_VERBOSE=false
 TARGET_DEVICE=""
 PORT="${PORT:-8080}"
+BACKEND_EXIT_POLICY="${DEV_BACKEND_EXIT_POLICY:-auto}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -121,9 +137,15 @@ while [[ $# -gt 0 ]]; do
     --verbose)       DO_VERBOSE=true; shift ;;
     --device)        TARGET_DEVICE="$2"; shift 2 ;;
     --port)          PORT="$2"; shift 2 ;;
+    --backend-exit-policy) BACKEND_EXIT_POLICY="$2"; shift 2 ;;
     *) die "Unknown flag: $1 (use --help)" ;;
   esac
 done
+
+case "$BACKEND_EXIT_POLICY" in
+  auto|always|never) ;;
+  *) die "Invalid --backend-exit-policy: $BACKEND_EXIT_POLICY (use auto|always|never)" ;;
+esac
 
 # ── ADB path resolution (Windows + WSL + native Linux/Mac) ───────────────────
 find_adb() {
@@ -152,6 +174,40 @@ if [[ -z "$ADB_BIN" ]]; then
 fi
 
 adb_cmd() { "$ADB_BIN" "$@"; }
+
+resolve_launcher_component() {
+  local serial="$1"
+  local pkg=""
+  local resolved=""
+
+  for pkg in "$APP_PACKAGE_DEBUG" "$APP_PACKAGE"; do
+    resolved="$(adb_cmd -s "$serial" shell cmd package resolve-activity --brief \
+      -a android.intent.action.MAIN \
+      -c android.intent.category.LAUNCHER \
+      "$pkg" 2>/dev/null | tr -d '\r' | grep '/' | tail -1 || true)"
+    if [[ -n "$resolved" ]]; then
+      echo "$resolved"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+start_component() {
+  local serial="$1"
+  local component="$2"
+  local launch_out=""
+  local launch_exit=0
+
+  set +e
+  launch_out="$(adb_cmd -s "$serial" shell am start -n "$component" --activity-clear-top 2>&1)"
+  launch_exit=$?
+  set -e
+
+  printf "%s\n" "$launch_out" | sed 's/^/  /'
+  return "$launch_exit"
+}
 
 # ── LAN IP detection ──────────────────────────────────────────────────────────
 detect_lan_ip() {
@@ -340,24 +396,53 @@ fi
 
 # ── PIDS list (for cleanup) ───────────────────────────────────────────────────
 PIDS=()
+BACKEND_STARTED=false
+INTERRUPTED=false
+
+on_signal() {
+  INTERRUPTED=true
+  exit 130
+}
 
 cleanup() {
+  local exit_code=$?
+  local stop_backend=false
+
   echo ""
   banner "Shutting down"
 
-  for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
-  done
-  for pid in "${PIDS[@]}"; do
-    wait "$pid" 2>/dev/null || true
-  done
+  if $BACKEND_STARTED && should_stop_backend_on_exit "$BACKEND_EXIT_POLICY" "$INTERRUPTED"; then
+    stop_backend=true
+  fi
 
-  ok "Go API stopped"
+  if $stop_backend; then
+    for pid in "${PIDS[@]}"; do
+      kill "$pid" 2>/dev/null || true
+    done
+    for pid in "${PIDS[@]}"; do
+      wait "$pid" 2>/dev/null || true
+    done
+    ok "Go API stopped"
+  elif $BACKEND_STARTED; then
+    ok "Go API left running for fast reuse"
+    for pid in "${PIDS[@]}"; do
+      info "Go API PID: $pid"
+    done
+    info "Stop API manually: kill <pid>"
+  else
+    info "No Go API process to stop"
+  fi
+
   info "Postgres + Redis are still running (fast restart next time)"
   info "Stop containers: docker compose -f backend/docker-compose.yml down"
+  if [[ "$exit_code" -ne 0 && "$INTERRUPTED" == "false" && "$stop_backend" == "false" ]]; then
+    warn "dev.sh exited with code $exit_code; backend kept running for debugging"
+    warn "Check backend logs: tail -n 80 /tmp/scanvault-backend.log"
+  fi
   echo ""
 }
-trap cleanup INT TERM EXIT
+trap on_signal INT TERM
+trap cleanup EXIT
 
 # ── Start backend ─────────────────────────────────────────────────────────────
 if [[ "$MODE" != "phone-only" ]]; then
@@ -413,6 +498,7 @@ if [[ "$MODE" != "phone-only" ]]; then
   fi
   API_PID=$!
   PIDS+=("$API_PID")
+  BACKEND_STARTED=true
   ok "Go API starting (PID $API_PID) — logs: /tmp/scanvault-backend.log"
 
   # Wait for API to become healthy
@@ -488,11 +574,32 @@ if [[ "$MODE" != "backend-only" ]]; then
 
     # Kill existing instance then launch fresh
     adb_cmd -s "$DEVICE_SERIAL" shell am force-stop "$APP_PACKAGE_DEBUG" 2>/dev/null || true
-    adb_cmd -s "$DEVICE_SERIAL" shell am start \
-      -n "${APP_PACKAGE_DEBUG}/.MainActivity" \
-      --activity-clear-top 2>/dev/null \
-      | sed 's/^/  /'
-    ok "App launched on ${DEVICE_MODEL}"
+    adb_cmd -s "$DEVICE_SERIAL" shell am force-stop "$APP_PACKAGE" 2>/dev/null || true
+
+    LAUNCH_COMPONENT="$(resolve_launcher_component "$DEVICE_SERIAL" || true)"
+    if [[ -z "$LAUNCH_COMPONENT" ]]; then
+      warn "Could not resolve launcher activity for $APP_PACKAGE_DEBUG or $APP_PACKAGE"
+      warn "App installed, but auto-launch was skipped. Launch it manually on phone."
+    else
+      info "Launching activity: $LAUNCH_COMPONENT"
+      if start_component "$DEVICE_SERIAL" "$LAUNCH_COMPONENT"; then
+        ok "App launched on ${DEVICE_MODEL}"
+      else
+        warn "Component launch failed for $LAUNCH_COMPONENT"
+        TARGET_PACKAGE="${LAUNCH_COMPONENT%%/*}"
+        info "Trying fallback launcher intent for $TARGET_PACKAGE..."
+        set +e
+        MONKEY_OUT="$(adb_cmd -s "$DEVICE_SERIAL" shell monkey -p "$TARGET_PACKAGE" -c android.intent.category.LAUNCHER 1 2>&1)"
+        MONKEY_EXIT=$?
+        set -e
+        printf "%s\n" "$MONKEY_OUT" | sed 's/^/  /'
+        if [[ "$MONKEY_EXIT" -eq 0 ]]; then
+          ok "App launched on ${DEVICE_MODEL} (fallback)"
+        else
+          warn "Fallback launch failed (exit $MONKEY_EXIT). Continuing for debugging."
+        fi
+      fi
+    fi
   fi
 fi
 
@@ -529,7 +636,11 @@ if $DO_WATCH && [[ "$MODE" != "backend-only" ]]; then
       if [[ -n "$APK_PATH" ]]; then
         adb_cmd -s "$DEVICE_SERIAL" install -r "$APK_PATH" 2>/dev/null
         adb_cmd -s "$DEVICE_SERIAL" shell am force-stop "$APP_PACKAGE_DEBUG" 2>/dev/null || true
-        adb_cmd -s "$DEVICE_SERIAL" shell am start -n "${APP_PACKAGE_DEBUG}/.MainActivity" 2>/dev/null
+        adb_cmd -s "$DEVICE_SERIAL" shell am force-stop "$APP_PACKAGE" 2>/dev/null || true
+        LAUNCH_COMPONENT="$(resolve_launcher_component "$DEVICE_SERIAL" || true)"
+        if [[ -n "$LAUNCH_COMPONENT" ]]; then
+          adb_cmd -s "$DEVICE_SERIAL" shell am start -n "$LAUNCH_COMPONENT" --activity-clear-top >/dev/null 2>&1 || true
+        fi
         ok "Redeployed at $(date '+%H:%M:%S')"
       fi
       cd "$ROOT"
@@ -575,18 +686,42 @@ if [[ "$MODE" != "backend-only" && $DO_INSTALL == true ]]; then
 
   printf "${CYAN}  Streaming logs — Ctrl+C to stop (app keeps running on phone)${NC}\n\n"
 
-  # Colourised logcat — never exits until Ctrl+C
-  adb_cmd -s "$DEVICE_SERIAL" logcat "${LOGCAT_ARGS[@]}" 2>/dev/null \
-    | while IFS= read -r line; do
-        case "$line" in
-          *" E "*)  printf "${RED}%s${NC}\n"    "$line" ;;
-          *" W "*)  printf "${YELLOW}%s${NC}\n" "$line" ;;
-          *" I "*)  printf "${GREEN}%s${NC}\n"  "$line" ;;
-          *" D "*)  printf "${BLUE}%s${NC}\n"   "$line" ;;
-          *" V "*)  printf "%s\n"               "$line" ;;
-          *)        printf "%s\n"               "$line" ;;
-        esac
-      done
+  # Logcat over Wi-Fi can drop unexpectedly; retry so backend sessions do not get torn down.
+  while true; do
+    set +e
+    adb_cmd -s "$DEVICE_SERIAL" logcat "${LOGCAT_ARGS[@]}" 2>/dev/null \
+      | while IFS= read -r line; do
+          case "$line" in
+            *" E "*)  printf "${RED}%s${NC}\n"    "$line" ;;
+            *" W "*)  printf "${YELLOW}%s${NC}\n" "$line" ;;
+            *" I "*)  printf "${GREEN}%s${NC}\n"  "$line" ;;
+            *" D "*)  printf "${BLUE}%s${NC}\n"   "$line" ;;
+            *" V "*)  printf "%s\n"               "$line" ;;
+            *)        printf "%s\n"               "$line" ;;
+          esac
+        done
+    LOGCAT_EXIT=${PIPESTATUS[0]}
+    set -e
+
+    if [[ "$INTERRUPTED" == "true" ]]; then
+      break
+    fi
+
+    warn "logcat stream ended (adb exit code: $LOGCAT_EXIT)"
+    warn "Retrying logcat in 2s..."
+    sleep 2
+
+    # Refresh PID filter after app restart/redeploy.
+    APP_PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE_DEBUG" 2>/dev/null | tr -d '[:space:]' || true)
+    if [[ -z "$APP_PID" ]]; then
+      APP_PID=$(adb_cmd -s "$DEVICE_SERIAL" shell pidof -s "$APP_PACKAGE" 2>/dev/null | tr -d '[:space:]' || true)
+    fi
+    if [[ -n "$APP_PID" && "$APP_PID" =~ ^[0-9]+$ ]]; then
+      LOGCAT_ARGS=("-v" "time" "--pid=$APP_PID")
+    else
+      LOGCAT_ARGS=("-v" "time" "-s" "ScanVault:V" "AndroidRuntime:E" "System.err:W")
+    fi
+  done
 else
   # Backend-only mode: tail the API log
   banner "Backend logs"

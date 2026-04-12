@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -103,8 +103,8 @@ func testConfig() *config.Config {
 	return &config.Config{
 		DatabaseURL:   "unused",
 		PasetoKey:     "dGhpcy1pcy1hLTMyYnl0ZS10ZXN0LWtleS1oZXJlISE=", // 32 bytes
-		Argon2Time:    1,   // fast for tests
-		Argon2Memory:  8192, // 8 MB (min for test speed)
+		Argon2Time:    1,                                              // fast for tests
+		Argon2Memory:  8192,                                           // 8 MB (min for test speed)
 		Argon2Threads: 1,
 		R2Endpoint:    "https://test.r2.cloudflarestorage.com",
 		R2AccessKey:   "test",
@@ -413,23 +413,29 @@ func TestVerifyEmail_ExpiredToken(t *testing.T) {
 	email := uniqueEmail(t)
 
 	// Create account to get account_id
-	svc.CreateAccount(ctx, accounts.CreateAccountRequest{ //nolint:errcheck
+	if _, err := svc.CreateAccount(ctx, accounts.CreateAccountRequest{
 		Email:      email,
 		AuthHash:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		AuthParams: `{"m":8192,"t":1,"p":1}`,
 		WrappedKey: []byte("wrappedkeyblob16"),
 		KDFSalt:    []byte("saltsaltsalt1234"),
 		KDFParams:  `{"m":8192,"t":1,"p":1}`,
-	})
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
 
-	// Expire the verification token directly in DB
-	_, err := pool.Exec(ctx, `
+	// Expire the verification token directly in DB with generous skew to avoid
+	// host-vs-container clock drift in CI/local Docker.
+	result, err := pool.Exec(ctx, `
 		UPDATE email_verification_tokens
-		SET expires_at = NOW() - INTERVAL '1 second'
+		SET expires_at = NOW() - INTERVAL '5 minutes'
 		WHERE account_id = (SELECT id FROM accounts WHERE email = $1)
 	`, email)
 	if err != nil {
 		t.Fatalf("expire token: %v", err)
+	}
+	if result.RowsAffected() != 1 {
+		t.Fatalf("expire token: updated %d rows, want 1", result.RowsAffected())
 	}
 
 	rawToken := svc.LastVerificationToken()
@@ -742,13 +748,16 @@ func TestRefresh_ExpiredToken(t *testing.T) {
 
 	loginResp, _ := svc.Login(context.Background(), accounts.LoginRequest{Email: email, AuthHash: authHash})
 
-	// Force expiry
-	_, err := pool.Exec(context.Background(), `
-		UPDATE refresh_tokens SET expires_at = NOW() - INTERVAL '1 second'
+	// Force expiry with generous skew to avoid host-vs-container clock drift.
+	result, err := pool.Exec(context.Background(), `
+		UPDATE refresh_tokens SET expires_at = NOW() - INTERVAL '5 minutes'
 		WHERE token_hash = $1
 	`, accounts.HashRefreshTokenExported(loginResp.RefreshToken))
 	if err != nil {
 		t.Fatalf("expire token: %v", err)
+	}
+	if result.RowsAffected() != 1 {
+		t.Fatalf("expire token: updated %d rows, want 1", result.RowsAffected())
 	}
 
 	_, err = svc.RefreshSession(context.Background(), accounts.RefreshRequest{RefreshToken: loginResp.RefreshToken})

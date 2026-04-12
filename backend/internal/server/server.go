@@ -24,14 +24,15 @@ import (
 
 // Server holds the HTTP server and its dependencies.
 type Server struct {
-	httpServer  *http.Server
-	router      http.Handler
-	cfg         *config.Config
-	db          *pgxpool.Pool
-	logger      *slog.Logger
-	accountsSvc *accounts.Service
-	vaultSvc    *vault.Service
-	rateLimiter *appmiddleware.RateLimiter
+	httpServer         *http.Server
+	router             http.Handler
+	cfg                *config.Config
+	db                 *pgxpool.Pool
+	logger             *slog.Logger
+	accountsSvc        *accounts.Service
+	vaultSvc           *vault.Service
+	vaultRoutesMounted bool
+	rateLimiter        *appmiddleware.RateLimiter
 }
 
 // New constructs a Server with the full middleware chain and routes wired up.
@@ -95,6 +96,7 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 			r.With(authMW).Route("/", func(r chi.Router) {
 				vh.RegisterRoutes(r)
 			})
+			s.vaultRoutesMounted = true
 		}
 	})
 
@@ -115,6 +117,29 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 // Call this before Start().
 func (s *Server) WithVaultService(svc *vault.Service) *Server {
 	s.vaultSvc = svc
+
+	if svc == nil || s.vaultRoutesMounted {
+		return s
+	}
+
+	mux, ok := s.router.(*chi.Mux)
+	if !ok {
+		return s
+	}
+
+	authMW := s.buildAuthMiddleware()
+	vh := vault.NewHandler(s.vaultSvc)
+	mux.With(authMW).Post("/v1/vault/documents", vh.HandleCreateDocument)
+	mux.With(authMW).Get("/v1/vault/documents", vh.HandleListDocuments)
+	mux.With(authMW).Get("/v1/vault/documents/{uuid}", vh.HandleGetDocument)
+	mux.With(authMW).Put("/v1/vault/documents/{uuid}", vh.HandleUpdateDocument)
+	mux.With(authMW).Delete("/v1/vault/documents/{uuid}", vh.HandleDeleteDocument)
+	mux.With(authMW).Post("/v1/vault/documents/{doc_uuid}/pages/upload-url", vh.HandleRequestUploadURL)
+	mux.With(authMW).Post("/v1/vault/documents/{doc_uuid}/pages/{page_uuid}/confirm", vh.HandleConfirmUpload)
+	mux.With(authMW).Get("/v1/vault/documents/{doc_uuid}/pages/{page_uuid}/download-url", vh.HandleDownloadURL)
+	mux.With(authMW).Get("/v1/vault/manifest", vh.HandleManifest)
+	s.vaultRoutesMounted = true
+
 	return s
 }
 
@@ -267,8 +292,8 @@ func (s *Server) secureHeaders() func(http.Handler) http.Handler {
 // but we may add a web dashboard later.
 func (s *Server) corsMiddleware() func(http.Handler) http.Handler {
 	allowed := map[string]bool{
-		"https://scanvault.app":         true,
-		"https://www.scanvault.app":     true,
+		"https://scanvault.app":             true,
+		"https://www.scanvault.app":         true,
 		"https://app-staging.scanvault.app": true,
 	}
 	// In dev, allow all origins for local tooling

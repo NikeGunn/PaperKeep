@@ -22,6 +22,7 @@ import (
 
 	"github.com/nikhil/scanvault-api/internal/config"
 	"github.com/nikhil/scanvault-api/internal/server"
+	"github.com/nikhil/scanvault-api/internal/vault"
 )
 
 // testLogger returns a discard logger for use in tests.
@@ -237,7 +238,27 @@ func TestReady_UnhealthyWhenDBStopped(t *testing.T) {
 			t.Errorf("post-stop: expected 503, got %d: %s", w2.Code, w2.Body.String())
 		}
 	}
+
 	// err != nil means pool creation failed (acceptable — we're testing the "down" case)
+}
+
+// TestVaultRoutes_RegisteredWhenVaultServiceAttached verifies /v1/vault/* paths
+// are mounted when the vault service is configured.
+func TestVaultRoutes_RegisteredWhenVaultServiceAttached(t *testing.T) {
+	cfg := testConfig("dev")
+	vaultSvc := vault.NewService(nil, nil, testLogger())
+	srv := server.New(cfg, nil, testLogger()).WithVaultService(vaultSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/vault/manifest", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Fatalf("vault route not registered: got 404")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 when auth missing", w.Code)
+	}
 }
 
 // -------------------------------------------------------------------------
