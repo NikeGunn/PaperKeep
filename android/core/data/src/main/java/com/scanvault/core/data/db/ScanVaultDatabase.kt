@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocumentEntity::class,
         PageEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ScanVaultDatabase : RoomDatabase() {
@@ -20,6 +20,45 @@ abstract class ScanVaultDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 
     companion object {
+        /**
+         * Migration 2 → 3: adds the FTS4 virtual table for full-text search over
+         * document titles and OCR text.
+         *
+         * The FTS content table is backed by [DocumentEntity]; the initial rowid
+         * population copies existing data so search works immediately after upgrade.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create standalone FTS4 virtual table. This is NOT a content table
+                // (no content= parameter) so Room won't try to sync it automatically.
+                // The repository layer calls updateFtsRow() after every write.
+                db.execSQL(
+                    """
+                    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
+                    USING fts4(
+                        docId,
+                        title,
+                        ocrText
+                    )
+                    """.trimIndent()
+                )
+
+                // Populate FTS index with existing documents + their OCR text.
+                db.execSQL(
+                    """
+                    INSERT INTO documents_fts(docId, title, ocrText)
+                    SELECT d.id,
+                           d.title,
+                           COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')
+                                     FROM pages p
+                                     WHERE p.documentId = d.id
+                                       AND p.ocrText IS NOT NULL), '')
+                    FROM documents d
+                    """.trimIndent()
+                )
+            }
+        }
+
         /**
          * Migration 1 → 2: adds folders, documents, and pages tables.
          * The existing `scans` table is left untouched for backwards compatibility.

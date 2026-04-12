@@ -5,8 +5,10 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -108,4 +110,36 @@ interface DocumentDao {
 
     @Query("SELECT COUNT(*) FROM folders")
     suspend fun countFolders(): Int
+
+    // ── Full-text search (FTS4) ───────────────────────────────────────────────
+    //
+    // These queries use @RawQuery to bypass Room's compile-time schema validation
+    // for the FTS4 virtual table `documents_fts`, which is created in Migration 2→3
+    // and not declared as a Room @Entity (Room's KSP processor cannot validate
+    // virtual table schemas at build time).
+    //
+    // The FTS query is always sanitised before reaching here (see
+    // DocumentRepository.sanitiseFtsQuery). Do NOT call these methods directly
+    // with unsanitised user input.
+
+    /**
+     * Full-text search over document titles and OCR text.
+     *
+     * [query] must be a valid FTS4 MATCH expression (pre-sanitised by the
+     * repository layer). Results are ordered newest-first.
+     */
+    @Transaction
+    @RawQuery(observedEntities = [DocumentEntity::class])
+    suspend fun searchDocumentsRaw(query: SimpleSQLiteQuery): List<DocumentWithPages>
+
+    /**
+     * Upsert the FTS row for a single document (title + aggregated OCR text).
+     * Call after inserting/updating a document or saving OCR results for its pages.
+     */
+    @RawQuery
+    suspend fun updateFtsRowRaw(query: SimpleSQLiteQuery): Int
+
+    /** Rebuild the entire FTS index from scratch (use after bulk inserts). */
+    @RawQuery
+    suspend fun rebuildFtsIndexRaw(query: SimpleSQLiteQuery): Int
 }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -45,6 +46,7 @@ class LibraryViewModelTest {
         repo = mockk(relaxed = true) {
             every { observeDocuments(any()) } returns docsFlow
             every { observeFolders() } returns foldersFlow
+            coEvery { searchDocuments(any<String>()) } returns emptyList()
         }
         vm = LibraryViewModel(repo)
     }
@@ -258,6 +260,102 @@ class LibraryViewModelTest {
             val state = awaitItem()
             assertEquals(1, state.documents.size)
             assertEquals("d1", state.documents[0].id)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun setSearchQuery_activatesSearch_afterDebounce() = runTest {
+        val searchDoc = buildDocument("search-result")
+        coEvery { repo.searchDocuments(any<String>()) } returns listOf(searchDoc)
+
+        vm.uiState.test {
+            awaitItem() // initial
+
+            vm.setSearchQuery("invoice")
+            // Advance past the 300ms debounce
+            advanceTimeBy(400)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertTrue("Search should be active", state.isSearchActive)
+            assertEquals(1, state.searchResults.size)
+            assertEquals("search-result", state.searchResults[0].id)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun clearSearch_deactivatesSearch_andClearsResults() = runTest {
+        coEvery { repo.searchDocuments(any<String>()) } returns listOf(buildDocument("r1"))
+
+        vm.setSearchQuery("test")
+        advanceTimeBy(400)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.clearSearch()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.uiState.test {
+            val state = awaitItem()
+            assertFalse(state.isSearchActive)
+            assertTrue(state.searchResults.isEmpty())
+            assertEquals("", state.searchQuery)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun visibleDocuments_returnsSearchResults_whenSearchActive() = runTest {
+        val allDocs = listOf(buildDocument("all-1"), buildDocument("all-2"))
+        val searchResult = listOf(buildDocument("match-1"))
+
+        docsFlow.value = allDocs
+        coEvery { repo.searchDocuments(any<String>()) } returns searchResult
+
+        vm.uiState.test {
+            awaitItem() // initial
+
+            vm.setSearchQuery("match")
+            advanceTimeBy(400)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertTrue("Search should be active", state.isSearchActive)
+            assertEquals(1, state.visibleDocuments.size)
+            assertEquals("match-1", state.visibleDocuments[0].id)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun visibleDocuments_returnsAllDocs_whenSearchNotActive() = runTest {
+        val allDocs = listOf(buildDocument("d1"), buildDocument("d2"))
+
+        vm.uiState.test {
+            awaitItem() // initial empty
+
+            docsFlow.value = allDocs
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertFalse(state.isSearchActive)
+            assertEquals(2, state.visibleDocuments.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun setSearchQuery_emptyString_doesNotActivateSearch() = runTest {
+        vm.setSearchQuery("  ")
+        advanceTimeBy(400)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.uiState.test {
+            val state = awaitItem()
+            assertFalse(state.isSearchActive)
             cancelAndIgnoreRemainingEvents()
         }
     }

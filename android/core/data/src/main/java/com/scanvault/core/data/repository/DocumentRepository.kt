@@ -1,5 +1,6 @@
 package com.scanvault.core.data.repository
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.scanvault.core.data.db.DocumentDao
 import com.scanvault.core.data.db.FolderEntity
 import com.scanvault.core.data.db.toDomain
@@ -72,4 +73,68 @@ class DocumentRepository @Inject constructor(
         val entity = dao.getDocumentById(documentId) ?: return
         dao.updateDocument(entity.copy(folderId = folderId))
     }
+
+    /**
+     * Full-text search across document titles and OCR text content.
+     *
+     * The [query] is sanitised before forwarding to FTS4 MATCH:
+     * - Non-alphanumeric chars (except spaces and hyphens) are stripped.
+     * - Each word becomes a prefix token (e.g. "inv" → "inv*").
+     * - Returns empty list for blank queries rather than all documents.
+     */
+    suspend fun searchDocuments(query: String): List<Document> {
+        val sanitised = sanitiseFtsQuery(query)
+        if (sanitised.isBlank()) return emptyList()
+        val sql = SimpleSQLiteQuery(
+            """
+            SELECT d.* FROM documents d
+            INNER JOIN documents_fts ON documents_fts.docId = d.id
+            WHERE documents_fts MATCH ?
+            ORDER BY d.createdAt DESC
+            """.trimIndent(),
+            arrayOf<Any>(sanitised),
+        )
+        return dao.searchDocumentsRaw(sql).map { it.toDomain() }
+    }
+
+    /**
+     * Rebuild FTS index row for a single document after its title or pages change.
+     * Call this after saving/updating a document or its OCR text.
+     */
+    suspend fun refreshFtsRow(documentId: String) {
+        val sql = SimpleSQLiteQuery(
+            """
+            INSERT OR REPLACE INTO documents_fts(docId, title, ocrText)
+            SELECT d.id,
+                   d.title,
+                   COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')
+                             FROM pages p
+                             WHERE p.documentId = d.id
+                               AND p.ocrText IS NOT NULL), '')
+            FROM documents d
+            WHERE d.id = ?
+            """.trimIndent(),
+            arrayOf<Any>(documentId),
+        )
+        dao.updateFtsRowRaw(sql)
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    /**
+     * Convert a user-supplied query string into a safe FTS4 MATCH expression.
+     *
+     * Rules:
+     * 1. Strip any character that is not alphanumeric, space, or hyphen.
+     * 2. Split on whitespace → each token becomes a prefix term ("token*").
+     * 3. Join tokens with " ".
+     *
+     * Example: "  hello  world  " → "hello* world*"
+     */
+    internal fun sanitiseFtsQuery(raw: String): String =
+        raw.replace(Regex("[^\\w\\s\\-]"), "")
+            .trim()
+            .split(Regex("\\s+"))
+            .filter { it.isNotEmpty() }
+            .joinToString(" ") { "$it*" }
 }

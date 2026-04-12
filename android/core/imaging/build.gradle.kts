@@ -3,11 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
     namespace = "com.scanvault.core.imaging"
     compileSdk = libs.versions.compileSdk.get().toInt()
+
+    buildFeatures {
+        compose = true
+    }
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
@@ -38,6 +43,11 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    // Compose (for FilterPreviewStrip)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.bundles.compose)
+    implementation(libs.androidx.material.icons.extended)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

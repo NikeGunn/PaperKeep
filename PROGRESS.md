@@ -143,9 +143,9 @@
 - [x] **2B.1** Document + Page Room entities with relations — 2026-04-11
 - [x] **2B.2** Library screen (grid, cards from docs/DESIGN_SYSTEM.md 2.7, multi-select, sort) — 2026-04-11
 - [x] **2B.3** Folders (one level deep, create/rename/delete) — 2026-04-11
-- [ ] **2B.4** Full-text search (Room FTS4)
-- [ ] **2B.5** Multi-page capture flow (batch mode, reorder screen)
-- [ ] **2B.6** Image filters (Original, Auto, Magic Color, Grayscale, B&W) in `:core:imaging`
+- [x] **2B.4** Full-text search (Room FTS4) — 2026-04-12
+- [x] **2B.5** Multi-page capture flow (batch mode, reorder screen) — 2026-04-12
+- [x] **2B.6** Image filters (Original, Auto, Magic Color, Grayscale, B&W) in `:core:imaging` — 2026-04-12
 - [ ] **2B.7** OCR pipeline (ML Kit v2, Latin bundled, on-device) in `:core:ml`
 - [ ] **2B.8** PDF export (PdfDocument + PDFBox text layer) in `:core:pdf`
 - [ ] **2B.9** Other exports (JPEG, PNG, TXT, encrypted ZIP)
@@ -208,12 +208,13 @@
 > **Depends on:** intelligence/ stubs already exist
 > **Runs in PARALLEL with 3A and 3B**
 
-- [ ] **3C.1** Finalize FastAPI app (health endpoint working in Docker)
+- [ ] **3C.0** `scripts/run-intelligence.sh` — starts Docker compose (API + worker + Redis), waits healthy, prints port 8100. Has --help.
+- [ ] **3C.1** Finalize FastAPI app (health endpoint working in Docker, port 8100 internal only)
 - [ ] **3C.2** Classification endpoint (heuristic + ML model loading)
 - [ ] **3C.3** Enhanced OCR endpoint (PaddleOCR, single page)
 - [ ] **3C.4** Vision enhance endpoint (denoise, sharpen, balance pipeline)
-- [ ] **3C.5** Redis queue integration (ARQ worker consuming tasks)
-- [ ] **3C.6** R2 integration (download input, upload output)
+- [ ] **3C.5** Redis queue integration (ARQ worker consuming from `scanvault:intelligence:tasks`)
+- [ ] **3C.6** R2 integration (download from `processing/` prefix, upload results)
 - [ ] **3C.7** Docker compose working (API + worker + Redis)
 - [ ] **3C.8** Tests passing in CI
 
@@ -244,7 +245,26 @@
 
 > **Spec:** docs/FRONTEND_MVP.md section 4 → Phase 4
 > **Depends on:** Phase 3B completed + Phase 3A completed (backend sync must be ready)
-> **THIS IS WHERE FRONTEND MEETS BACKEND**
+> **THIS IS WHERE FRONTEND MEETS BACKEND FOR THE FIRST TIME**
+>
+> **GATE — do NOT start 4B.1 until:**
+> - [ ] PROGRESS.md tasks 3A.1–3A.11 are all checked
+> - [ ] Go backend is deployed to staging (`https://api-staging.scanvault.app/v1` responds)
+> - [ ] Backend staging passes `/health` and `/ready` checks
+>
+> **API Base URLs (hardcode nowhere — use BuildConfig):**
+> - Production: `https://api.scanvault.app/v1`
+> - Staging: `https://api-staging.scanvault.app/v1`
+>
+> **Key endpoints Android calls (full contract in docs/FRONTEND_MVP.md Phase 4 → "API Contract"):**
+> - `POST /accounts` — create account
+> - `POST /sessions` — login (returns Paseto token)
+> - `PUT /sessions` — refresh token
+> - `POST /vault/blobs` — upload encrypted blob
+> - `GET /vault/blobs/{id}` — download encrypted blob
+> - `GET /vault/manifest` — sync manifest
+> - `DELETE /vault/blobs/{id}` — delete blob
+> - `DELETE /accounts/me` — delete account
 
 - [ ] **4B.1** Account screen (signup, login, password strength)
 - [ ] **4B.2** Client-side E2E crypto (`:core:network` — libsodium, K_master, K_encrypt, HKDF)
@@ -265,6 +285,13 @@
 
 > **Spec:** docs/INTELLIGENCE_LAYER.md section 9 → Phase 2
 > **Depends on:** Phase 3C completed
+>
+> **4C.4–4C.6 connect Go to Python for the FIRST TIME:**
+> - Python port: `8100` (internal Docker only, never exposed to internet)
+> - Go calls Python at: `http://localhost:8100`
+> - Redis queue: `scanvault:intelligence:tasks`
+> - Redis result channel: `scanvault:intelligence:results`
+> - See docs/INTELLIGENCE_LAYER.md §2 for full `internal/intelligence/` package spec
 
 - [ ] **4C.1** Layout analysis and table extraction
 - [ ] **4C.2** Structured field extraction (receipts, invoices, IDs)
@@ -306,6 +333,40 @@
 
 ---
 
+---
+
+## Architecture Integration Quick Reference
+
+> Read this before any Phase 4+ session. These are the facts that prevent cross-layer mistakes.
+
+### When each layer first connects
+
+| Event | Session | Task | What happens |
+|---|---|---|---|
+| Android calls Go for first time | Session 33 | 4B.1 | `POST /v1/sessions` login via Ktor client |
+| Android sends encrypted blobs to Go | Session 33 | 4B.3 | `POST /v1/vault/blobs` via WorkManager |
+| Go calls Python for first time | Session 36 | 4C.4 | `internal/intelligence/` HTTP client calls Python `:8100` |
+| Go publishes to Redis for first time | Session 36 | 4C.4 | Publishes to `scanvault:intelligence:tasks` |
+| Android submits AI task | Session 34 | 4B.9 | `POST /v1/intelligence/tasks` (Go proxies to Python) |
+
+### Pre-flight gates (MUST be true before starting the session)
+
+| Session | Gate condition |
+|---|---|
+| Session 33 (4B.1) | Backend staging URL responds: `curl https://api-staging.scanvault.app/v1/health` → 200 |
+| Session 36 (4C.4) | Python container starts: `docker compose up intelligence` → `/health` returns 200 |
+| Session 36 (4C.4) | Redis running: `redis-cli ping` → PONG |
+
+### Architecture rules (never violate)
+
+1. **Android NEVER calls Python directly** — all requests go Android → Go → Python
+2. **Python port 8100 is internal only** — Caddy does not proxy to it, firewall blocks external access
+3. **Go never decrypts vault data** — blobs arrive encrypted, stored encrypted, served encrypted
+4. **AI opt-in is per-document** — Android asks user consent, decrypts locally, uploads plaintext to `processing/` R2 prefix only
+5. **`processing/` R2 prefix has 1-hour TTL** — Go's purge job cleans it; it is SEPARATE from `vault/` prefix
+
+---
+
 ## Session Log
 
 > Claude Code: After each session, add one line here. Format: `YYYY-MM-DD | Task IDs completed | Notes`
@@ -325,4 +386,7 @@
 | 2026-04-11 | 1C.1–1C.5 | **PHASE 1C COMPLETE.** android-ci.yml (lint+test+assemble+artifact+instrumented matrix api 26/30/34). backend-ci.yml (vet+staticcheck+gosec SARIF+govulncheck+race test+coverage). backend-deploy-staging.yml (CGO_ENABLED=0 cross-compile, SSH deploy, migration, smoke test, Telegram notify). security-scan.yml (OWASP SARIF, govulncheck, TruffleHog --only-verified). intelligence-ci.yml verified. scripts/validate-workflows.py: 87/87 checks pass (YAML valid, no tabs, concurrency cancel-in-progress, path filters, cron schedule, timeout-minutes on every job, action version pinning, no hardcoded credentials). Fixed PyYAML 1.1 gotcha: bare `on:` key parses as boolean True. |
 | 2026-04-11 | 2A.5–2A.12 | **PHASE 2A COMPLETE.** PUT /v1/vault/documents/{uuid} (optimistic concurrency, 5-goroutine race test). DELETE soft-delete (quota decrement, 404 for other account). Page upload flow: POST upload-url (size 413, quota 402, pending row), POST confirm (HeadObject verify, page count/quota increment). GET download-url (presign GET, 404 auth). PurgeExpiredWithRetention (R2 delete → hard delete, spares <30d). Quota: doc limit 402, resets after delete. GET /v1/vault/manifest (since param, pagination). Full E2E: create→upload→confirm→list→download→delete→purge. 8 packages, all pass. |
 | 2026-04-11 | 2A.1–2A.4 | R2 storage wrapper (ObjectStorage interface + R2Storage + mockStorage). Migration 0002 (vault_documents, vault_pages, account_quotas with indexes + constraints). POST /v1/vault/documents (v7 UUID validation, duplicate 409, quota row init). GET /v1/vault/documents (cursor pagination, excludes soft-deleted). GET /v1/vault/documents/{uuid} (404 for other user, 404 for non-existent). 30 tests pass across 8 packages. |
+| 2026-04-12 | interconnect audit | Rewrote CLAUDE.md (3-layer arch, integration points table, gotchas). Added API contract + :core:network spec + AI flow to FRONTEND_MVP.md §Phase4. Added internal/intelligence/ dir + API route map to BACKEND_MVP.md. Added session numbers + Redis constants + Python port + Go proxy ref to INTELLIGENCE_LAYER.md §9. Added Architecture Integration Quick Reference + Phase 4B/4C gates to PROGRESS.md. Updated Sessions 29/33/34/36 in prompt-guide.txt with explicit API endpoints, staging gates, and integration constants. |
+| 2026-04-12 | 2B.4–2B.6 | **Session 21 COMPLETE.** FTS4 full-text search (DocumentFtsEntity + @RawQuery DAO + sanitiseFtsQuery + LibraryViewModel search debounce). BatchCaptureViewModel (add/move/delete/reorder/consume pages). PageReorderScreen (drag-to-reorder, delete badge, Add/Done buttons). ImageFilter enum (5 filters) + ImageFilterProcessor (ORIGINAL zero-copy, AUTO, MAGIC_COLOR, GRAYSCALE, B&W adaptive threshold). FilterPreviewStrip Composable. 244/244 unit tests pass. FTS DAO integration tests moved to androidTest/ (require real Android SQLite — FTS4 not available in Robolectric sqlite4java). |
+| 2026-04-11 | 2B.1–2B.3 | **PHASE 2B tasks 2B.1–2B.3 COMPLETE.** Document+Page+Folder Room entities (migration 1→2), DocumentRepository, LibraryViewModel (combine 6 flows), LibraryScreen (PullToRefreshBox, LazyVerticalGrid, 2/4 cols), DocumentCard (combinedClickable, Coil AsyncImage, color tag), Folder CRUD. KSP replaces kapt (Windows fix). 13/13 ViewModel unit tests pass. |
 | 2026-04-11 | 1B.15–1B.20 | Session 16. **PHASE 1B COMPLETE.** AesGcmImageStore (AES-256-GCM, random IV per write, tamper detection). KeyStoreKeyProvider (hardware-backed Android Keystore). ScanEntity + ScanDao (Room in-memory tests, unicode, ordering, replace-on-conflict). RecentScansViewModel + RecentScansThumbnailStrip (placeholder thumbnails, empty state). AppRoutes (type-safe @Serializable routes: Scanner/Crop/Library/Reader/Settings). AppNavHost (Navigation 2.8.5 type-safe API). ScannerScreen (camera permission gate + preview + controls + thumbnail strip). ScreenRotationTest (SavedStateHandle survives recreation). ScanFlowTest (full 10-step journey across 5 ViewModels). 137/137 tests pass. | Theme (ScanAmber palette, light/dark, dynamic color fallback). Splash screen (≤300ms, brand amber bg). Adaptive icon (foreground+background drawables). Camera permissions state machine (CameraPermissionViewModel: NotRequested/ShowRationale/Granted/PermanentlyDenied). CameraX PreviewView (4:3 aspect, safe-area insets). Camera controls (CameraControlsViewModel: torch, grid, zoom clamp, tap-to-focus). EdgeDetector interface + FakeEdgeDetector (deterministic for tests) + OpenCvEdgeDetector (graceful no-op without native lib). EdgeDetectionOverlay (green/amber/invisible, spring animation). CaptureViewModel (edge detect → perspective warp pipeline, SavedStateHandle). CropScreen (4 draggable corners, rotate, retake/next). Switched core:imaging + core:common + feature:scanner to KSP (fixes Windows KAPT path bug). CommonModule provides AppDispatchers. 85/85 unit tests pass. |

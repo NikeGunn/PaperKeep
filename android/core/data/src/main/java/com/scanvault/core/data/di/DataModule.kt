@@ -38,7 +38,10 @@ abstract class DataModule {
                 ScanVaultDatabase::class.java,
                 "scanvault.db",
             )
-                .addMigrations(ScanVaultDatabase.MIGRATION_1_2)
+                .addMigrations(
+                    ScanVaultDatabase.MIGRATION_1_2,
+                    ScanVaultDatabase.MIGRATION_2_3,
+                )
                 .build()
 
         @Provides
