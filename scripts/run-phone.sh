@@ -109,9 +109,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 # -----------------------------------------------------------------------------
-# Prerequisite checks
+# ADB path resolution (Windows Git Bash + native Linux/Mac)
 # -----------------------------------------------------------------------------
-command -v adb &>/dev/null || die "adb not found — add Android SDK platform-tools to PATH"
+find_adb() {
+  command -v adb &>/dev/null && { echo "adb"; return; }
+  local win_sdk="/c/Users/Nautilus/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+  [[ -f "$win_sdk" ]] && { echo "$win_sdk"; return; }
+  [[ -n "${ANDROID_HOME:-}" && -f "$ANDROID_HOME/platform-tools/adb.exe" ]] && \
+    { echo "$ANDROID_HOME/platform-tools/adb.exe"; return; }
+  [[ -n "${ANDROID_HOME:-}" && -f "$ANDROID_HOME/platform-tools/adb" ]] && \
+    { echo "$ANDROID_HOME/platform-tools/adb"; return; }
+  echo ""
+}
+ADB_BIN="$(find_adb)"
+[[ -z "$ADB_BIN" ]] && die "adb not found — add Android SDK platform-tools to PATH or set ANDROID_HOME"
+
+# Prerequisite checks
+
 
 if [[ ! -d "$ANDROID_DIR" ]]; then
   die "android/ directory not found — has task 1B.1 been completed?"
@@ -133,11 +147,11 @@ if $DO_WIFI; then
   echo ""
   read -rp "  Enter pairing address (IP:PORT): " PAIR_ADDR
   read -rp "  Enter pairing code: " PAIR_CODE
-  adb pair "$PAIR_ADDR" "$PAIR_CODE"
+  "$ADB_BIN" pair "$PAIR_ADDR" "$PAIR_CODE"
   echo ""
   printf "  Now note the IP:PORT shown under 'Wireless debugging' (main screen).\n"
   read -rp "  Enter connection address (IP:PORT): " CONNECT_ADDR
-  adb connect "$CONNECT_ADDR"
+  "$ADB_BIN" connect "$CONNECT_ADDR"
   ok "Wi-Fi ADB connected"
 fi
 
@@ -152,7 +166,7 @@ if [[ -n "$TARGET_DEVICE" ]]; then
   ADB_OPTS=(-s "$TARGET_DEVICE")
 fi
 
-DEVICE_LIST=$(adb devices 2>/dev/null | grep -v '^List' | grep 'device$' | awk '{print $1}')
+DEVICE_LIST=$("$ADB_BIN" devices 2>/dev/null | grep -v '^List' | grep 'device$' | awk '{print $1}')
 DEVICE_COUNT=$(echo "$DEVICE_LIST" | grep -c '.' || true)
 
 if [[ "$DEVICE_COUNT" -eq 0 ]]; then
@@ -180,7 +194,7 @@ else
   fi
 fi
 
-ADB="adb -s $DEVICE_SERIAL"
+ADB="$ADB_BIN -s $DEVICE_SERIAL"
 
 # Print device info
 DEVICE_MODEL=$($ADB shell getprop ro.product.model 2>/dev/null | tr -d '\r' || echo "unknown")

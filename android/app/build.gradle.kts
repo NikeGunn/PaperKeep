@@ -19,6 +19,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "com.scanvault.app.HiltTestRunner"
+
+        // API base URL — override via Gradle property: -PapiBaseUrl=http://192.168.1.5:8080
+        // Production default is the live API. Dev scripts inject the LAN IP automatically.
+        val apiBaseUrl = project.findProperty("apiBaseUrl") as? String
+            ?: "https://api.scanvault.app/v1"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
