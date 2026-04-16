@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.scanvault.core.domain.model.SyncStatus
 
 /**
  * A scanned document — one entity may have many [PageEntity] rows.
@@ -43,4 +44,9 @@ data class DocumentEntity(
      * Stored as an ARGB integer (e.g. 0xFF_E53935.toInt()). Null = no tag.
      */
     val colorTag: Int?,
+    /**
+     * Current sync state. Stored as the enum name (TEXT column).
+     * Default: LOCAL_ONLY for newly created documents.
+     */
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
 )

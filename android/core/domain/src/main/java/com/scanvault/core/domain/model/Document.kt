@@ -20,6 +20,7 @@ data class Document(
     val pageCount: Int,
     val colorTag: Int?,
     val pages: List<Page>,
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
 )
 
 /** Domain model for a single page inside a [Document]. */

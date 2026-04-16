@@ -7,7 +7,7 @@
 
 **Status:** IN PROGRESS
 **Last session:** 2026-04-16
-**Last completed task:** 3B.1–3B.13, 4B.1–4B.4 — Phase 3B complete, Phase 4B.1-4B.4 complete, INFRA.6 CI/CD added
+**Last completed task:** 4B.5–4B.10 — Phase 4B complete (sync status, cert pinning, tamper check, account mgmt, Ktor client, E2E test)
 
 ---
 
@@ -145,15 +145,17 @@
 - [x] **INFRA.5** S3 module (versioning, public access block, SSE-S3, lifecycle rules) — 2026-04-16
 - [x] **INFRA.6** terraform apply staging — all 62 resources created, API Gateway live — 2026-04-16
 
-**Live staging endpoints:**
-- API Gateway: `https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1`
+**Live staging endpoints (ALL VERIFIED 200 OK — 2026-04-16):**
+- API Gateway: `https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com` (stage: `$default`)
+- Health: `GET /health` → 200, Ready: `GET /ready` → 200, Deep: `GET /v1/health/deep` → 200
 - S3 bucket: `scanvault-staging-vault-203a9e83`
-- Aurora: `scanvault-staging-aurora.cluster-cjk6c26cyw2o.ap-south-1.rds.amazonaws.com`
+- Aurora: `scanvault-staging-aurora.cluster-cjk6c26cyw2o.ap-south-1.rds.amazonaws.com` (DB: scanvault, migrations run, scanvault_app user created)
 - Redis: `scanvault-staging-redis-wuu4iy.serverless.aps1.cache.amazonaws.com`
-- ECR Go: `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-go-backend`
+- ECR Go: `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-go-backend` (REAL image deployed)
 - ECR Python: `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-python-intelligence`
 
-**Note:** Lambda currently has placeholder images. Real images deployed by CI/CD after code is written.
+**Terraform:** Working. Run from `infra/` with `terraform init -backend-config=...` + `terraform plan/apply -var-file=terraform.tfvars`. See docs/TERRAFORM_GUIDE.md.
+**Terraform fix:** `%APPDATA%\terraform.rc` filesystem_mirror prevents IPv6 registry timeout on Windows.
 
 ---
 
@@ -293,12 +295,12 @@
 - [x] **4B.2** Client-side E2E crypto (`:core:crypto` — KeyDerivation, VaultCrypto AES-256-GCM, KeyRotation — VaultCryptoTest + KeyDerivationTest + KeyRotationTest) — 2026-04-16
 - [x] **4B.3** Sync engine (WorkManager stub, SyncManager, ExponentialBackoff, OfflineQueue — SyncOperationTest + OfflineQueueTest + ExponentialBackoffTest + MockSyncRepositoryTest) — 2026-04-16
 - [x] **4B.4** Conflict resolution UI (ConflictResolutionScreen, ConflictResolutionViewModel — ConflictResolutionViewModelTest) — 2026-04-16
-- [ ] **4B.5** Sync status in library cards (cloud-done, uploading, pending, local-only)
-- [ ] **4B.6** Certificate pinning (Ktor + OkHttp)
-- [ ] **4B.7** Tamper check (signature verification)
-- [ ] **4B.8** Account management (change password, delete account, logout, data export)
-- [ ] **4B.9** Ktor client setup (HTTP/2, retry, offline queue)
-- [ ] **4B.10** Integration test (account → scan → sync → second device → see documents)
+- [x] **4B.5** Sync status in library cards (cloud-done, uploading, pending, local-only) — 2026-04-16
+- [x] **4B.6** Certificate pinning (Ktor + OkHttp) — 2026-04-16
+- [x] **4B.7** Tamper check (signature verification) — 2026-04-16
+- [x] **4B.8** Account management (change password, delete account, logout, data export) — 2026-04-16
+- [x] **4B.9** Ktor client setup (HTTP/2, retry, offline queue) — 2026-04-16
+- [x] **4B.10** Integration test (account → scan → sync → second device → see documents) — 2026-04-16
 
 **Acceptance:** All criteria in docs/FRONTEND_MVP.md Phase 4 acceptance section pass.
 
@@ -413,6 +415,9 @@
 | 2026-04-16 | INFRA.1–6 | AWS Terraform infrastructure deployed. 62 resources in staging: VPC, ECR, S3, Secrets Manager, IAM, Aurora Serverless v2 (pg 15.10), ElastiCache Serverless Redis, Lambda (Go+Python arm64), API Gateway HTTP API, CloudWatch. API Gateway URL: https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1. api_base_url.properties and pins.properties written. Placeholder images in ECR (real code pending). terraform validate + apply pass. |
 | 2026-04-16 | 2B.10–12, 3A.1–11, 3C.0–8 | **PHASE 2B COMPLETE. PHASE 3A COMPLETE. PHASE 3C COMPLETE.** Fixed Go backend test failures (auth_params NOT NULL, mockStorage missing BucketName()). Fixed API Gateway 500 error by adding AWS Lambda adapter (aws-lambda-go + aws-lambda-go-api-proxy) to main.go — auto-detects Lambda env via AWS_LAMBDA_FUNCTION_NAME. All 12 Go packages pass with -race. Python: 71/1 skipped tests pass. Android: reader+security tests pass. |
 | 2026-04-16 | 3B.1–13, 4B.1–4, INFRA.6 | **PHASE 3B COMPLETE. PHASE 4B.1-4B.4 COMPLETE.** Fixed InterstitialAdController (lastShownMs sentinel for fresh init), OnboardingViewModelTest (Dispatchers.setMain for viewModelScope), SignatureTest (pixel-render not reliable in Robolectric — changed to mutable-copy assertion). INFRA.6: added backend-deploy-aws.yml + intelligence-deploy-aws.yml (arm64 Docker buildx → ECR → Lambda, staging auto-deploy, production manual gate, secrets.AWS_ACCESS_KEY_ID). All 458 Android tests pass. All 16 Go packages pass with -race. |
+| 2026-04-16 | AWS debug + Terraform fix | **BACKEND AWS FULLY LIVE.** Debugged: placeholder Docker image in ECR, API Gateway stage `v1` prefix mismatch, missing Lambda env vars, `scanvault_app` DB user not created, goose migrations not run. Fixes: built+pushed real Go backend image (--provenance=false for Lambda), created `$default` API Gateway stage, ran 4 migrations, created DB user+grants. All health endpoints 200. Terraform fixed: `%APPDATA%\terraform.rc` filesystem_mirror blocks IPv6 registry.terraform.io timeout on Windows. terraform plan/apply now work. Created docs/TERRAFORM_GUIDE.md. Updated CLAUDE.md + PROGRESS.md. |
+| 2026-04-16 | AWS cost optimization | **COST CUT FROM ~$112 → ~$3.50/month.** Deleted: ElastiCache Serverless Redis ($15+/mo), 4 VPC Interface endpoints ($57.60/mo), captcha secret ($0.40/mo). Aurora min ACU = 0 (auto-pause, $0 at rest). Made REDIS_URL optional in config.go + config_test.go (16 tests pass). Removed Redis+captcha from all Terraform modules. Rebuilt+pushed Go backend image. Terraform apply: SG deleted, IAM policy updated, Python Lambda REDIS_URL removed. All health endpoints still 200 OK. |
+| 2026-04-16 | 4B.5–4B.10 | **PHASE 4B COMPLETE.** SyncStatus enum (LOCAL_ONLY/PENDING/UPLOADING/CLOUD_DONE) + Room migration 3→4. DocumentCard sync icons (CloudDone/CloudSync/CloudUpload/CloudOff). TokenStore (EncryptedSharedPreferences). ScanVaultApiClient (Ktor MockEngine tests). NetworkModule (OkHttp + CertificatePinner + Bearer auth, Logger.DEFAULT fix). TamperChecker (APK cert SHA-256, null-safety fix). AccountManagementViewModel + Screen (changePassword key-rewrap, deleteAccount, logout). E2ESyncIntegrationTest (4 tests). 8 settings tests all pass (changePassword_success fixed with real encrypted wrapped key). All Phase 4B tests pass. |
 | 2026-04-12 | 2B.4–2B.6 | **Session 21 COMPLETE.** FTS4 full-text search (DocumentFtsEntity + @RawQuery DAO + sanitiseFtsQuery + LibraryViewModel search debounce). BatchCaptureViewModel (add/move/delete/reorder/consume pages). PageReorderScreen (drag-to-reorder, delete badge, Add/Done buttons). ImageFilter enum (5 filters) + ImageFilterProcessor (ORIGINAL zero-copy, AUTO, MAGIC_COLOR, GRAYSCALE, B&W adaptive threshold). FilterPreviewStrip Composable. 244/244 unit tests pass. FTS DAO integration tests moved to androidTest/ (require real Android SQLite — FTS4 not available in Robolectric sqlite4java). |
 | 2026-04-12 | 2B.7–2B.9 | **Session 22 COMPLETE.** OCR pipeline: OcrEngine interface + MlKitOcrEngine (ML Kit v2 Latin bundled, suspendCancellableCoroutine) + FakeOcrEngine (deterministic, emptyText flag). PDF export: PdfExporter (A4 595×842pt, bitmap scaling, transparent OCR text layer) + PdfDocumentWrapper abstraction (AndroidPdfDocumentWrapper production, FakePdfDocumentWrapper for tests). DocumentExporter: exportJpeg (quality 90), exportPng (lossless), exportTxt (page separator), exportEncryptedZip/decryptZip (AES-256-CBC, PBKDF2WithHmacSHA256 key derivation, 10K iterations). Switched core:ml and core:pdf from kapt → KSP (Windows fix). 258/258 unit tests pass, 0 failures. |
 | 2026-04-11 | 2B.1–2B.3 | **PHASE 2B tasks 2B.1–2B.3 COMPLETE.** Document+Page+Folder Room entities (migration 1→2), DocumentRepository, LibraryViewModel (combine 6 flows), LibraryScreen (PullToRefreshBox, LazyVerticalGrid, 2/4 cols), DocumentCard (combinedClickable, Coil AsyncImage, color tag), Folder CRUD. KSP replaces kapt (Windows fix). 13/13 ViewModel unit tests pass. |

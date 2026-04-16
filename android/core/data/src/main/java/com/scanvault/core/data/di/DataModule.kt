@@ -41,6 +41,7 @@ abstract class DataModule {
                 .addMigrations(
                     ScanVaultDatabase.MIGRATION_1_2,
                     ScanVaultDatabase.MIGRATION_2_3,
+                    ScanVaultDatabase.MIGRATION_3_4,
                 )
                 .build()
 

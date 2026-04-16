@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -30,9 +35,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.scanvault.core.domain.model.Document
+import com.scanvault.core.domain.model.SyncStatus
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+
+private data class SyncIconSpec(val icon: ImageVector, val tint: Color, val description: String)
+
+@Composable
+private fun syncIconSpec(status: SyncStatus): SyncIconSpec {
+    val scheme = MaterialTheme.colorScheme
+    return when (status) {
+        SyncStatus.CLOUD_DONE -> SyncIconSpec(Icons.Filled.CloudDone, scheme.primary, "Synced")
+        SyncStatus.UPLOADING  -> SyncIconSpec(Icons.Filled.CloudUpload, scheme.tertiary, "Uploading")
+        SyncStatus.PENDING    -> SyncIconSpec(Icons.Filled.CloudSync, scheme.onSurfaceVariant, "Pending sync")
+        SyncStatus.LOCAL_ONLY -> SyncIconSpec(Icons.Filled.CloudOff, scheme.onSurfaceVariant.copy(alpha = 0.5f), "Local only")
+    }
+}
 
 private val cardShape = RoundedCornerShape(16.dp)
 private val dateFormatter = DateTimeFormatter
@@ -74,7 +93,13 @@ fun DocumentCard(
                 onLongClick = onLongPress,
             )
             .semantics {
-                contentDescription = "Document: ${document.title}, ${document.pageCount} pages"
+                val syncDesc = when (document.syncStatus) {
+                    SyncStatus.CLOUD_DONE -> "synced"
+                    SyncStatus.UPLOADING -> "uploading"
+                    SyncStatus.PENDING -> "pending sync"
+                    SyncStatus.LOCAL_ONLY -> "local only"
+                }
+                contentDescription = "Document: ${document.title}, ${document.pageCount} pages, $syncDesc"
             },
     ) {
         Column {
@@ -120,6 +145,17 @@ fun DocumentCard(
                             .background(Color(argb)),
                     )
                 }
+                // Sync status icon — bottom-end corner
+                val syncSpec = syncIconSpec(document.syncStatus)
+                Icon(
+                    imageVector = syncSpec.icon,
+                    contentDescription = syncSpec.description,
+                    tint = syncSpec.tint,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(16.dp),
+                )
             }
 
             // Title + metadata

@@ -1,8 +1,9 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
 }
 
@@ -34,10 +35,12 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
+    implementation(project(":core:crypto"))
+    implementation(project(":core:network"))
 
     // Hilt
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -50,6 +53,10 @@ dependencies {
     implementation(libs.androidx.biometric)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.bundles.ktor)
+    implementation(libs.androidx.material.icons.extended)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

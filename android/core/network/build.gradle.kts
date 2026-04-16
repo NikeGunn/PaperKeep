@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -13,6 +15,22 @@ android {
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Inject API base URL and TLS pin from properties files
+        val apiProps = Properties().apply {
+            file("api_base_url.properties").takeIf { it.exists() }
+                ?.inputStream()?.use(::load)
+        }
+        val pinsProps = Properties().apply {
+            file("pins.properties").takeIf { it.exists() }
+                ?.inputStream()?.use(::load)
+        }
+        buildConfigField("String", "API_BASE_URL",
+            "\"${apiProps.getProperty("API_BASE_URL", "https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1")}\"")
+        buildConfigField("String", "TLS_PIN_SHA256",
+            "\"${pinsProps.getProperty("TLS_PIN_SHA256", "")}\"")
+        buildConfigField("String", "TLS_PIN_HOST",
+            "\"${pinsProps.getProperty("API_HOST", "")}\"")
     }
 
     compileOptions {
@@ -22,6 +40,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 
@@ -38,7 +60,11 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // EncryptedSharedPreferences for TokenStore
+    implementation(libs.androidx.security.crypto)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
 }

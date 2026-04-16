@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocumentEntity::class,
         PageEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class ScanVaultDatabase : RoomDatabase() {
@@ -20,6 +20,21 @@ abstract class ScanVaultDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 
     companion object {
+        /**
+         * Migration 3 → 4: adds syncStatus column to documents table.
+         * Default 'LOCAL_ONLY' applied to all existing rows.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE documents ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_documents_syncStatus ON documents(syncStatus)"
+                )
+            }
+        }
+
         /**
          * Migration 2 → 3: adds the FTS4 virtual table for full-text search over
          * document titles and OCR text.

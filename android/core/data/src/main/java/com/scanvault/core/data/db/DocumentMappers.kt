@@ -3,6 +3,7 @@ package com.scanvault.core.data.db
 import com.scanvault.core.domain.model.Document
 import com.scanvault.core.domain.model.Folder
 import com.scanvault.core.domain.model.Page
+import com.scanvault.core.domain.model.SyncStatus
 import java.time.Instant
 
 fun DocumentWithPages.toDomain() = Document(
@@ -14,6 +15,7 @@ fun DocumentWithPages.toDomain() = Document(
     pageCount = document.pageCount,
     colorTag = document.colorTag,
     pages = pages.map { it.toDomain() },
+    syncStatus = document.syncStatus,
 )
 
 fun PageEntity.toDomain() = Page(
@@ -43,6 +45,7 @@ fun Document.toEntity() = DocumentEntity(
     folderId = folderId,
     pageCount = pageCount,
     colorTag = colorTag,
+    syncStatus = syncStatus,
 )
 
 fun Folder.toEntity() = FolderEntity(

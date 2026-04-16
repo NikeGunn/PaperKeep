@@ -9,6 +9,7 @@ import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.scanvault.core.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -67,6 +68,10 @@ interface DocumentDao {
     /** Nullify folderId for all documents in [folderId] before deleting the folder. */
     @Query("UPDATE documents SET folderId = NULL WHERE folderId = :folderId")
     suspend fun clearFolderReference(folderId: String)
+
+    /** Update only the syncStatus for a document. */
+    @Query("UPDATE documents SET syncStatus = :status WHERE id = :id")
+    suspend fun updateSyncStatus(id: String, status: SyncStatus)
 
     // ── Pages ─────────────────────────────────────────────────────────────────
 

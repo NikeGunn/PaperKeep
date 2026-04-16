@@ -8,6 +8,7 @@ import com.scanvault.core.data.db.toEntity
 import com.scanvault.core.domain.model.Document
 import com.scanvault.core.domain.model.DocumentSort
 import com.scanvault.core.domain.model.Folder
+import com.scanvault.core.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -67,6 +68,10 @@ class DocumentRepository @Inject constructor(
     suspend fun deleteFolder(folder: Folder) {
         dao.clearFolderReference(folder.id)
         dao.deleteFolder(folder.toEntity())
+    }
+
+    suspend fun updateSyncStatus(documentId: String, status: SyncStatus) {
+        dao.updateSyncStatus(documentId, status)
     }
 
     suspend fun moveDocumentToFolder(documentId: String, folderId: String?) {
