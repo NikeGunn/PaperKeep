@@ -112,3 +112,22 @@ gradle/wrapper/gradle-wrapper.jar
 *.bak
 *.swp
 *.swo
+
+
+
+ScanVault_credentials.csv
+
+ScanVault_accessKeys.csv
+
+# -----------------------------------------------------------------------------
+# AWS / Terraform generated files
+# -----------------------------------------------------------------------------
+android/core/network/api_base_url.properties
+android/core/network/pins.properties
+backend/.env.generated
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform-providers/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+backend/tmp/

@@ -9,18 +9,16 @@ import (
 // allVars returns a map of all required env vars set to valid values.
 func allVars() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":    "postgres://user:pass@localhost:5432/scanvault?sslmode=disable",
-		"PASETO_KEY":      "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXQ=", // 32-byte base64
-		"ARGON2_TIME":     "3",
-		"ARGON2_MEMORY":   "65536",
-		"ARGON2_THREADS":  "4",
-		"R2_ENDPOINT":     "https://abc.r2.cloudflarestorage.com",
-		"R2_ACCESS_KEY":   "test-access-key",
-		"R2_SECRET_KEY":   "test-secret-key",
-		"R2_BUCKET":       "scanvault-test",
-		"POSTMARK_TOKEN":  "test-postmark-token",
-		"IP_HASH_KEY":     "test-ip-hash-key-32-bytes-here!!",
-		"ENVIRONMENT":     "dev",
+		"DATABASE_URL":   "postgres://user:pass@localhost:5432/scanvault?sslmode=disable",
+		"PASETO_KEY":     "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXQ=", // 32-byte base64
+		"ARGON2_TIME":    "3",
+		"ARGON2_MEMORY":  "65536",
+		"ARGON2_THREADS": "4",
+		"S3_BUCKET_NAME": "scanvault-staging-vault-203a9e83",
+		"REDIS_URL":      "rediss://scanvault-staging-redis.serverless.aps1.cache.amazonaws.com:6379",
+		"POSTMARK_TOKEN": "test-postmark-token",
+		"IP_HASH_KEY":    "test-ip-hash-key-32-bytes-here!!",
+		"ENVIRONMENT":    "dev",
 	}
 }
 
@@ -56,11 +54,11 @@ func TestLoad_HappyPath(t *testing.T) {
 	if cfg.Argon2Threads != 4 {
 		t.Errorf("Argon2Threads = %d, want 4", cfg.Argon2Threads)
 	}
-	if cfg.R2Endpoint != "https://abc.r2.cloudflarestorage.com" {
-		t.Errorf("R2Endpoint = %q", cfg.R2Endpoint)
+	if cfg.S3BucketName != "scanvault-staging-vault-203a9e83" {
+		t.Errorf("S3BucketName = %q", cfg.S3BucketName)
 	}
-	if cfg.R2Bucket != "scanvault-test" {
-		t.Errorf("R2Bucket = %q", cfg.R2Bucket)
+	if cfg.RedisURL != "rediss://scanvault-staging-redis.serverless.aps1.cache.amazonaws.com:6379" {
+		t.Errorf("RedisURL = %q", cfg.RedisURL)
 	}
 	if cfg.PostmarkToken != "test-postmark-token" {
 		t.Errorf("PostmarkToken = %q", cfg.PostmarkToken)
@@ -106,10 +104,8 @@ func TestLoad_MissingRequired(t *testing.T) {
 		"ARGON2_TIME",
 		"ARGON2_MEMORY",
 		"ARGON2_THREADS",
-		"R2_ENDPOINT",
-		"R2_ACCESS_KEY",
-		"R2_SECRET_KEY",
-		"R2_BUCKET",
+		"S3_BUCKET_NAME",
+		"REDIS_URL",
 		"POSTMARK_TOKEN",
 		"IP_HASH_KEY",
 	}
@@ -129,8 +125,6 @@ func TestLoad_MissingRequired(t *testing.T) {
 }
 
 // TestLoad_InvalidEnvironment verifies that an unknown environment value is rejected.
-// Note: empty string is not tested here because caarlos0/env treats "" as "use default" (dev),
-// which is valid. To get an invalid env, you must set a non-empty invalid value.
 func TestLoad_InvalidEnvironment(t *testing.T) {
 	cases := []string{"production", "test", "local", "PROD", "Dev"}
 

@@ -106,10 +106,8 @@ func testConfig() *config.Config {
 		Argon2Time:    1,                                              // fast for tests
 		Argon2Memory:  8192,                                           // 8 MB (min for test speed)
 		Argon2Threads: 1,
-		R2Endpoint:    "https://test.r2.cloudflarestorage.com",
-		R2AccessKey:   "test",
-		R2SecretKey:   "test",
-		R2Bucket:      "test",
+		S3BucketName:  "scanvault-test",
+		RedisURL:      "redis://localhost:6379",
 		PostmarkToken: "test",
 		IPHashKey:     "test-ip-hash-key-32-bytes-here!!",
 		ServerPort:    "8080",

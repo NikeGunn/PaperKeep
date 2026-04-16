@@ -23,20 +23,31 @@ type Config struct {
 	Argon2Memory  uint32 `env:"ARGON2_MEMORY,required"`
 	Argon2Threads uint8  `env:"ARGON2_THREADS,required"`
 
-	// Cloudflare R2 / S3-compatible object storage
-	R2Endpoint  string `env:"R2_ENDPOINT,required"`
-	R2AccessKey string `env:"R2_ACCESS_KEY,required"`
-	R2SecretKey string `env:"R2_SECRET_KEY,required"`
-	R2Bucket    string `env:"R2_BUCKET,required"`
+	// AWS S3 object storage (replaces R2 — standard AWS, no custom endpoint)
+	S3BucketName string `env:"S3_BUCKET_NAME,required"`
+
+	// Redis — used by rate limiter and background queues
+	RedisURL string `env:"REDIS_URL,required"`
 
 	// Transactional email (Postmark)
 	PostmarkToken string `env:"POSTMARK_TOKEN,required"`
+
+	// hCaptcha secret for signup protection (optional in dev)
+	CaptchaSecretKey string `env:"CAPTCHA_SECRET_KEY"`
+
+	// AWS Secrets Manager ARNs (used in Lambda to resolve DB credentials at runtime)
+	DBSecretARN      string `env:"DB_SECRET_ARN"`
+	PasetoSecretARN  string `env:"PASETO_SECRET_ARN"`
+	CaptchaSecretARN string `env:"CAPTCHA_SECRET_ARN"`
 
 	// Error reporting (optional — not required to start)
 	SentryDSN string `env:"SENTRY_DSN"`
 
 	// Security — HMAC key for IP hashing in logs (required)
 	IPHashKey string `env:"IP_HASH_KEY,required"`
+
+	// Backup
+	BackupDryRun bool `env:"BACKUP_DRY_RUN" envDefault:"false"`
 
 	// Server
 	ServerPort  string `env:"SERVER_PORT" envDefault:"8080"`

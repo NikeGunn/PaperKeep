@@ -6,8 +6,8 @@
 ## Current Sprint: WEEK 1 — Foundation
 
 **Status:** IN PROGRESS
-**Last session:** 2026-04-11
-**Last completed task:** 2B.3 — Library screen, DocumentCard, LibraryViewModel, Folders complete
+**Last session:** 2026-04-16
+**Last completed task:** INFRA.1–INFRA.6 — AWS Terraform infrastructure deployed to staging
 
 ---
 
@@ -131,6 +131,29 @@
 - [x] **2A.12** Integration tests (full upload/download E2E) — 2026-04-11
 
 **Acceptance:** All criteria in docs/BACKEND_MVP.md Phase 2 acceptance section pass.
+
+---
+
+## INFRA: AWS Infrastructure (Terraform)
+
+> **Region:** ap-south-1 (Mumbai). State bucket: scanvault-tfstate. Workspace: staging.
+
+- [x] **INFRA.1** Terraform project structure (10 modules: ecr, s3, secrets, iam, aurora, redis, lambda_go, lambda_python, api_gateway, cloudwatch) — 2026-04-16
+- [x] **INFRA.2** Aurora Serverless v2 module (PostgreSQL 15.10, min 0.5 ACU / max 2 ACU) — 2026-04-16
+- [x] **INFRA.3** Lambda + API Gateway module (Go arm64 512MB 30s, Python arm64 2048MB 120s) — 2026-04-16
+- [x] **INFRA.4** ECR repos + bootstrap scripts (get_api_url.sh writes API_BASE_URL + TLS pin) — 2026-04-16
+- [x] **INFRA.5** S3 module (versioning, public access block, SSE-S3, lifecycle rules) — 2026-04-16
+- [x] **INFRA.6** terraform apply staging — all 62 resources created, API Gateway live — 2026-04-16
+
+**Live staging endpoints:**
+- API Gateway: `https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1`
+- S3 bucket: `scanvault-staging-vault-203a9e83`
+- Aurora: `scanvault-staging-aurora.cluster-cjk6c26cyw2o.ap-south-1.rds.amazonaws.com`
+- Redis: `scanvault-staging-redis-wuu4iy.serverless.aps1.cache.amazonaws.com`
+- ECR Go: `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-go-backend`
+- ECR Python: `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-python-intelligence`
+
+**Note:** Lambda currently has placeholder images. Real images deployed by CI/CD after code is written.
 
 ---
 
@@ -387,6 +410,7 @@
 | 2026-04-11 | 2A.5–2A.12 | **PHASE 2A COMPLETE.** PUT /v1/vault/documents/{uuid} (optimistic concurrency, 5-goroutine race test). DELETE soft-delete (quota decrement, 404 for other account). Page upload flow: POST upload-url (size 413, quota 402, pending row), POST confirm (HeadObject verify, page count/quota increment). GET download-url (presign GET, 404 auth). PurgeExpiredWithRetention (R2 delete → hard delete, spares <30d). Quota: doc limit 402, resets after delete. GET /v1/vault/manifest (since param, pagination). Full E2E: create→upload→confirm→list→download→delete→purge. 8 packages, all pass. |
 | 2026-04-11 | 2A.1–2A.4 | R2 storage wrapper (ObjectStorage interface + R2Storage + mockStorage). Migration 0002 (vault_documents, vault_pages, account_quotas with indexes + constraints). POST /v1/vault/documents (v7 UUID validation, duplicate 409, quota row init). GET /v1/vault/documents (cursor pagination, excludes soft-deleted). GET /v1/vault/documents/{uuid} (404 for other user, 404 for non-existent). 30 tests pass across 8 packages. |
 | 2026-04-12 | interconnect audit | Rewrote CLAUDE.md (3-layer arch, integration points table, gotchas). Added API contract + :core:network spec + AI flow to FRONTEND_MVP.md §Phase4. Added internal/intelligence/ dir + API route map to BACKEND_MVP.md. Added session numbers + Redis constants + Python port + Go proxy ref to INTELLIGENCE_LAYER.md §9. Added Architecture Integration Quick Reference + Phase 4B/4C gates to PROGRESS.md. Updated Sessions 29/33/34/36 in prompt-guide.txt with explicit API endpoints, staging gates, and integration constants. |
+| 2026-04-16 | INFRA.1–6 | AWS Terraform infrastructure deployed. 62 resources in staging: VPC, ECR, S3, Secrets Manager, IAM, Aurora Serverless v2 (pg 15.10), ElastiCache Serverless Redis, Lambda (Go+Python arm64), API Gateway HTTP API, CloudWatch. API Gateway URL: https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1. api_base_url.properties and pins.properties written. Placeholder images in ECR (real code pending). terraform validate + apply pass. |
 | 2026-04-12 | 2B.4–2B.6 | **Session 21 COMPLETE.** FTS4 full-text search (DocumentFtsEntity + @RawQuery DAO + sanitiseFtsQuery + LibraryViewModel search debounce). BatchCaptureViewModel (add/move/delete/reorder/consume pages). PageReorderScreen (drag-to-reorder, delete badge, Add/Done buttons). ImageFilter enum (5 filters) + ImageFilterProcessor (ORIGINAL zero-copy, AUTO, MAGIC_COLOR, GRAYSCALE, B&W adaptive threshold). FilterPreviewStrip Composable. 244/244 unit tests pass. FTS DAO integration tests moved to androidTest/ (require real Android SQLite — FTS4 not available in Robolectric sqlite4java). |
 | 2026-04-12 | 2B.7–2B.9 | **Session 22 COMPLETE.** OCR pipeline: OcrEngine interface + MlKitOcrEngine (ML Kit v2 Latin bundled, suspendCancellableCoroutine) + FakeOcrEngine (deterministic, emptyText flag). PDF export: PdfExporter (A4 595×842pt, bitmap scaling, transparent OCR text layer) + PdfDocumentWrapper abstraction (AndroidPdfDocumentWrapper production, FakePdfDocumentWrapper for tests). DocumentExporter: exportJpeg (quality 90), exportPng (lossless), exportTxt (page separator), exportEncryptedZip/decryptZip (AES-256-CBC, PBKDF2WithHmacSHA256 key derivation, 10K iterations). Switched core:ml and core:pdf from kapt → KSP (Windows fix). 258/258 unit tests pass, 0 failures. |
 | 2026-04-11 | 2B.1–2B.3 | **PHASE 2B tasks 2B.1–2B.3 COMPLETE.** Document+Page+Folder Room entities (migration 1→2), DocumentRepository, LibraryViewModel (combine 6 flows), LibraryScreen (PullToRefreshBox, LazyVerticalGrid, 2/4 cols), DocumentCard (combinedClickable, Coil AsyncImage, color tag), Folder CRUD. KSP replaces kapt (Windows fix). 13/13 ViewModel unit tests pass. |

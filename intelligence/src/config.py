@@ -19,12 +19,9 @@ class Settings(BaseSettings):
     task_queue_name: str = "scanvault:intelligence:tasks"
     result_channel: str = "scanvault:intelligence:results"
 
-    # R2 / S3-compatible storage
-    r2_endpoint: str = ""
-    r2_access_key: str = ""
-    r2_secret_key: str = ""
-    r2_bucket: str = "scanvault-processing"
-    r2_region: str = "auto"
+    # AWS S3 storage (replaces R2 — standard AWS endpoint, no custom URL)
+    s3_bucket_name: str = "scanvault-staging-vault-203a9e83"
+    aws_region: str = "ap-south-1"
 
     # Model paths
     model_cache_dir: str = "./models"

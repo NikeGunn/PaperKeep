@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from src.services.ocr_service import OCRService
-from src.utils.r2 import download_from_r2, upload_to_r2
+from src.utils.s3 import download_from_s3, upload_to_s3
 
 logger = logging.getLogger("scanvault.intelligence.worker.ocr")
 
@@ -21,12 +21,12 @@ async def process_ocr_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, An
     """
     task_id = task_data["task_id"]
     task_type = task_data["task_type"]
-    r2_key = task_data["input"]["r2_key"]
+    s3_key = task_data["input"]["s3_key"]
     params = task_data["input"].get("params", {})
 
     logger.info("Processing OCR task", extra={"task_id": task_id, "type": task_type})
 
-    image_bytes = download_from_r2(r2_key)
+    image_bytes = download_from_s3(s3_key)
     model_manager = ctx["model_manager"]
     service = OCRService(model_manager)
 
@@ -41,14 +41,13 @@ async def process_ocr_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, An
         detect_layout=detect_layout,
     )
 
-    # Write result to R2
-    output_key = r2_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".json"
-    upload_to_r2(output_key, json.dumps(result).encode(), content_type="application/json")
+    output_key = s3_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".json"
+    upload_to_s3(output_key, json.dumps(result).encode(), content_type="application/json")
 
     return {
         "task_id": task_id,
         "status": "completed",
-        "output_r2_key": output_key,
+        "output_s3_key": output_key,
         "metadata": {
             "confidence": result["confidence"],
             "language": result["language"],

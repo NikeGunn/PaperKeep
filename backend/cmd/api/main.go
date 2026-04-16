@@ -63,15 +63,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	r2Storage, err := vault.NewR2Storage(ctx, cfg.R2Endpoint, cfg.R2AccessKey, cfg.R2SecretKey, cfg.R2Bucket)
+	s3Storage, err := vault.NewS3Storage(ctx, cfg.S3BucketName)
 	if err != nil {
-		logger.Error("failed to initialize R2 storage", slog.String("error", err.Error()))
+		logger.Error("failed to initialize S3 storage", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	vaultSvc := vault.NewService(pool, r2Storage, logger)
+	vaultSvc := vault.NewService(pool, s3Storage, logger)
 	vaultSvc.StartPurgeWorker(ctx, time.Hour)
-	logger.Info("vault service initialized", slog.String("bucket", cfg.R2Bucket))
+	logger.Info("vault service initialized", slog.String("bucket", cfg.S3BucketName))
 
 	// -------------------------------------------------------------------------
 	// Server

@@ -30,6 +30,6 @@ class AsyncTaskRequest(BaseModel):
         pattern="^(ocr\\.|vision\\.|ai\\.)",
         description="Task type: ocr.enhance, vision.enhance, ai.summarize, etc.",
     )
-    input_r2_key: str = Field(..., description="R2 key for the input blob")
+    input_s3_key: str = Field(..., description="S3 key for the input blob in the processing bucket")
     params: dict[str, str | int | float | bool | list[str]] = Field(default_factory=dict)
     priority: int = Field(default=5, ge=1, le=10)

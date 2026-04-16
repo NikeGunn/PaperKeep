@@ -61,7 +61,7 @@ class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     task_type: str
-    output_r2_key: str | None = None
+    output_s3_key: str | None = None
     result_metadata: dict | None = None
     error_message: str | None = None
     created_at: str

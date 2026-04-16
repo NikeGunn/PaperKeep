@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from src.services.vision_service import VisionService
-from src.utils.r2 import download_from_r2, upload_to_r2
+from src.utils.s3 import download_from_s3, upload_to_s3
 
 logger = logging.getLogger("scanvault.intelligence.worker.vision")
 
@@ -13,12 +13,12 @@ async def process_vision_task(ctx: dict, task_data: dict[str, Any]) -> dict[str,
     """Process an async vision enhancement task."""
     task_id = task_data["task_id"]
     task_type = task_data["task_type"]
-    r2_key = task_data["input"]["r2_key"]
+    s3_key = task_data["input"]["s3_key"]
     params = task_data["input"].get("params", {})
 
     logger.info("Processing vision task", extra={"task_id": task_id, "type": task_type})
 
-    image_bytes = download_from_r2(r2_key)
+    image_bytes = download_from_s3(s3_key)
     model_manager = ctx["model_manager"]
     service = VisionService(model_manager)
 
@@ -34,14 +34,13 @@ async def process_vision_task(ctx: dict, task_data: dict[str, Any]) -> dict[str,
 
     enhanced_bytes = await service.enhance(image_bytes, operations=operations, quality=quality)
 
-    # Write result to R2
-    output_key = r2_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".jpg"
-    upload_to_r2(output_key, enhanced_bytes, content_type="image/jpeg")
+    output_key = s3_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".jpg"
+    upload_to_s3(output_key, enhanced_bytes, content_type="image/jpeg")
 
     return {
         "task_id": task_id,
         "status": "completed",
-        "output_r2_key": output_key,
+        "output_s3_key": output_key,
         "metadata": {
             "output_size_bytes": len(enhanced_bytes),
             "operations_applied": operations,
