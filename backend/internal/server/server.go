@@ -19,6 +19,7 @@ import (
 	"github.com/nikhil/scanvault-api/internal/config"
 	"github.com/nikhil/scanvault-api/internal/db"
 	appmiddleware "github.com/nikhil/scanvault-api/internal/middleware"
+	"github.com/nikhil/scanvault-api/internal/metrics"
 	"github.com/nikhil/scanvault-api/internal/vault"
 )
 
@@ -33,6 +34,7 @@ type Server struct {
 	vaultSvc           *vault.Service
 	vaultRoutesMounted bool
 	rateLimiter        *appmiddleware.RateLimiter
+	collector          *metrics.Collector
 }
 
 // New constructs a Server with the full middleware chain and routes wired up.
@@ -43,7 +45,8 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 		svc = accountsSvc[0]
 	}
 	rl := appmiddleware.NewRateLimiter()
-	s := &Server{cfg: cfg, db: dbPool, logger: logger, accountsSvc: svc, rateLimiter: rl}
+	col := metrics.NewCollector(metrics.NoopEmitter{})
+	s := &Server{cfg: cfg, db: dbPool, logger: logger, accountsSvc: svc, rateLimiter: rl, collector: col}
 
 	r := chi.NewRouter()
 
@@ -64,6 +67,10 @@ func New(cfg *config.Config, dbPool *pgxpool.Pool, logger *slog.Logger, accounts
 	// -------------------------------------------------------------------------
 	r.Get("/health", s.handleHealth)
 	r.Get("/ready", s.handleReady)
+
+	// v1 internal endpoints (no auth — aggregate data only)
+	r.Get("/v1/health/deep", s.handleHealthDeep)
+	r.Get("/v1/metrics", s.handleMetrics)
 
 	// v1 API
 	r.Route("/v1", func(r chi.Router) {
