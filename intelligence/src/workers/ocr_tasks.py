@@ -16,7 +16,7 @@ async def process_ocr_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, An
     task_data shape:
         task_id: str
         task_type: "ocr.enhance" | "ocr.table_extract" | "ocr.layout_analysis"
-        input.r2_key: str
+        input.s3_key: str
         input.params: dict
     """
     task_id = task_data["task_id"]
@@ -27,29 +27,26 @@ async def process_ocr_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, An
     logger.info("Processing OCR task", extra={"task_id": task_id, "type": task_type})
 
     image_bytes = download_from_s3(s3_key)
-    model_manager = ctx["model_manager"]
-    service = OCRService(model_manager)
+    service = OCRService()
 
     languages = params.get("languages", ["en"])
-    detect_tables = task_type == "ocr.table_extract" or params.get("enable_table_detection", False)
-    detect_layout = task_type == "ocr.layout_analysis" or params.get("enable_layout_analysis", False)
+    result = await service.extract_text_async(image_bytes, languages=languages)
 
-    result = await service.recognize(
-        image_bytes,
-        languages=languages,
-        detect_tables=detect_tables,
-        detect_layout=detect_layout,
-    )
+    output = {
+        "text": result.text,
+        "blocks": result.blocks,
+        "confidence": result.confidence,
+        "language": "en" if result.text else "unknown",
+    }
 
     output_key = s3_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".json"
-    upload_to_s3(output_key, json.dumps(result).encode(), content_type="application/json")
+    upload_to_s3(output_key, json.dumps(output).encode(), content_type="application/json")
 
     return {
         "task_id": task_id,
         "status": "completed",
         "output_s3_key": output_key,
         "metadata": {
-            "confidence": result["confidence"],
-            "language": result["language"],
+            "confidence": result.confidence,
         },
     }

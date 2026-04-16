@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir ".[dev]"
 
 # --- Stage 2: Runtime ---
 FROM python:3.12-slim AS runtime
@@ -32,10 +32,20 @@ USER appuser
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+# RUNTIME_MODE=local  → uvicorn (default for containers / local dev)
+# RUNTIME_MODE=lambda → Mangum handler (AWS Lambda)
+ENV RUNTIME_MODE=local
 
 EXPOSE 8100
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8100/api/v1/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]
+# Entrypoint selects mode via RUNTIME_MODE env var.
+# local  → uvicorn ASGI server on port 8100
+# lambda → import the Mangum handler (Lambda runtime calls handler() directly)
+CMD if [ "$RUNTIME_MODE" = "lambda" ]; then \
+        python -c "from src.lambda_handler import handler"; \
+    else \
+        uvicorn src.main:app --host 0.0.0.0 --port 8100 --workers 1; \
+    fi

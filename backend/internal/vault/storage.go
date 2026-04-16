@@ -1,4 +1,4 @@
-// Package vault implements R2/S3-compatible object storage for encrypted document pages.
+// Package vault implements S3 object storage for encrypted document pages.
 package vault
 
 import (
@@ -9,20 +9,19 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // presignURLTTL is the lifetime of all pre-signed URLs (put and get).
 const presignURLTTL = 5 * time.Minute
 
-// ObjectKey returns the R2 object key for a page blob.
+// ObjectKey returns the S3 object key for a page blob.
 // Format: vault/{account_uuid}/{doc_uuid}/{page_uuid}.enc
 func ObjectKey(accountUUID, docUUID, pageUUID string) string {
 	return fmt.Sprintf("vault/%s/%s/%s.enc", accountUUID, docUUID, pageUUID)
 }
 
-// ObjectStorage defines the interface for interacting with R2/S3 object storage.
+// ObjectStorage defines the interface for interacting with S3 object storage.
 // Using an interface enables straightforward mocking in tests.
 type ObjectStorage interface {
 	// GeneratePresignedPutURL returns a pre-signed URL for uploading a page blob.
@@ -38,53 +37,41 @@ type ObjectStorage interface {
 
 	// HeadObject returns the size in bytes of an object, or an error if it does not exist.
 	HeadObject(ctx context.Context, key string) (sizeBytes int64, err error)
+
+	// BucketName returns the configured bucket name.
+	BucketName() string
 }
 
-// R2Storage implements ObjectStorage backed by Cloudflare R2 (S3-compatible API).
-type R2Storage struct {
-	client   *s3.Client
-	presign  *s3.PresignClient
-	bucket   string
+// S3Storage implements ObjectStorage backed by AWS S3.
+type S3Storage struct {
+	client  *s3.Client
+	presign *s3.PresignClient
+	bucket  string
 }
 
-// NewR2Storage constructs an R2Storage from explicit credentials and endpoint.
-// endpoint should be the full R2 account URL, e.g. https://<accountid>.r2.cloudflarestorage.com
-func NewR2Storage(ctx context.Context, endpoint, accessKey, secretKey, bucket string) (*R2Storage, error) {
-	resolver := aws.EndpointResolverWithOptionsFunc(
-		func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			return aws.Endpoint{
-				URL:               endpoint,
-				SigningRegion:     "auto",
-				HostnameImmutable: true,
-			}, nil
-		},
-	)
-
-	cfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion("auto"),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
-		),
-		awsconfig.WithEndpointResolverWithOptions(resolver), //nolint:staticcheck // R2 requires custom endpoint
-	)
+// NewS3Storage constructs an S3Storage using the default AWS credential chain.
+// The bucket name is loaded from S3_BUCKET_NAME via the config.
+func NewS3Storage(ctx context.Context, bucket string) (*S3Storage, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.UsePathStyle = true // R2 requires path-style addressing
-	})
-
-	return &R2Storage{
+	client := s3.NewFromConfig(cfg)
+	return &S3Storage{
 		client:  client,
 		presign: s3.NewPresignClient(client),
 		bucket:  bucket,
 	}, nil
 }
 
+// BucketName returns the configured bucket name.
+func (s *S3Storage) BucketName() string {
+	return s.bucket
+}
+
 // GeneratePresignedPutURL creates a signed S3 PutObject URL valid for 5 minutes.
-// maxBytes is enforced via a Content-Length condition in the query string.
-func (s *R2Storage) GeneratePresignedPutURL(ctx context.Context, key string, maxBytes int64) (string, error) {
+func (s *S3Storage) GeneratePresignedPutURL(ctx context.Context, key string, maxBytes int64) (string, error) {
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(key),
@@ -99,7 +86,7 @@ func (s *R2Storage) GeneratePresignedPutURL(ctx context.Context, key string, max
 }
 
 // GeneratePresignedGetURL creates a signed S3 GetObject URL valid for 5 minutes.
-func (s *R2Storage) GeneratePresignedGetURL(ctx context.Context, key string) (string, error) {
+func (s *S3Storage) GeneratePresignedGetURL(ctx context.Context, key string) (string, error) {
 	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -113,7 +100,7 @@ func (s *R2Storage) GeneratePresignedGetURL(ctx context.Context, key string) (st
 }
 
 // DeleteObject permanently deletes key from the bucket.
-func (s *R2Storage) DeleteObject(ctx context.Context, key string) error {
+func (s *S3Storage) DeleteObject(ctx context.Context, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -125,7 +112,7 @@ func (s *R2Storage) DeleteObject(ctx context.Context, key string) error {
 }
 
 // HeadObject checks that key exists in the bucket and returns its size.
-func (s *R2Storage) HeadObject(ctx context.Context, key string) (int64, error) {
+func (s *S3Storage) HeadObject(ctx context.Context, key string) (int64, error) {
 	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -151,7 +138,6 @@ func ParsePresignedURLExpiry(rawURL string) (time.Duration, error) {
 	if expiresStr == "" {
 		return 0, fmt.Errorf("X-Amz-Expires not found in URL")
 	}
-	// X-Amz-Expires is in seconds as an integer string
 	var secs int64
 	if _, err := fmt.Sscanf(expiresStr, "%d", &secs); err != nil {
 		return 0, fmt.Errorf("parse X-Amz-Expires %q: %w", expiresStr, err)

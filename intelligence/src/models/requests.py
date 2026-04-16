@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class ClassifyRequest(BaseModel):
     """Request body is multipart/form-data with image file — this is for JSON fallback."""
+
     image_b64: str | None = None
 
 

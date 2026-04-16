@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
 from src.config import settings
-from src.routers import ai, classify, health, ocr, vision
+from src.routers import classify, health, ocr, vision
 
 logger = logging.getLogger("scanvault.intelligence")
 
@@ -42,4 +42,6 @@ app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["ocr"])
 app.include_router(vision.router, prefix="/api/v1/vision", tags=["vision"])
 
 if settings.enable_ai:
+    from src.routers import ai
+
     app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])

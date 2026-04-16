@@ -4,6 +4,7 @@ import logging
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from src.config import settings
 
@@ -28,7 +29,7 @@ def download_from_s3(s3_key: str) -> bytes:
     """Download a blob from the S3 processing bucket."""
     client = get_s3_client()
     response = client.get_object(Bucket=settings.s3_bucket_name, Key=s3_key)
-    return response["Body"].read()
+    return response["Body"].read()  # type: ignore[no-any-return]
 
 
 def upload_to_s3(s3_key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
@@ -49,5 +50,5 @@ def s3_key_exists(s3_key: str) -> bool:
     try:
         client.head_object(Bucket=settings.s3_bucket_name, Key=s3_key)
         return True
-    except client.exceptions.ClientError:
+    except ClientError:
         return False

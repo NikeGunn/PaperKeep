@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -30,7 +31,7 @@ async def shutdown(ctx: dict) -> None:
 class WorkerSettings:
     """ARQ worker configuration."""
 
-    functions = [process_ocr_task, process_vision_task, process_ai_task]
+    functions: ClassVar = [process_ocr_task, process_vision_task, process_ai_task]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

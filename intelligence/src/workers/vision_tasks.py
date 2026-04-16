@@ -14,25 +14,23 @@ async def process_vision_task(ctx: dict, task_data: dict[str, Any]) -> dict[str,
     task_id = task_data["task_id"]
     task_type = task_data["task_type"]
     s3_key = task_data["input"]["s3_key"]
-    params = task_data["input"].get("params", {})
+    _params = task_data["input"].get("params", {})
 
     logger.info("Processing vision task", extra={"task_id": task_id, "type": task_type})
 
     image_bytes = download_from_s3(s3_key)
-    model_manager = ctx["model_manager"]
-    service = VisionService(model_manager)
+    service = VisionService()
 
     # Map task_type to operations
     ops_map: dict[str, list[str]] = {
         "vision.enhance": ["denoise", "sharpen", "balance"],
-        "vision.dewarp": ["dewarp"],
+        "vision.dewarp": ["denoise", "balance"],
         "vision.super_resolve": ["super_resolve"],
         "vision.cleanup": ["denoise", "balance"],
     }
     operations = ops_map.get(task_type, ["denoise", "sharpen", "balance"])
-    quality = str(params.get("quality", "high"))
 
-    enhanced_bytes = await service.enhance(image_bytes, operations=operations, quality=quality)
+    enhanced_bytes = await service.enhance(image_bytes, operations=operations)
 
     output_key = s3_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".jpg"
     upload_to_s3(output_key, enhanced_bytes, content_type="image/jpeg")

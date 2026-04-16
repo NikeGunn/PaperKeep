@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nikhil/scanvault-api/internal/accounts"
@@ -70,19 +73,41 @@ func main() {
 	}
 
 	vaultSvc := vault.NewService(pool, s3Storage, logger)
-	vaultSvc.StartPurgeWorker(ctx, time.Hour)
+	// Only start purge worker in HTTP mode (Lambda has no persistent goroutines)
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
+		vaultSvc.StartPurgeWorker(ctx, time.Hour)
+	}
 	logger.Info("vault service initialized", slog.String("bucket", cfg.S3BucketName))
 
 	// -------------------------------------------------------------------------
-	// Server
+	// Router
 	// -------------------------------------------------------------------------
 	srv := server.New(cfg, pool, logger, accountsSvc).WithVaultService(vaultSvc)
+	handler := srv.Handler()
+
+	// -------------------------------------------------------------------------
+	// Runtime mode: Lambda or HTTP server
+	// -------------------------------------------------------------------------
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		// Running inside AWS Lambda — use HTTP adapter
+		logger.Info("starting in Lambda mode")
+		adapter := httpadapter.NewV2(handler)
+		lambda.Start(adapter.ProxyWithContext)
+		return
+	}
+
+	// HTTP server mode (local dev / VPS)
+	httpSrv := &http.Server{
+		Addr:    ":" + cfg.ServerPort,
+		Handler: handler,
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		if err := srv.Start(); err != nil {
+		logger.Info("server listening", slog.String("addr", httpSrv.Addr))
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server error", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
@@ -95,7 +120,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

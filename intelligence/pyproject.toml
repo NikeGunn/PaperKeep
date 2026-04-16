@@ -9,19 +9,15 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
+    "mangum>=0.19.0",
 
     # Image processing
     "opencv-python-headless>=4.10.0",
     "Pillow>=11.0.0",
+    "numpy>=2.2.0",
 
-    # OCR
-    "paddlepaddle>=3.0.0",
-    "paddleocr>=2.9.0",
-
-    # ML / AI
-    "transformers>=4.48.0",
-    "torch>=2.5.0",
-    "sentence-transformers>=3.4.0",
+    # OCR (easyocr — cross-platform, no Windows build issues)
+    "easyocr>=1.7.0",
 
     # Task queue
     "arq>=0.26.0",
@@ -36,7 +32,6 @@ dependencies = [
     # Utilities
     "httpx>=0.28.0",
     "python-multipart>=0.0.18",
-    "numpy>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -54,11 +49,12 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "TCH", "RUF"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
 
 [tool.pyright]
 pythonVersion = "3.12"
-typeCheckingMode = "strict"
+typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

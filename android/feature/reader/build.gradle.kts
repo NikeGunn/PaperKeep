@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
 }
@@ -27,6 +27,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -36,9 +42,9 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:pdf"))
 
-    // Hilt
+    // Hilt — KSP avoids Windows kapt path bug
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -46,6 +52,9 @@ dependencies {
     implementation(libs.bundles.lifecycle)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.navigation.compose)
+
+    // Extended icons (for TextFields toggle icon)
+    implementation(libs.androidx.material.icons.extended)
 
     // Image loading
     implementation(libs.coil.compose)
@@ -56,4 +65,6 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

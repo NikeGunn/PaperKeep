@@ -6,35 +6,32 @@ import logging
 import cv2
 import numpy as np
 
-from src.services.model_manager import ModelManager
 from src.utils.image import bytes_to_cv2, cv2_to_jpeg_bytes
 
 logger = logging.getLogger("scanvault.intelligence.vision")
 
-# Quality presets: JPEG quality parameter
-_QUALITY_MAP = {"low": 60, "medium": 80, "high": 95}
-
 
 class VisionService:
-    """Server-side image enhancement pipelines using OpenCV."""
+    """Server-side image enhancement pipelines using OpenCV.
 
-    def __init__(self, model_manager: ModelManager) -> None:
-        self._models = model_manager
+    Pure OpenCV implementation — no ML model required.
+    Lazy-instantiated; safe to construct at import time.
+    """
 
     async def enhance(
         self,
         image_bytes: bytes,
-        operations: list[str],
-        quality: str = "high",
+        operations: list[str] | None = None,
     ) -> bytes:
         """Apply a chain of enhancement operations and return JPEG bytes."""
+        if operations is None:
+            operations = ["denoise", "sharpen", "balance"]
         img = bytes_to_cv2(image_bytes)
         result = await asyncio.to_thread(self._apply_pipeline, img, operations)
-        jpeg_quality = _QUALITY_MAP.get(quality, 95)
-        return cv2_to_jpeg_bytes(result, quality=jpeg_quality)
+        return cv2_to_jpeg_bytes(result, quality=90)
 
     def _apply_pipeline(self, img: np.ndarray, operations: list[str]) -> np.ndarray:
-        """Apply operations sequentially. Each operation is a pure function."""
+        """Apply operations sequentially."""
         for op in operations:
             match op:
                 case "denoise":
@@ -51,12 +48,12 @@ class VisionService:
 
     @staticmethod
     def _denoise(img: np.ndarray) -> np.ndarray:
-        """Non-local means denoising. Good for document scans with noise."""
-        return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
+        """Non-local means denoising."""
+        return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)  # type: ignore[return-value]
 
     @staticmethod
     def _sharpen(img: np.ndarray) -> np.ndarray:
-        """Unsharp mask for text sharpening."""
+        """Unsharp mask sharpening."""
         gaussian = cv2.GaussianBlur(img, (0, 0), 3)
         return cv2.addWeighted(img, 1.5, gaussian, -0.5, 0)
 
@@ -72,10 +69,6 @@ class VisionService:
 
     @staticmethod
     def _super_resolve(img: np.ndarray) -> np.ndarray:
-        """Placeholder for Real-ESRGAN super-resolution.
-
-        TODO: Integrate Real-ESRGAN x2 model for actual super-resolution.
-        For now, uses bicubic upscale as a stub.
-        """
+        """Bicubic upscale (stub for Real-ESRGAN)."""
         h, w = img.shape[:2]
         return cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)

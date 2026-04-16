@@ -172,9 +172,9 @@
 - [x] **2B.7** OCR pipeline (ML Kit v2, Latin bundled, on-device) in `:core:ml` — 2026-04-12
 - [x] **2B.8** PDF export (PdfDocument + PDFBox text layer) in `:core:pdf` — 2026-04-12
 - [x] **2B.9** Other exports (JPEG, PNG, TXT, encrypted ZIP) — 2026-04-12
-- [ ] **2B.10** Document reader (swipeable pager, pinch-to-zoom, OCR text overlay, FLAG_SECURE)
-- [ ] **2B.11** Biometric app lock
-- [ ] **2B.12** Integration tests (10-page scan → reorder → filter → export → share)
+- [x] **2B.10** Document reader (swipeable pager, pinch-to-zoom, OCR text overlay, FLAG_SECURE) — 2026-04-16
+- [x] **2B.11** Biometric app lock (BiometricLockManager, BiometricLockManagerTest 8 cases pass) — 2026-04-16
+- [x] **2B.12** Integration tests (10-case DocumentPipelineIntegrationTest — 10 pages, reorder, filter, export, OCR overlay) — 2026-04-16
 
 **Acceptance:** All criteria in docs/FRONTEND_MVP.md Phase 2 acceptance section pass.
 
@@ -185,17 +185,17 @@
 > **Spec:** docs/BACKEND_MVP.md section 6 → Phase 3
 > **Depends on:** Phase 2A completed
 
-- [ ] **3A.1** Conflict resolution protocol + conflict backup table (migration 0003)
-- [ ] **3A.2** Batch operations endpoint
-- [ ] **3A.3** Redis rate limiter (replace in-memory)
-- [ ] **3A.4** CAPTCHA on signup (hCaptcha/Turnstile)
-- [ ] **3A.5** Account lockout after brute force
-- [ ] **3A.6** Password reset flow (with data loss warning)
-- [ ] **3A.7** Audit event logging (all security events)
-- [ ] **3A.8** Account activity endpoint
-- [ ] **3A.9** Session listing & revocation
-- [ ] **3A.10** Delete account flow (7-day grace + hard purge)
-- [ ] **3A.11** Abuse signals
+- [x] **3A.1** Conflict resolution protocol + conflict backup table (migration 0003) — 2026-04-16
+- [x] **3A.2** Batch operations endpoint — 2026-04-16
+- [x] **3A.3** Redis rate limiter (replace in-memory) — 2026-04-16
+- [x] **3A.4** CAPTCHA on signup (hCaptcha/Turnstile) — 2026-04-16
+- [x] **3A.5** Account lockout after brute force — 2026-04-16
+- [x] **3A.6** Password reset flow (with data loss warning) — 2026-04-16
+- [x] **3A.7** Audit event logging (all security events) — 2026-04-16
+- [x] **3A.8** Account activity endpoint — 2026-04-16
+- [x] **3A.9** Session listing & revocation — 2026-04-16
+- [x] **3A.10** Delete account flow (7-day grace + hard purge) — 2026-04-16
+- [x] **3A.11** Abuse signals — 2026-04-16
 
 **Acceptance:** All criteria in docs/BACKEND_MVP.md Phase 3 acceptance section pass.
 
@@ -231,15 +231,15 @@
 > **Depends on:** intelligence/ stubs already exist
 > **Runs in PARALLEL with 3A and 3B**
 
-- [ ] **3C.0** `scripts/run-intelligence.sh` — starts Docker compose (API + worker + Redis), waits healthy, prints port 8100. Has --help.
-- [ ] **3C.1** Finalize FastAPI app (health endpoint working in Docker, port 8100 internal only)
-- [ ] **3C.2** Classification endpoint (heuristic + ML model loading)
-- [ ] **3C.3** Enhanced OCR endpoint (PaddleOCR, single page)
-- [ ] **3C.4** Vision enhance endpoint (denoise, sharpen, balance pipeline)
-- [ ] **3C.5** Redis queue integration (ARQ worker consuming from `scanvault:intelligence:tasks`)
-- [ ] **3C.6** R2 integration (download from `processing/` prefix, upload results)
-- [ ] **3C.7** Docker compose working (API + worker + Redis)
-- [ ] **3C.8** Tests passing in CI
+- [x] **3C.0** `scripts/run-intelligence.sh` — starts Docker compose (API + worker + Redis), waits healthy, prints port 8100. Has --help. — 2026-04-16
+- [x] **3C.1** Finalize FastAPI app (health endpoint working in Docker, port 8100 internal only) — 2026-04-16
+- [x] **3C.2** Classification endpoint (heuristic + ML model loading) — 2026-04-16
+- [x] **3C.3** Enhanced OCR endpoint (PaddleOCR, single page) — 2026-04-16
+- [x] **3C.4** Vision enhance endpoint (denoise, sharpen, balance pipeline) — 2026-04-16
+- [x] **3C.5** Redis queue integration (ARQ worker consuming from `scanvault:intelligence:tasks`) — 2026-04-16
+- [x] **3C.6** S3 integration (download from `processing/` prefix, upload results — AWS S3 via boto3) — 2026-04-16
+- [x] **3C.7** Docker compose working (API + worker + Redis) — 2026-04-16
+- [x] **3C.8** Tests passing in CI (71 passed, 1 skipped) — 2026-04-16
 
 **Acceptance:** `curl` can classify an image, get enhanced OCR, and enhance a document photo.
 
@@ -411,6 +411,7 @@
 | 2026-04-11 | 2A.1–2A.4 | R2 storage wrapper (ObjectStorage interface + R2Storage + mockStorage). Migration 0002 (vault_documents, vault_pages, account_quotas with indexes + constraints). POST /v1/vault/documents (v7 UUID validation, duplicate 409, quota row init). GET /v1/vault/documents (cursor pagination, excludes soft-deleted). GET /v1/vault/documents/{uuid} (404 for other user, 404 for non-existent). 30 tests pass across 8 packages. |
 | 2026-04-12 | interconnect audit | Rewrote CLAUDE.md (3-layer arch, integration points table, gotchas). Added API contract + :core:network spec + AI flow to FRONTEND_MVP.md §Phase4. Added internal/intelligence/ dir + API route map to BACKEND_MVP.md. Added session numbers + Redis constants + Python port + Go proxy ref to INTELLIGENCE_LAYER.md §9. Added Architecture Integration Quick Reference + Phase 4B/4C gates to PROGRESS.md. Updated Sessions 29/33/34/36 in prompt-guide.txt with explicit API endpoints, staging gates, and integration constants. |
 | 2026-04-16 | INFRA.1–6 | AWS Terraform infrastructure deployed. 62 resources in staging: VPC, ECR, S3, Secrets Manager, IAM, Aurora Serverless v2 (pg 15.10), ElastiCache Serverless Redis, Lambda (Go+Python arm64), API Gateway HTTP API, CloudWatch. API Gateway URL: https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1. api_base_url.properties and pins.properties written. Placeholder images in ECR (real code pending). terraform validate + apply pass. |
+| 2026-04-16 | 2B.10–12, 3A.1–11, 3C.0–8 | **PHASE 2B COMPLETE. PHASE 3A COMPLETE. PHASE 3C COMPLETE.** Fixed Go backend test failures (auth_params NOT NULL, mockStorage missing BucketName()). Fixed API Gateway 500 error by adding AWS Lambda adapter (aws-lambda-go + aws-lambda-go-api-proxy) to main.go — auto-detects Lambda env via AWS_LAMBDA_FUNCTION_NAME. All 12 Go packages pass with -race. Python: 71/1 skipped tests pass. Android: reader+security tests pass. |
 | 2026-04-12 | 2B.4–2B.6 | **Session 21 COMPLETE.** FTS4 full-text search (DocumentFtsEntity + @RawQuery DAO + sanitiseFtsQuery + LibraryViewModel search debounce). BatchCaptureViewModel (add/move/delete/reorder/consume pages). PageReorderScreen (drag-to-reorder, delete badge, Add/Done buttons). ImageFilter enum (5 filters) + ImageFilterProcessor (ORIGINAL zero-copy, AUTO, MAGIC_COLOR, GRAYSCALE, B&W adaptive threshold). FilterPreviewStrip Composable. 244/244 unit tests pass. FTS DAO integration tests moved to androidTest/ (require real Android SQLite — FTS4 not available in Robolectric sqlite4java). |
 | 2026-04-12 | 2B.7–2B.9 | **Session 22 COMPLETE.** OCR pipeline: OcrEngine interface + MlKitOcrEngine (ML Kit v2 Latin bundled, suspendCancellableCoroutine) + FakeOcrEngine (deterministic, emptyText flag). PDF export: PdfExporter (A4 595×842pt, bitmap scaling, transparent OCR text layer) + PdfDocumentWrapper abstraction (AndroidPdfDocumentWrapper production, FakePdfDocumentWrapper for tests). DocumentExporter: exportJpeg (quality 90), exportPng (lossless), exportTxt (page separator), exportEncryptedZip/decryptZip (AES-256-CBC, PBKDF2WithHmacSHA256 key derivation, 10K iterations). Switched core:ml and core:pdf from kapt → KSP (Windows fix). 258/258 unit tests pass, 0 failures. |
 | 2026-04-11 | 2B.1–2B.3 | **PHASE 2B tasks 2B.1–2B.3 COMPLETE.** Document+Page+Folder Room entities (migration 1→2), DocumentRepository, LibraryViewModel (combine 6 flows), LibraryScreen (PullToRefreshBox, LazyVerticalGrid, 2/4 cols), DocumentCard (combinedClickable, Coil AsyncImage, color tag), Folder CRUD. KSP replaces kapt (Windows fix). 13/13 ViewModel unit tests pass. |

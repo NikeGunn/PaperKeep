@@ -95,9 +95,7 @@ class ModelManager:
     def unload_unused(self, idle_minutes: int = 30) -> None:
         """Free memory for models not used recently."""
         cutoff = time.monotonic() - (idle_minutes * 60)
-        to_remove = [
-            name for name, last in self._last_used.items() if last < cutoff
-        ]
+        to_remove = [name for name, last in self._last_used.items() if last < cutoff]
         for name in to_remove:
             logger.info("Unloading idle model", extra={"model": name})
             del self._models[name]

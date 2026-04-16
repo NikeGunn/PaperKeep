@@ -4,14 +4,16 @@ import json
 import logging
 from typing import Any
 
-from src.services.ai_service import AIService
 from src.utils.s3 import download_from_s3, upload_to_s3
 
 logger = logging.getLogger("scanvault.intelligence.worker.ai")
 
 
 async def process_ai_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, Any]:
-    """Process an async AI task (summarization, extraction, embedding)."""
+    """Process an async AI task (summarization, extraction, embedding).
+
+    Requires ctx["model_manager"] to be set by the worker startup hook.
+    """
     task_id = task_data["task_id"]
     task_type = task_data["task_type"]
     s3_key = task_data["input"]["s3_key"]
@@ -19,7 +21,19 @@ async def process_ai_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, Any
 
     logger.info("Processing AI task", extra={"task_id": task_id, "type": task_type})
 
-    model_manager = ctx["model_manager"]
+    if task_type not in ("ai.summarize", "ai.extract_fields"):
+        return {
+            "task_id": task_id,
+            "status": "failed",
+            "error": f"Unknown task type: {task_type}",
+        }
+
+    # Lazy-import AIService + ModelManager so tests can mock them
+    from src.config import settings
+    from src.services.ai_service import AIService
+    from src.services.model_manager import ModelManager
+
+    model_manager = ctx.get("model_manager") or ModelManager(settings=settings)
     service = AIService(model_manager)
 
     if task_type == "ai.summarize":
@@ -31,7 +45,7 @@ async def process_ai_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, Any
             style=str(params.get("style", "bullet_points")),
             language=str(params.get("language", "en")),
         )
-    elif task_type == "ai.extract_fields":
+    else:  # ai.extract_fields
         import base64
 
         image_bytes = download_from_s3(s3_key)
@@ -40,8 +54,6 @@ async def process_ai_task(ctx: dict, task_data: dict[str, Any]) -> dict[str, Any
             document_type=str(params.get("document_type", "unknown")),
             fields=list(params.get("fields", [])),
         )
-    else:
-        return {"task_id": task_id, "status": "failed", "error": f"Unknown task type: {task_type}"}
 
     output_key = s3_key.replace("/input.", "/output.").rsplit(".", 1)[0] + ".json"
     upload_to_s3(output_key, json.dumps(result).encode(), content_type="application/json")

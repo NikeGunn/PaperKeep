@@ -58,6 +58,10 @@ func (m *mockStorage) HeadObject(_ context.Context, key string) (int64, error) {
 	return size, nil
 }
 
+func (m *mockStorage) BucketName() string {
+	return "test-bucket"
+}
+
 func (m *mockStorage) put(key string, size int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

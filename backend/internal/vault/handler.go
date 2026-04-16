@@ -40,6 +40,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	// Sync manifest
 	r.Get("/vault/manifest", h.HandleManifest)
+
+	// Batch operations (3A.2)
+	r.Post("/vault/batch", h.HandleBatch)
 }
 
 // -------------------------------------------------------------------------

@@ -2,75 +2,117 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from dataclasses import dataclass, field
 
-import numpy as np
+from fastapi import HTTPException
 
-from src.services.model_manager import ModelManager
-from src.utils.image import bytes_to_cv2
+from src.config import settings
 
 logger = logging.getLogger("scanvault.intelligence.ocr")
 
+_MAX_IMAGE_BYTES = settings.max_image_size_mb * 1024 * 1024
+
+
+@dataclass
+class OCRResult:
+    text: str
+    blocks: list[dict] = field(default_factory=list)
+    confidence: float = 0.0
+
 
 class OCRService:
-    """Enhanced OCR using PaddleOCR with optional layout analysis."""
+    """Enhanced OCR using EasyOCR with lazy model loading."""
 
-    def __init__(self, model_manager: ModelManager) -> None:
-        self._models = model_manager
+    def __init__(self) -> None:
+        self._reader = None  # type: ignore[assignment]
+        self._reader_loaded = False
 
-    async def recognize(
-        self,
-        image_bytes: bytes,
-        languages: list[str] | None = None,
-        detect_tables: bool = False,
-        detect_layout: bool = False,
-    ) -> dict[str, Any]:
-        """Run enhanced OCR on an image.
+    def _ensure_reader(self, languages: list[str] | None = None) -> None:
+        """Lazy-load EasyOCR reader on first use."""
+        if self._reader_loaded:
+            return
+        if not settings.enable_ocr:
+            self._reader_loaded = True
+            self._reader = None
+            return
+        try:
+            import easyocr  # type: ignore[import-untyped]
 
-        Returns dict with keys: text, confidence, language, layout (optional).
+            lang_list = languages or ["en"]
+            logger.info("Loading EasyOCR reader", extra={"languages": lang_list})
+            self._reader = easyocr.Reader(lang_list, gpu=settings.enable_gpu, verbose=False)
+        except ImportError:
+            logger.warning("easyocr not installed — OCR will return empty results")
+            self._reader = None
+        finally:
+            self._reader_loaded = True
+
+    def extract_text(self, image_bytes: bytes, languages: list[str] | None = None) -> OCRResult:
+        """Extract text from image bytes.
+
+        Returns OCRResult(text="", blocks=[], confidence=0.0) for corrupt images.
+        Raises HTTPException 413 if image exceeds size limit.
         """
-        ocr_model = await self._models.get_ocr_model(languages)
-        img = bytes_to_cv2(image_bytes)
+        if len(image_bytes) > _MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Image too large: max {settings.max_image_size_mb}MB",
+            )
 
-        # PaddleOCR inference runs in a thread to avoid blocking the event loop
-        result = await asyncio.to_thread(ocr_model.ocr, img, cls=True)
+        self._ensure_reader(languages)
 
-        text_blocks: list[str] = []
-        confidences: list[float] = []
-        layout_blocks: list[dict[str, Any]] = []
+        if self._reader is None:
+            return OCRResult(text="", blocks=[], confidence=0.0)
 
-        if result and result[0]:
-            for line in result[0]:
-                bbox_points = line[0]  # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-                text = line[1][0]
-                conf = float(line[1][1])
-                text_blocks.append(text)
-                confidences.append(conf)
+        try:
+            import cv2
+            import numpy as np
 
-                if detect_layout:
-                    x_coords = [p[0] for p in bbox_points]
-                    y_coords = [p[1] for p in bbox_points]
-                    layout_blocks.append({
-                        "type": "paragraph",
+            arr = np.frombuffer(image_bytes, dtype=np.uint8)
+            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if img is None:
+                return OCRResult(text="", blocks=[], confidence=0.0)
+
+            raw = self._reader.readtext(img)
+            if not raw:
+                return OCRResult(text="", blocks=[], confidence=0.0)
+
+            text_parts: list[str] = []
+            blocks: list[dict] = []
+            confidences: list[float] = []
+
+            for bbox, text, conf in raw:
+                text_parts.append(text)
+                confidences.append(float(conf))
+                xs = [p[0] for p in bbox]
+                ys = [p[1] for p in bbox]
+                blocks.append(
+                    {
                         "text": text,
+                        "confidence": round(float(conf), 3),
                         "bbox": {
-                            "x": float(min(x_coords)),
-                            "y": float(min(y_coords)),
-                            "w": float(max(x_coords) - min(x_coords)),
-                            "h": float(max(y_coords) - min(y_coords)),
+                            "x": float(min(xs)),
+                            "y": float(min(ys)),
+                            "w": float(max(xs) - min(xs)),
+                            "h": float(max(ys) - min(ys)),
                         },
-                        "confidence": conf,
-                    })
+                    }
+                )
 
-        avg_confidence = float(np.mean(confidences)) if confidences else 0.0
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            return OCRResult(
+                text="\n".join(text_parts),
+                blocks=blocks,
+                confidence=round(avg_confidence, 3),
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("OCR extraction failed")
+            return OCRResult(text="", blocks=[], confidence=0.0)
 
-        result_dict: dict[str, Any] = {
-            "text": "\n".join(text_blocks),
-            "confidence": round(avg_confidence, 3),
-            "language": (languages or ["en"])[0],
-        }
-
-        if detect_layout and layout_blocks:
-            result_dict["layout"] = layout_blocks
-
-        return result_dict
+    async def extract_text_async(
+        self, image_bytes: bytes, languages: list[str] | None = None
+    ) -> OCRResult:
+        """Async wrapper — runs blocking inference in a thread pool."""
+        return await asyncio.to_thread(self.extract_text, image_bytes, languages)
