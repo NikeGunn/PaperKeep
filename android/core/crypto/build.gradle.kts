@@ -3,11 +3,10 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
-    namespace = "com.scanvault.core.network"
+    namespace = "com.scanvault.core.crypto"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
@@ -23,20 +22,21 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
-    implementation(project(":core:common"))
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.android)
 
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-
-    // Ktor (Phase 4+ — declared here, used only when sync is enabled)
-    implementation(libs.bundles.ktor)
-    implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
