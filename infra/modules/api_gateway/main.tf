@@ -15,7 +15,7 @@ resource "aws_apigatewayv2_api" "main" {
 
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.main.id
-  name        = "v1"
+  name        = "$default"
   auto_deploy = true
 
   access_log_settings {

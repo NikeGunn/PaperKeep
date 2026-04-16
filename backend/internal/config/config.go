@@ -26,8 +26,9 @@ type Config struct {
 	// AWS S3 object storage (replaces R2 — standard AWS, no custom endpoint)
 	S3BucketName string `env:"S3_BUCKET_NAME,required"`
 
-	// Redis — used by rate limiter and background queues
-	RedisURL string `env:"REDIS_URL,required"`
+	// Redis — used by rate limiter and background queues.
+	// Optional: if empty, in-memory rate limiter is used and deep health skips Redis check.
+	RedisURL string `env:"REDIS_URL"`
 
 	// Transactional email (Postmark)
 	PostmarkToken string `env:"POSTMARK_TOKEN,required"`

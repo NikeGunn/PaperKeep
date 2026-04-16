@@ -99,34 +99,9 @@ resource "aws_vpc_endpoint" "s3" {
   tags              = { Name = "${local.name_prefix}-s3-endpoint" }
 }
 
-# VPC Endpoint for Secrets Manager
-resource "aws_vpc_endpoint" "secretsmanager" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.ap-south-1.secretsmanager"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-  tags                = { Name = "${local.name_prefix}-secretsmanager-endpoint" }
-}
-
-resource "aws_security_group" "vpc_endpoints" {
-  name        = "${local.name_prefix}-vpc-endpoints"
-  description = "Allow Lambda to reach VPC endpoints"
-  vpc_id      = aws_vpc.main.id
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
+# Note: Secrets Manager is accessed via Lambda's internet egress (no VPC Interface endpoint).
+# Lambda SG has open egress — it calls secretsmanager.ap-south-1.amazonaws.com over the internet.
+# This is fine for staging: no extra $14.40/month VPC endpoint cost.
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
@@ -153,15 +128,6 @@ module "aurora" {
   db_secret_arn = module.secrets.db_secret_arn
 }
 
-module "redis" {
-  source       = "./modules/redis"
-  name_prefix  = local.name_prefix
-  environment  = var.environment
-  vpc_id       = aws_vpc.main.id
-  subnet_ids   = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  lambda_sg_id = module.lambda_go.security_group_id
-}
-
 module "lambda_go" {
   source             = "./modules/lambda_go"
   name_prefix        = local.name_prefix
@@ -172,10 +138,13 @@ module "lambda_go" {
   subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
   db_secret_arn      = module.secrets.db_secret_arn
   aurora_endpoint    = module.aurora.cluster_endpoint
-  redis_endpoint     = module.redis.endpoint
   s3_bucket_name     = module.s3.bucket_name
   paseto_secret_arn  = module.secrets.paseto_secret_arn
-  captcha_secret_arn = module.secrets.captcha_secret_arn
+  ip_hash_secret_arn = module.secrets.ip_hash_secret_arn
+  database_url       = var.database_url
+  paseto_key         = var.paseto_key
+  ip_hash_key        = var.ip_hash_key
+  postmark_token     = var.postmark_token
 }
 
 module "lambda_python" {
@@ -186,7 +155,6 @@ module "lambda_python" {
   execution_role_arn = module.iam.lambda_python_role_arn
   vpc_id             = aws_vpc.main.id
   subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  redis_endpoint     = module.redis.endpoint
   s3_bucket_name     = module.s3.bucket_name
 }
 

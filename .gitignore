@@ -130,4 +130,6 @@ infra/.terraform.lock.hcl
 infra/terraform-providers/
 infra/terraform.tfstate
 infra/terraform.tfstate.backup
+infra/terraform.tfvars
+infra/*.tfvars
 backend/tmp/

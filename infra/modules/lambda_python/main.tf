@@ -30,7 +30,6 @@ resource "aws_lambda_function" "python_intelligence" {
   environment {
     variables = {
       ENVIRONMENT    = var.environment
-      REDIS_URL      = "rediss://${var.redis_endpoint}:6379"
       S3_BUCKET_NAME = var.s3_bucket_name
       RUNTIME_MODE   = "lambda"
     }

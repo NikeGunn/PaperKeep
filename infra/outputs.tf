@@ -14,12 +14,6 @@ output "aurora_cluster_endpoint" {
   sensitive   = true
 }
 
-output "redis_endpoint" {
-  description = "ElastiCache Serverless endpoint"
-  value       = module.redis.endpoint
-  sensitive   = true
-}
-
 output "go_backend_ecr_url" {
   description = "ECR URL for Go backend image"
   value       = module.ecr.go_backend_repo_url

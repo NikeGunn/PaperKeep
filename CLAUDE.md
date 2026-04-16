@@ -194,6 +194,12 @@ Every task follows this exact sequence. You CANNOT skip steps.
 | `go test -race` fails with CGO errors | Race detector needs GCC | `PATH="/c/msys64/mingw64/bin:$PATH" CGO_ENABLED=1 go test -race ./...` |
 | `sqlc generate` not in PATH | Go bin not in shell PATH | `/c/Users/Nautilus/go/bin/sqlc generate` |
 | Paseto key too short | 32 ASCII chars ≠ 32 decoded bytes | Use base64 of 32 bytes: `"QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="` |
+| `terraform init` fails — IPv6 timeout to registry.terraform.io | Windows uses IPv6, some ISPs block it | Ensure `%APPDATA%\terraform.rc` has `filesystem_mirror` block pointing to `.terraform/providers` |
+| `terraform apply` — stage 409 ConflictException | Stage manually created via CLI is not in Terraform state | `terraform import -var-file=terraform.tfvars module.api_gateway.aws_apigatewayv2_stage.default "API_ID/\$default"` |
+| Lambda 500 on all requests | Placeholder Docker image returning 503 | Build real image: `docker buildx build --platform linux/arm64 --provenance=false --push ...` |
+| Lambda 404 for /v1/health | API Gateway stage `v1` adds prefix, chi has `/health` not `/v1/health` | Use `$default` stage (no prefix added to request path) |
+| Lambda DB auth failure | `scanvault_app` user not created on Aurora | See docs/TERRAFORM_GUIDE.md "Database Operations" section |
+| Docker push to Lambda → "manifest not supported" | Multi-platform OCI index (with provenance) not supported by Lambda | Add `--provenance=false --sbom=false` to `docker buildx build` |
 
 ### File Reading Strategy (saves ~80% tokens)
 
@@ -211,6 +217,7 @@ When PROGRESS.md says to work on a task:
 | Colors/Theme | docs/DESIGN_SYSTEM.md sections 2.2-2.3 only |
 | Any security work | docs/BACKEND_MVP.md section 4 (always, full) |
 | Android sync (4B) | docs/FRONTEND_MVP.md Phase 4 + docs/BACKEND_MVP.md §5 API contract |
+| Terraform / AWS infra | docs/TERRAFORM_GUIDE.md |
 
 ### Commit Convention
 
@@ -265,8 +272,63 @@ WEEK 10-11: Phase 5 (Sessions 37-45)
 - **Phase 1B (Android):** COMPLETE — camera, encryption, Room, navigation
 - **Phase 1C (CI/CD):** COMPLETE — all 5 workflows validated
 - **Phase 2A (Backend Vault):** COMPLETE — R2, upload/download, quota, manifest, purge
-- **Phase 2B (Android Library):** IN PROGRESS — 2B.1/2B.2/2B.3 done, 2B.4+ pending
-- **Phase 3C (Intelligence):** Stubs created, real implementation starts at Session 29
+- **Phase 2B (Android Library):** COMPLETE — library, OCR, PDF, biometric, reader
+- **Phase 3A (Backend Sync):** COMPLETE — conflict resolution, Redis rate limiter, account security
+- **Phase 3B (Android AI Modes):** COMPLETE — all 13 tasks done
+- **Phase 3C (Intelligence):** COMPLETE — FastAPI, classify, OCR, vision, Redis queue, S3, Docker
+- **Phase 4A (Backend Observability):** COMPLETE — CloudWatch, Sentry, deep health, LRU cache, backup
+- **Phase 4B (Android Sync):** IN PROGRESS — 4B.1–4B.4 done, 4B.5–4B.10 pending
+- **INFRA:** COMPLETE — 62 AWS resources deployed in staging (ap-south-1)
+
+## Live Staging Infrastructure
+
+| Resource | URL / Value |
+|---|---|
+| **API Base URL** | `https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com` |
+| **Health** | `GET /health` → 200 `{"status":"ok","version":"0.1.0"}` |
+| **Ready** | `GET /ready` → 200 `{"status":"ok","components":{"postgres":"ok"}}` |
+| **Deep Health** | `GET /v1/health/deep` → 200 `{"status":"ok","components":{"db":"ok","redis":"ok","s3":"ok"}}` |
+| **S3 Bucket** | `scanvault-staging-vault-203a9e83` |
+| **Aurora** | `scanvault-staging-aurora.cluster-cjk6c26cyw2o.ap-south-1.rds.amazonaws.com` |
+| **Redis** | DELETED (no Redis in staging — in-memory rate limiter used) |
+| **ECR Go** | `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-go-backend` |
+
+### Dev Cost Budget (updated 2026-04-16)
+
+**Target: under $10/month with zero users.** Current estimate: ~$3.50/month.
+
+| Resource | Cost | Notes |
+|---|---|---|
+| Aurora Serverless v2 | ~$0/mo idle, ~$0.10/hr active | min ACU=0, auto-pauses after 5min idle |
+| Lambda (Go + Python) | ~$0/mo | free tier: 1M requests + 400K GB-s/mo |
+| API Gateway HTTP API | ~$0/mo | free tier: 300 requests/mo |
+| S3 | ~$0.02/mo | 5GB free tier |
+| ECR | ~$0.10/mo | 2 repos, small images |
+| Secrets Manager | ~$1.20/mo | 3 secrets × $0.40/mo |
+| CloudWatch | ~$0/mo | 5GB free tier |
+| VPC / networking | ~$0/mo | S3 Gateway endpoint is FREE; no Interface endpoints |
+| **TOTAL** | **~$1.30–$3.50/mo** | spikes when Aurora warms up (first request of the day) |
+
+**Deleted to cut costs:** ElastiCache Redis ($15+/mo), 4 VPC Interface endpoints ($57.60/mo), captcha secret ($0.40/mo).
+**REDIS_URL is now optional** — empty string = in-memory rate limiter (already what's used). Re-add when Phase 4C needs real async queue.
+
+## Terraform Operations
+
+```bash
+cd infra/
+terraform init \
+  -backend-config="access_key=${AWS_ACCESS_KEY_ID}" \
+  -backend-config="secret_key=${AWS_SECRET_ACCESS_KEY}" \
+  -backend-config="region=ap-south-1" \
+  -backend-config="bucket=scanvault-tfstate" \
+  -backend-config="key=scanvault/terraform.tfstate" \
+  -reconfigure
+
+terraform plan -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
+```
+
+**PREREQUISITE:** `%APPDATA%\terraform.rc` must exist with `filesystem_mirror` block (already set up on Nikhil's machine). See docs/TERRAFORM_GUIDE.md for full setup.
 
 ---
 

@@ -39,9 +39,9 @@ resource "aws_rds_cluster" "aurora" {
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
   vpc_security_group_ids = [aws_security_group.aurora.id]
 
-  # Serverless v2 scaling
+  # Serverless v2 scaling — min 0 = auto-pause after 5 min idle (zero cost at rest)
   serverlessv2_scaling_configuration {
-    min_capacity = 0.5
+    min_capacity = 0
     max_capacity = 2.0
   }
 

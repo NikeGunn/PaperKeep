@@ -1,0 +1,22 @@
+# ScanVault Terraform Variables — EXAMPLE
+# Copy to terraform.tfvars and fill in real values.
+# NEVER commit terraform.tfvars (it's gitignored).
+
+environment = "staging"  # or "prod"
+
+# Database URL — URL-encode special chars in password
+# Get password from: aws secretsmanager get-secret-value --secret-id scanvault-staging/db-password
+# Encode password: python3 -c "import urllib.parse; print(urllib.parse.quote('YOUR_PASSWORD', safe=''))"
+database_url = "postgresql://scanvault_app:URL_ENCODED_PASSWORD@AURORA_ENDPOINT:5432/scanvault?sslmode=require"
+
+# PASETO key — base64 of 32 bytes
+# Get from: aws secretsmanager get-secret-value --secret-id scanvault-staging/paseto-key
+paseto_key = "BASE64_32_BYTES"
+
+# IP hash key — base64 of 32 bytes
+# Get from: aws secretsmanager get-secret-value --secret-id scanvault-staging/ip-hash-key
+ip_hash_key = "BASE64_32_BYTES"
+
+# Postmark transactional email token
+# Get from: https://account.postmarkapp.com/servers
+postmark_token = "YOUR_POSTMARK_TOKEN"

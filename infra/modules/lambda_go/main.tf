@@ -30,12 +30,17 @@ resource "aws_lambda_function" "go_backend" {
   environment {
     variables = {
       ENVIRONMENT        = var.environment
-      DATABASE_URL       = "resolved-at-runtime-from-secrets"
-      REDIS_URL          = "rediss://${var.redis_endpoint}:6379"
+      DATABASE_URL       = var.database_url
+      PASETO_KEY         = var.paseto_key
+      ARGON2_TIME        = tostring(var.argon2_time)
+      ARGON2_MEMORY      = tostring(var.argon2_memory)
+      ARGON2_THREADS     = tostring(var.argon2_threads)
+      IP_HASH_KEY        = var.ip_hash_key
+      POSTMARK_TOKEN     = var.postmark_token
       S3_BUCKET_NAME     = var.s3_bucket_name
       DB_SECRET_ARN      = var.db_secret_arn
       PASETO_SECRET_ARN  = var.paseto_secret_arn
-      CAPTCHA_SECRET_ARN = var.captcha_secret_arn
+      IP_HASH_SECRET_ARN = var.ip_hash_secret_arn
       SERVER_PORT        = "8080"
       AWS_REGION_NAME    = "ap-south-1"
     }

@@ -7,6 +7,7 @@ import (
 )
 
 // allVars returns a map of all required env vars set to valid values.
+// REDIS_URL is intentionally omitted — it is optional.
 func allVars() map[string]string {
 	return map[string]string{
 		"DATABASE_URL":   "postgres://user:pass@localhost:5432/scanvault?sslmode=disable",
@@ -15,7 +16,6 @@ func allVars() map[string]string {
 		"ARGON2_MEMORY":  "65536",
 		"ARGON2_THREADS": "4",
 		"S3_BUCKET_NAME": "scanvault-staging-vault-203a9e83",
-		"REDIS_URL":      "rediss://scanvault-staging-redis.serverless.aps1.cache.amazonaws.com:6379",
 		"POSTMARK_TOKEN": "test-postmark-token",
 		"IP_HASH_KEY":    "test-ip-hash-key-32-bytes-here!!",
 		"ENVIRONMENT":    "dev",
@@ -57,8 +57,8 @@ func TestLoad_HappyPath(t *testing.T) {
 	if cfg.S3BucketName != "scanvault-staging-vault-203a9e83" {
 		t.Errorf("S3BucketName = %q", cfg.S3BucketName)
 	}
-	if cfg.RedisURL != "rediss://scanvault-staging-redis.serverless.aps1.cache.amazonaws.com:6379" {
-		t.Errorf("RedisURL = %q", cfg.RedisURL)
+	if cfg.RedisURL != "" {
+		t.Errorf("RedisURL = %q, want empty (optional, not set)", cfg.RedisURL)
 	}
 	if cfg.PostmarkToken != "test-postmark-token" {
 		t.Errorf("PostmarkToken = %q", cfg.PostmarkToken)
@@ -68,6 +68,36 @@ func TestLoad_HappyPath(t *testing.T) {
 	}
 	if cfg.Environment != "dev" {
 		t.Errorf("Environment = %q, want dev", cfg.Environment)
+	}
+}
+
+// TestLoad_RedisURLOptional verifies config loads with no REDIS_URL set (empty = in-memory mode).
+func TestLoad_RedisURLOptional(t *testing.T) {
+	vars := allVars()
+	delete(vars, "REDIS_URL")
+	setEnv(t, vars)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("expected no error without REDIS_URL, got: %v", err)
+	}
+	if cfg.RedisURL != "" {
+		t.Errorf("RedisURL = %q, want empty string when not set", cfg.RedisURL)
+	}
+}
+
+// TestLoad_RedisURLWhenSet verifies REDIS_URL is read when provided.
+func TestLoad_RedisURLWhenSet(t *testing.T) {
+	vars := allVars()
+	vars["REDIS_URL"] = "rediss://example.cache.amazonaws.com:6379"
+	setEnv(t, vars)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.RedisURL != "rediss://example.cache.amazonaws.com:6379" {
+		t.Errorf("RedisURL = %q, want set value", cfg.RedisURL)
 	}
 }
 
@@ -105,7 +135,6 @@ func TestLoad_MissingRequired(t *testing.T) {
 		"ARGON2_MEMORY",
 		"ARGON2_THREADS",
 		"S3_BUCKET_NAME",
-		"REDIS_URL",
 		"POSTMARK_TOKEN",
 		"IP_HASH_KEY",
 	}
