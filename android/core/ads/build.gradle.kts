@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.common"
+    namespace = "com.scanvault.core.ads"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
@@ -31,17 +31,21 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:common"))
+
+    // Hilt — KSP (no kapt on Windows)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Hilt — provides AppDispatchers binding
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    // DataStore for frequency-cap persistence
+    implementation(libs.datastore.preferences)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
 }

@@ -1,0 +1,30 @@
+App Name: ScanVault — Document Scanner
+
+Short Description (80 chars max):
+Scan, organise and export documents. Private, on-device, no subscription.
+
+Full Description:
+ScanVault is a powerful document scanner that keeps your files private and on your device — no forced cloud accounts, no subscriptions, no ads on core features.
+
+FEATURES
+• Smart edge detection — auto-detects document corners in real time
+• Five capture modes — Document, Receipt, ID Card, Whiteboard, Book Scan
+• OCR (text recognition) — search inside scanned documents
+• PDF export with invisible text layer — fully searchable PDFs
+• Image filters — Original, Auto, Magic Color, Grayscale, Black & White
+• Signature tool — draw, save and place your signature on any document
+• Annotations — text, highlight, and redaction tools with undo/redo
+• Destructive redaction — permanently blacks out sensitive information
+• Image cleanup — denoise, sharpen and fix lighting with one tap
+• Encrypted storage — all files encrypted with AES-256-GCM on your device
+• Biometric lock — fingerprint or face unlock
+• Folder organisation — one-level folders with rename and delete
+• Full-text search — find any document by its content
+• Export formats — PDF, JPEG, PNG, TXT, encrypted ZIP
+
+PRIVACY
+ScanVault never reads your documents. Everything is processed on your device using on-device ML Kit. No data is uploaded without your explicit consent.
+
+PERMISSIONS
+• Camera — required to scan documents
+• Biometric — optional, for app lock

@@ -1,0 +1,24 @@
+Feature Graphic Specification
+==============================
+
+Dimensions: 1024 x 500 pixels (JPEG or 24-bit PNG, no alpha)
+File size:  Max 1 MB
+Format:     JPEG recommended (smaller file, same quality at this size)
+
+Recommended content:
+- App logo centred with the ScanVault wordmark
+- Background: ScanAmber gradient (#F9A825 → #F57F17) or dark charcoal (#1A1A1A)
+- Tagline: "Scan. Organise. Export."
+- No text within 40px of any edge (safe zone)
+- No screenshots or device frames inside the feature graphic (Play Store policy)
+
+Figma template:
+- Canvas: 1024 × 500 px
+- Export as JPEG at 90% quality → target ~80 KB
+
+Acceptance checklist:
+[  ] 1024 × 500 pixels confirmed
+[  ] No alpha channel
+[  ] File size < 1 MB
+[  ] No overlapping text / icons in the top-left 40 px safe zone
+[  ] Passes Play Console image review
