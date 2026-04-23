@@ -1,10 +1,10 @@
-App Name: ScanVault — Document Scanner
+App Name: Paperkeep — Document Scanner
 
 Short Description (80 chars max):
 Scan, organise and export documents. Private, on-device, no subscription.
 
 Full Description:
-ScanVault is a powerful document scanner that keeps your files private and on your device — no forced cloud accounts, no subscriptions, no ads on core features.
+Paperkeep is a powerful document scanner that keeps your files private and on your device — no forced cloud accounts, no subscriptions, no ads on core features.
 
 FEATURES
 • Smart edge detection — auto-detects document corners in real time
@@ -23,7 +23,7 @@ FEATURES
 • Export formats — PDF, JPEG, PNG, TXT, encrypted ZIP
 
 PRIVACY
-ScanVault never reads your documents. Everything is processed on your device using on-device ML Kit. No data is uploaded without your explicit consent.
+Paperkeep never reads your documents. Everything is processed on your device using on-device ML Kit. No data is uploaded without your explicit consent.
 
 PERMISSIONS
 • Camera — required to scan documents

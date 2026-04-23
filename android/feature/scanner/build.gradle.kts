@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.feature.scanner"
+    namespace = "app.paperkeep.feature.scanner"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

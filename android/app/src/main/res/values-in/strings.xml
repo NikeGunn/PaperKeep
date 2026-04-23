@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScanVault</string>
+    <string name="app_name">Paperkeep</string>
     <string name="action_scan">Pindai</string>
     <string name="action_save">Simpan</string>
     <string name="action_cancel">Batal</string>
@@ -18,7 +18,7 @@
     <string name="action_backup">Cadangkan</string>
     <string name="scanner_capture_button_description">Ambil dokumen</string>
     <string name="scanner_permission_title">Izin kamera diperlukan</string>
-    <string name="scanner_permission_rationale">ScanVault memerlukan akses kamera untuk memindai dokumen.</string>
+    <string name="scanner_permission_rationale">Paperkeep memerlukan akses kamera untuk memindai dokumen.</string>
     <string name="library_empty_title">Belum ada dokumen</string>
     <string name="library_empty_subtitle">Ketuk tombol kamera untuk memindai dokumen pertama Anda.</string>
     <string name="library_search_hint">Cari dokumen…</string>
@@ -28,7 +28,7 @@
     <string name="onboarding_page2_title">Pribadi dan terenkripsi</string>
     <string name="onboarding_page3_title">Sinkronisasi antar perangkat</string>
     <string name="settings_title">Pengaturan</string>
-    <string name="biometric_prompt_title">Buka kunci ScanVault</string>
+    <string name="biometric_prompt_title">Buka kunci Paperkeep</string>
     <string name="widget_scan_now_title">Pindai sekarang</string>
     <string name="widget_recent_scans_title">Pemindaian terbaru</string>
     <string name="qs_tile_label">Pindai dokumen</string>

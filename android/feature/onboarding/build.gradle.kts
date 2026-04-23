@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.feature.onboarding"
+    namespace = "app.paperkeep.feature.onboarding"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

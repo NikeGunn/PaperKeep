@@ -1,8 +1,8 @@
-# ScanVault ProGuard / R8 rules
+# Paperkeep ProGuard / R8 rules
 # These rules are added on top of the Android default rules.
 
 # Keep application class
--keep class com.scanvault.app.ScanVaultApplication { *; }
+-keep class app.paperkeep.PaperkeepApplication { *; }
 
 # Hilt
 -keep class dagger.hilt.** { *; }
@@ -33,8 +33,8 @@
     *** INSTANCE;
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep,includedescriptorclasses class com.scanvault.**$$serializer { *; }
--keepclassmembers class com.scanvault.** {
+-keep,includedescriptorclasses class app.paperkeep.**$$serializer { *; }
+-keepclassmembers class app.paperkeep.** {
     @kotlinx.serialization.Transient <fields>;
 }
 
@@ -82,13 +82,13 @@
 -keep class * extends android.service.quicksettings.TileService { *; }
 
 # Share / Intent handling activities
--keep class com.scanvault.app.share.** { *; }
+-keep class app.paperkeep.share.** { *; }
 
 # Crash handler — must survive even when most of the app is stripped
--keep class com.scanvault.app.crash.ScanVaultCrashHandler { *; }
+-keep class app.paperkeep.crash.PaperkeepCrashHandler { *; }
 
 # OTA config data classes (kotlinx.serialization)
--keep class com.scanvault.core.network.ota.** { *; }
+-keep class app.paperkeep.core.network.ota.** { *; }
 
 # OpenCV — only keep the native bridge; let R8 strip unused pure-Java wrappers
 -dontwarn org.opencv.**

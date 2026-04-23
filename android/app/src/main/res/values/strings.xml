@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScanVault</string>
+    <string name="app_name">Paperkeep</string>
 
     <!-- Common actions -->
     <string name="action_scan">Scan</string>
@@ -24,7 +24,7 @@
     <string name="scanner_torch_button_description">Toggle flashlight</string>
     <string name="scanner_grid_button_description">Toggle grid overlay</string>
     <string name="scanner_permission_title">Camera Permission Required</string>
-    <string name="scanner_permission_rationale">ScanVault needs camera access to scan documents.</string>
+    <string name="scanner_permission_rationale">Paperkeep needs camera access to scan documents.</string>
     <string name="scanner_permission_denied">Camera permission denied. Open Settings to allow it.</string>
     <string name="scanner_detecting_edges">Detecting document edges…</string>
     <string name="scanner_tap_to_focus">Tap to focus</string>
@@ -73,7 +73,7 @@
     <string name="export_encrypted_zip">Export encrypted ZIP</string>
 
     <!-- Biometric lock -->
-    <string name="biometric_prompt_title">Unlock ScanVault</string>
+    <string name="biometric_prompt_title">Unlock Paperkeep</string>
     <string name="biometric_prompt_subtitle">Confirm your identity to access your documents</string>
     <string name="biometric_prompt_negative">Use PIN</string>
     <string name="biometric_locked_message">App locked. Authenticate to continue.</string>
@@ -95,7 +95,7 @@
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_get_started">Get started</string>
     <string name="onboarding_page1_title">Scan any document</string>
-    <string name="onboarding_page1_body">Capture documents with your camera. ScanVault detects edges and corrects perspective automatically.</string>
+    <string name="onboarding_page1_body">Capture documents with your camera. Paperkeep detects edges and corrects perspective automatically.</string>
     <string name="onboarding_page2_title">Private &amp; encrypted</string>
     <string name="onboarding_page2_body">All your documents are encrypted on-device. Your data never leaves your phone unencrypted.</string>
     <string name="onboarding_page3_title">Sync across devices</string>
@@ -104,7 +104,7 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_biometric_lock">Biometric lock</string>
-    <string name="settings_biometric_lock_summary">Require fingerprint or face to open ScanVault</string>
+    <string name="settings_biometric_lock_summary">Require fingerprint or face to open Paperkeep</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_system">Follow system</string>
     <string name="settings_theme_light">Light</string>
@@ -118,7 +118,7 @@
 
     <!-- Widgets -->
     <string name="widget_scan_now_title">Scan Now</string>
-    <string name="widget_scan_now_description">Tap to open ScanVault camera</string>
+    <string name="widget_scan_now_description">Tap to open Paperkeep camera</string>
     <string name="widget_recent_scans_title">Recent Scans</string>
     <string name="widget_recent_scans_description">Shows your recently scanned documents</string>
     <string name="widget_no_recent_scans">No recent scans</string>
@@ -126,15 +126,15 @@
 
     <!-- Quick Settings tile -->
     <string name="qs_tile_label">Scan document</string>
-    <string name="qs_tile_subtitle">ScanVault</string>
-    <string name="qs_tile_description">Open ScanVault camera to scan a document</string>
+    <string name="qs_tile_subtitle">Paperkeep</string>
+    <string name="qs_tile_description">open Paperkeep camera to scan a document</string>
 
     <!-- Widget labels (used in AppWidget provider meta-data) -->
-    <string name="widget_scan_now_label">ScanVault — Scan Now</string>
+    <string name="widget_scan_now_label">Paperkeep — Scan Now</string>
 
     <!-- Share -->
-    <string name="share_import_label">ScanVault</string>
-    <string name="share_import_title">Import to ScanVault</string>
+    <string name="share_import_label">Paperkeep</string>
+    <string name="share_import_title">Import to Paperkeep</string>
     <string name="share_processing">Processing image…</string>
     <string name="share_success">Document imported successfully</string>
     <string name="share_unsupported_type">File type not supported</string>
@@ -159,7 +159,7 @@
     <string name="error_session_expired">Session expired. Please sign in again.</string>
 
     <!-- Crash reporting -->
-    <string name="crash_dialog_title">ScanVault encountered an error</string>
+    <string name="crash_dialog_title">Paperkeep encountered an error</string>
     <string name="crash_dialog_message">An unexpected error occurred. Tap Send to help us fix it, or Dismiss to continue.</string>
     <string name="crash_dialog_send">Send report</string>
     <string name="crash_dialog_dismiss">Dismiss</string>

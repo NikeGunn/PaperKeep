@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.network"
+    namespace = "app.paperkeep.core.network"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
@@ -33,7 +33,7 @@ android {
             "\"${pinsProps.getProperty("API_HOST", "")}\"")
         buildConfigField("String", "OTA_CONFIG_URL",
             "\"${apiProps.getProperty("OTA_CONFIG_URL",
-                "https://scanvault-staging-vault-203a9e83.s3.ap-south-1.amazonaws.com/ota/config.json")}\"")
+                "https://Paperkeep-staging-vault-203a9e83.s3.ap-south-1.amazonaws.com/ota/config.json")}\"")
     }
 
     compileOptions {

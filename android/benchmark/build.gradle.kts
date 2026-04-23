@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.benchmark"
+    namespace = "app.paperkeep.benchmark"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

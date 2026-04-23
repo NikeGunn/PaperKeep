@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScanVault</string>
+    <string name="app_name">Paperkeep</string>
     <string name="action_scan">Digitalizar</string>
     <string name="action_save">Salvar</string>
     <string name="action_cancel">Cancelar</string>
@@ -18,7 +18,7 @@
     <string name="action_backup">Backup</string>
     <string name="scanner_capture_button_description">Capturar documento</string>
     <string name="scanner_permission_title">Permissão de câmera necessária</string>
-    <string name="scanner_permission_rationale">ScanVault precisa de acesso à câmera para digitalizar documentos.</string>
+    <string name="scanner_permission_rationale">Paperkeep precisa de acesso à câmera para digitalizar documentos.</string>
     <string name="library_empty_title">Nenhum documento ainda</string>
     <string name="library_empty_subtitle">Toque no botão da câmera para digitalizar seu primeiro documento.</string>
     <string name="library_search_hint">Pesquisar documentos…</string>
@@ -28,7 +28,7 @@
     <string name="onboarding_page2_title">Privado e criptografado</string>
     <string name="onboarding_page3_title">Sincronize entre dispositivos</string>
     <string name="settings_title">Configurações</string>
-    <string name="biometric_prompt_title">Desbloquear ScanVault</string>
+    <string name="biometric_prompt_title">Desbloquear Paperkeep</string>
     <string name="widget_scan_now_title">Digitalizar agora</string>
     <string name="widget_recent_scans_title">Digitalizações recentes</string>
     <string name="qs_tile_label">Digitalizar documento</string>

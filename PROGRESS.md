@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-23)
 
-**Status:** v1 pivoted → v2 Paperkeep started · AWS fully torn down · `scrape/` deleted · docs on Paperkeep branding
-**Last session:** 2026-04-23 — AWS teardown (P1.0), Privacy Policy & ToS rewrite (P1.5), `scrape/` deleted and committed (P1.3)
-**Next task:** `P1.1` — Rename codebase (ScanVault → Paperkeep) across `android/`
+**Status:** v1 pivoted → v2 Paperkeep started · AWS fully torn down · `scrape/` deleted · codebase fully renamed to Paperkeep/app.paperkeep
+**Last session:** 2026-04-23 — Codebase rename P1.1 complete (ScanVault → Paperkeep, com.scanvault.app → app.paperkeep, VERSION → 2.0.0-alpha.1)
+**Next task:** `P1.2` — Delete dead Android modules (`:core:network`, `:feature:account`, `:feature:sync`)
 
 ### What exists from v1 that survives the pivot
 
@@ -35,7 +35,7 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 ### Cleanup (do these FIRST — they unblock everything)
 
 - [x] **P1.0** — AWS teardown. **Completed 2026-04-23** — user manually removed every resource from the AWS account. No Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, or VPC resources remain. $0 ongoing cost.
-- [ ] **P1.1** — Rename. Global find-replace across `android/` only: `ScanVault` → `Paperkeep`, `scanvault` → `paperkeep`, `com.scanvault.app` → `app.paperkeep`. Update `applicationId` in `:app/build.gradle.kts`, all `namespace = ` declarations in module `build.gradle.kts` files, `strings.xml` app label, `AndroidManifest.xml` package references. Reset `VERSION` to `2.0.0-alpha.1`. Verify `assembleDebug` still builds.
+- [x] **P1.1** — Rename. **Completed 2026-04-23.** Global find-replace across `android/` only: `ScanVault` → `Paperkeep`, `scanvault` → `paperkeep`, `com.scanvault.app` → `app.paperkeep`. Updated `applicationId` in `:app/build.gradle.kts`, all `namespace` declarations in module `build.gradle.kts` files, `strings.xml` app label, `AndroidManifest.xml` package references. Reset `VERSION` to `2.0.0-alpha.1`. Moved all source directories from `com/scanvault/` to `app/paperkeep/`. Renamed 7 Kotlin class files. Renamed Room schema directory. Removed dead `API_BASE_URL` buildConfigField (no backend). Fixed `BackupManager` to use `EncryptedImageStore` interface. Removed banned `Log.e/Log.w` calls from `PaperkeepCrashHandler`. Added `android.test` plugin to root `build.gradle.kts`. `assembleDebug` passes. All active module unit tests pass (`testDebugUnitTest` excluding dead `:core:network`). Zero `scanvault`/`ScanVault` references remain in source files.
 - [ ] **P1.2** — Delete dead Android modules. Remove dirs `android/core/network/`, `android/feature/account/`, `android/feature/sync/`. Remove them from `settings.gradle.kts`. Delete imports of these modules in all `build.gradle.kts` files. Delete Hilt modules/interfaces that referenced them. Delete navigation graph entries for account/sync screens. Verify `assembleDebug` builds. If code in `:app` references account/sync features, stub with TODO comments and track in P1.8.
 - [x] **P1.3** — `scrape/` deleted and committed. **Completed 2026-04-23.** All v1 legacy trees (backend, intelligence, infra, ota, deploy, old scripts/workflows, Makefile, nuke-config.yml, costs.csv) are gone from the working tree; recoverable via `git log` if ever needed.
 - [ ] **P1.4** — Update the 3 kept workflows (`android-ci.yml`, `android-release.yml`, `security-scan.yml`) so they no longer reference any backend/infra paths. `android-ci.yml` should run: `lint → detekt → unit tests → instrumented tests on emulator → assembleRelease → upload to Firebase App Distribution`. Merge `security-scan.yml` into it if duplicative.

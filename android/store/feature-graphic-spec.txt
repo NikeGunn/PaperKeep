@@ -6,7 +6,7 @@ File size:  Max 1 MB
 Format:     JPEG recommended (smaller file, same quality at this size)
 
 Recommended content:
-- App logo centred with the ScanVault wordmark
+- App logo centred with the Paperkeep wordmark
 - Background: ScanAmber gradient (#F9A825 → #F57F17) or dark charcoal (#1A1A1A)
 - Tagline: "Scan. Organise. Export."
 - No text within 40px of any edge (safe zone)

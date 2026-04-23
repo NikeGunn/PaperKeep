@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.ads"
+    namespace = "app.paperkeep.core.ads"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

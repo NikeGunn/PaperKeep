@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.crypto"
+    namespace = "app.paperkeep.core.crypto"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

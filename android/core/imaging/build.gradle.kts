@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.imaging"
+    namespace = "app.paperkeep.core.imaging"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     buildFeatures {

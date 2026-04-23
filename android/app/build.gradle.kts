@@ -8,23 +8,17 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.app"
+    namespace = "app.paperkeep"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.scanvault.app"
+        applicationId = "app.paperkeep"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "2.0.0-alpha.1"
 
-        testInstrumentationRunner = "com.scanvault.app.HiltTestRunner"
-
-        // API base URL — override via Gradle property: -PapiBaseUrl=http://192.168.1.5:8080
-        // Production default is the live API. Dev scripts inject the LAN IP automatically.
-        val apiBaseUrl = project.findProperty("apiBaseUrl") as? String
-            ?: "https://api.scanvault.app/v1"
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        testInstrumentationRunner = "app.paperkeep.HiltTestRunner"
     }
 
     buildTypes {
@@ -56,7 +50,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     packaging {

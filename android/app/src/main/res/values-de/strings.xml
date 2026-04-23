@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScanVault</string>
+    <string name="app_name">Paperkeep</string>
     <string name="action_scan">Scannen</string>
     <string name="action_save">Speichern</string>
     <string name="action_cancel">Abbrechen</string>
@@ -18,7 +18,7 @@
     <string name="action_backup">Sicherung</string>
     <string name="scanner_capture_button_description">Dokument aufnehmen</string>
     <string name="scanner_permission_title">Kameraberechtigung erforderlich</string>
-    <string name="scanner_permission_rationale">ScanVault benötigt Kamerazugriff zum Scannen von Dokumenten.</string>
+    <string name="scanner_permission_rationale">Paperkeep benötigt Kamerazugriff zum Scannen von Dokumenten.</string>
     <string name="library_empty_title">Noch keine Dokumente</string>
     <string name="library_empty_subtitle">Tippe auf den Kameraknopf, um dein erstes Dokument zu scannen.</string>
     <string name="library_search_hint">Dokumente suchen…</string>
@@ -28,7 +28,7 @@
     <string name="onboarding_page2_title">Privat und verschlüsselt</string>
     <string name="onboarding_page3_title">Geräteübergreifend synchronisieren</string>
     <string name="settings_title">Einstellungen</string>
-    <string name="biometric_prompt_title">ScanVault entsperren</string>
+    <string name="biometric_prompt_title">Paperkeep entsperren</string>
     <string name="widget_scan_now_title">Jetzt scannen</string>
     <string name="widget_recent_scans_title">Letzte Scans</string>
     <string name="qs_tile_label">Dokument scannen</string>

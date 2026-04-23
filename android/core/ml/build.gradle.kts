@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.scanvault.core.ml"
+    namespace = "app.paperkeep.core.ml"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

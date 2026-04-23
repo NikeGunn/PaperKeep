@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ScanVault"
+rootProject.name = "Paperkeep"
 
 include(":app")
 include(":core:ui")

@@ -22,7 +22,7 @@
         android:required="false" />
 
     <application
-        android:name=".ScanVaultApplication"
+        android:name=".PaperkeepApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -30,13 +30,13 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ScanVault">
+        android:theme="@style/Theme.Paperkeep">
 
         <!-- ── Main Activity ─────────────────────────────────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.ScanVault.Splash"
+            android:theme="@style/Theme.Paperkeep.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,12 +44,12 @@
             </intent-filter>
             <!-- Widget / QS tile deep-link: open camera directly -->
             <intent-filter>
-                <action android:name="com.scanvault.action.OPEN_CAMERA" />
+                <action android:name="app.paperkeep.action.OPEN_CAMERA" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <!-- Share extension: hand off imported images to scan flow -->
             <intent-filter>
-                <action android:name="com.scanvault.action.IMPORT_IMAGES" />
+                <action android:name="app.paperkeep.action.IMPORT_IMAGES" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
@@ -59,7 +59,7 @@
             android:name=".share.ShareImportActivity"
             android:exported="true"
             android:label="@string/share_import_label"
-            android:theme="@style/Theme.ScanVault">
+            android:theme="@style/Theme.Paperkeep">
             <!-- Single image share -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
