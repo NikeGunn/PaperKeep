@@ -62,16 +62,6 @@
     public static int i(...);
 }
 
-# Ktor client
--dontwarn io.ktor.**
--keep class io.ktor.** { *; }
-
-# OkHttp
--dontwarn okhttp3.**
--dontwarn okio.**
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
-
 # Glance AppWidget
 -keep class androidx.glance.** { *; }
 -dontwarn androidx.glance.**
@@ -86,9 +76,6 @@
 
 # Crash handler — must survive even when most of the app is stripped
 -keep class app.paperkeep.crash.PaperkeepCrashHandler { *; }
-
-# OTA config data classes (kotlinx.serialization)
--keep class app.paperkeep.core.network.ota.** { *; }
 
 # OpenCV — only keep the native bridge; let R8 strip unused pure-Java wrappers
 -dontwarn org.opencv.**

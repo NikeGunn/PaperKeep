@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
 }
 
@@ -28,6 +27,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -36,7 +41,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:crypto"))
-    implementation(project(":core:network"))
+    implementation(project(":core:security"))
 
     // Hilt
     implementation(libs.hilt.android)
@@ -53,9 +58,6 @@ dependencies {
     implementation(libs.androidx.biometric)
 
     implementation(libs.kotlinx.coroutines.android)
-
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.bundles.ktor)
     implementation(libs.androidx.material.icons.extended)
 
     testImplementation(libs.junit)
