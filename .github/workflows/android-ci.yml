@@ -5,7 +5,7 @@ on:
     paths: ['android/**', '.github/workflows/android-ci.yml']
   push:
     branches: [main]
-    paths: ['android/**']
+    paths: ['android/**', '.github/workflows/android-ci.yml']
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -13,8 +13,10 @@ concurrency:
 
 jobs:
   lint-and-test:
+    name: Lint, Detekt, Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,25 +31,19 @@ jobs:
         with:
           gradle-home-cache-cleanup: true
 
-      - name: Restore ccache for NDK builds
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ccache-ndk-${{ runner.os }}
-
-      - name: Detekt
+      - name: Detekt static analysis
         run: ./gradlew detekt
-        working-directory: android
-
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest
         working-directory: android
 
       - name: Lint (Android)
         run: ./gradlew lintDebug
         working-directory: android
 
-      - name: Assemble debug
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+        working-directory: android
+
+      - name: Assemble debug APK
         run: ./gradlew assembleDebug
         working-directory: android
 
@@ -59,20 +55,24 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
-      - name: Upload test results
+      - name: Upload lint & test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-test-results
+          name: android-ci-reports-${{ github.run_number }}
           path: android/**/build/reports/**
+          retention-days: 14
 
   instrumented-tests:
+    name: Instrumented Tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: lint-and-test
     strategy:
+      fail-fast: false
       matrix:
         api-level: [26, 30, 34]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -84,7 +84,7 @@ jobs:
       - name: Gradle setup with cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Enable KVM (for emulator)
+      - name: Enable KVM (for Android emulator)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -96,7 +96,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          key: avd-api${{ matrix.api-level }}-${{ runner.os }}
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -105,3 +105,48 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: cd android && ./gradlew connectedDebugAndroidTest
+
+      - name: Upload instrumented test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-results-api${{ matrix.api-level }}-${{ github.run_number }}
+          path: android/**/build/reports/androidTests/**
+          retention-days: 14
+
+  release-build:
+    name: Assemble Release (R8 + ProGuard gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Gradle setup with cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Assemble release (unsigned — signing gate is in android-release.yml)
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=/dev/null \
+            -Pandroid.injected.signing.store.password=unused \
+            -Pandroid.injected.signing.key.alias=unused \
+            -Pandroid.injected.signing.key.password=unused \
+            --no-daemon
+        working-directory: android
+        continue-on-error: false
+
+      - name: Verify APK exists
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "Release APK: $APK"
+          test -f "$APK"

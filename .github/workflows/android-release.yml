@@ -27,12 +27,9 @@ concurrency:
 
 jobs:
   release:
-    name: Build & publish release APK/AAB
+    name: Build & publish release AAB
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
-    env:
-      JAVA_VERSION: '17'
 
     steps:
       - name: Checkout
@@ -40,10 +37,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: 21
           distribution: temurin
 
       - name: Set up Gradle cache
@@ -55,11 +52,19 @@ jobs:
         run: |
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
+      - name: Run unit tests (release variant)
+        working-directory: android
+        # Run only the modules that have pure-JVM tests — release variant skips
+        # Compose UI tests that require a device/emulator (those run in instrumented-tests job).
+        run: |
+          ./gradlew testReleaseUnitTest \
+            -x :core:ui:testReleaseUnitTest \
+            --no-daemon
+
       - name: Build release AAB
         working-directory: android
         run: |
           ./gradlew bundleRelease \
-            -PapiBaseUrl="${{ secrets.PRODUCTION_API_URL }}" \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
@@ -67,21 +72,16 @@ jobs:
             --parallel \
             --no-daemon
 
-      - name: Build release APK (for side-loading / testing)
+      - name: Build release APK (for side-loading / QA)
         working-directory: android
         run: |
           ./gradlew assembleRelease \
-            -PapiBaseUrl="${{ secrets.PRODUCTION_API_URL }}" \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
             --parallel \
             --no-daemon
-
-      - name: Run release unit tests
-        working-directory: android
-        run: ./gradlew testReleaseUnitTest --parallel --no-daemon
 
       - name: Get version info
         id: version
@@ -94,32 +94,31 @@ jobs:
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: scanvault-release-${{ steps.version.outputs.name }}-aab
+          name: paperkeep-release-${{ steps.version.outputs.name }}-aab
           path: android/app/build/outputs/bundle/release/*.aab
-          retention-days: 30
+          retention-days: 90
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: scanvault-release-${{ steps.version.outputs.name }}-apk
+          name: paperkeep-release-${{ steps.version.outputs.name }}-apk
           path: android/app/build/outputs/apk/release/*.apk
-          retention-days: 30
+          retention-days: 90
 
       # ── Play Store upload via Fastlane supply ──────────────────────────────
       - name: Set up Ruby (for Fastlane)
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: '3.3'
           bundler-cache: true
           working-directory: android
 
-      - name: Create Fastlane directory structure
+      - name: Install Fastlane
         run: |
           mkdir -p android/fastlane
           cat > android/Gemfile <<'EOF'
           source "https://rubygems.org"
           gem "fastlane"
-          gem "supply"
           EOF
           bundle install --gemfile=android/Gemfile
 
@@ -142,7 +141,7 @@ jobs:
         working-directory: android
         env:
           SUPPLY_JSON_KEY: /tmp/play-store-key.json
-          SUPPLY_PACKAGE_NAME: com.scanvault.app
+          SUPPLY_PACKAGE_NAME: app.paperkeep
           SUPPLY_TRACK: ${{ steps.track.outputs.track }}
         run: |
           AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -1)
@@ -161,4 +160,4 @@ jobs:
       - name: Notify on success
         if: success()
         run: |
-          echo "✅ ScanVault ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }}) uploaded to Play Store (${{ steps.track.outputs.track }})"
+          echo "Paperkeep ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }}) uploaded to Play Store (${{ steps.track.outputs.track }})"
