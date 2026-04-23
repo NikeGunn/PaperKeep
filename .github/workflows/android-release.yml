@@ -1,0 +1,164 @@
+name: Android Release — Play Store
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Play Store track'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      rollout_percentage:
+        description: 'Staged rollout % (production track only, 1-100)'
+        required: false
+        default: '10'
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish release APK/AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      JAVA_VERSION: '17'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Build release AAB
+        working-directory: android
+        run: |
+          ./gradlew bundleRelease \
+            -PapiBaseUrl="${{ secrets.PRODUCTION_API_URL }}" \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
+            --parallel \
+            --no-daemon
+
+      - name: Build release APK (for side-loading / testing)
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease \
+            -PapiBaseUrl="${{ secrets.PRODUCTION_API_URL }}" \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
+            --parallel \
+            --no-daemon
+
+      - name: Run release unit tests
+        working-directory: android
+        run: ./gradlew testReleaseUnitTest --parallel --no-daemon
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(cat VERSION)
+          VERSION_CODE=$(git rev-list --count HEAD)
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanvault-release-${{ steps.version.outputs.name }}-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanvault-release-${{ steps.version.outputs.name }}-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      # ── Play Store upload via Fastlane supply ──────────────────────────────
+      - name: Set up Ruby (for Fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: android
+
+      - name: Create Fastlane directory structure
+        run: |
+          mkdir -p android/fastlane
+          cat > android/Gemfile <<'EOF'
+          source "https://rubygems.org"
+          gem "fastlane"
+          gem "supply"
+          EOF
+          bundle install --gemfile=android/Gemfile
+
+      - name: Decode Google Play service account key
+        run: |
+          echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}" > /tmp/play-store-key.json
+
+      - name: Determine upload track
+        id: track
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "track=internal" >> "$GITHUB_OUTPUT"
+            echo "rollout=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "track=${{ github.event.inputs.track }}" >> "$GITHUB_OUTPUT"
+            echo "rollout=${{ github.event.inputs.rollout_percentage }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to Play Store (${{ steps.track.outputs.track }})
+        working-directory: android
+        env:
+          SUPPLY_JSON_KEY: /tmp/play-store-key.json
+          SUPPLY_PACKAGE_NAME: com.scanvault.app
+          SUPPLY_TRACK: ${{ steps.track.outputs.track }}
+        run: |
+          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -1)
+          bundle exec fastlane supply \
+            --aab "$AAB_PATH" \
+            --track "$SUPPLY_TRACK" \
+            --json_key "$SUPPLY_JSON_KEY" \
+            --package_name "$SUPPLY_PACKAGE_NAME" \
+            --rollout "${{ steps.track.outputs.rollout }}"
+
+      - name: Clean up secrets
+        if: always()
+        run: |
+          rm -f android/app/release.keystore /tmp/play-store-key.json
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "✅ ScanVault ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }}) uploaded to Play Store (${{ steps.track.outputs.track }})"

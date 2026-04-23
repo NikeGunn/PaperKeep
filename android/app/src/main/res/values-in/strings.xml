@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanVault</string>
+    <string name="action_scan">Pindai</string>
+    <string name="action_save">Simpan</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_share">Bagikan</string>
+    <string name="action_export">Ekspor</string>
+    <string name="action_retry">Coba lagi</string>
+    <string name="action_done">Selesai</string>
+    <string name="action_next">Berikutnya</string>
+    <string name="action_back">Kembali</string>
+    <string name="action_settings">Pengaturan</string>
+    <string name="action_close">Tutup</string>
+    <string name="action_open_settings">Buka pengaturan</string>
+    <string name="action_restore">Pulihkan</string>
+    <string name="action_backup">Cadangkan</string>
+    <string name="scanner_capture_button_description">Ambil dokumen</string>
+    <string name="scanner_permission_title">Izin kamera diperlukan</string>
+    <string name="scanner_permission_rationale">ScanVault memerlukan akses kamera untuk memindai dokumen.</string>
+    <string name="library_empty_title">Belum ada dokumen</string>
+    <string name="library_empty_subtitle">Ketuk tombol kamera untuk memindai dokumen pertama Anda.</string>
+    <string name="library_search_hint">Cari dokumen…</string>
+    <string name="onboarding_skip">Lewati</string>
+    <string name="onboarding_get_started">Mulai</string>
+    <string name="onboarding_page1_title">Pindai dokumen apa saja</string>
+    <string name="onboarding_page2_title">Pribadi dan terenkripsi</string>
+    <string name="onboarding_page3_title">Sinkronisasi antar perangkat</string>
+    <string name="settings_title">Pengaturan</string>
+    <string name="biometric_prompt_title">Buka kunci ScanVault</string>
+    <string name="widget_scan_now_title">Pindai sekarang</string>
+    <string name="widget_recent_scans_title">Pemindaian terbaru</string>
+    <string name="qs_tile_label">Pindai dokumen</string>
+    <string name="error_network">Tidak ada koneksi internet</string>
+    <string name="error_unknown">Terjadi kesalahan. Silakan coba lagi.</string>
+</resources>

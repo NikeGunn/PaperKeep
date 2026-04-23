@@ -39,6 +39,9 @@ OPTIONS:
   --help, -h          Show this message and exit
   --backend-only      Start backend only (Postgres + Redis + Go API hot-reload)
   --phone-only        Build + deploy Android app only (backend must already run)
+  --staging           Build APK pointing at real AWS staging API (no local backend needed)
+                      URL: https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com/v1
+                      Use this to test end-to-end on your phone against live AWS infra.
   --wifi              Connect phone via Wi-Fi ADB (Android 11+). Cable-free.
   --no-install        Build APK but do not install on device
   --watch             Watch Kotlin files and auto-redeploy on change (uses inotifywait)
@@ -122,14 +125,18 @@ DO_INSTALL=true
 DO_WATCH=false
 DO_CLEAN=false
 DO_VERBOSE=false
+DO_STAGING=false
 TARGET_DEVICE=""
 PORT="${PORT:-8080}"
 BACKEND_EXIT_POLICY="${DEV_BACKEND_EXIT_POLICY:-auto}"
+# Real AWS staging endpoint — no local backend needed when --staging is used
+STAGING_API_URL="https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --backend-only)  MODE="backend-only"; shift ;;
     --phone-only)    MODE="phone-only"; shift ;;
+    --staging)       DO_STAGING=true; MODE="phone-only"; shift ;;
     --wifi)          DO_WIFI=true; shift ;;
     --no-install)    DO_INSTALL=false; shift ;;
     --watch)         DO_WATCH=true; shift ;;
@@ -141,6 +148,12 @@ while [[ $# -gt 0 ]]; do
     *) die "Unknown flag: $1 (use --help)" ;;
   esac
 done
+
+# --staging overrides the API URL baked into the APK
+if $DO_STAGING; then
+  BACKEND_URL="$STAGING_API_URL"
+  MODE="phone-only"
+fi
 
 case "$BACKEND_EXIT_POLICY" in
   auto|always|never) ;;
@@ -244,6 +257,11 @@ detect_lan_ip() {
 
 LAN_IP="$(detect_lan_ip)"
 
+# Set BACKEND_URL if not already set by --staging
+if [[ -z "${BACKEND_URL:-}" ]]; then
+  BACKEND_URL="http://${LAN_IP}:${PORT}"
+fi
+
 # ── Pre-flight banner ─────────────────────────────────────────────────────────
 clear
 printf "${CYAN}${BOLD}"
@@ -299,11 +317,14 @@ if [[ "$MODE" != "phone-only" ]]; then
 fi
 
 # ── Network summary ───────────────────────────────────────────────────────────
-BACKEND_URL="http://${LAN_IP}:${PORT}"
-
 banner "Network"
-printf "  Laptop LAN IP : ${GREEN}${BOLD}${LAN_IP}${NC}\n"
-printf "  Backend URL   : ${GREEN}${BOLD}${BACKEND_URL}${NC}\n"
+if $DO_STAGING; then
+  printf "  ${YELLOW}${BOLD}⚡ STAGING MODE — APK points at LIVE AWS API ⚡${NC}\n"
+  printf "  AWS API       : ${GREEN}${BOLD}${BACKEND_URL}${NC}\n"
+else
+  printf "  Laptop LAN IP : ${GREEN}${BOLD}${LAN_IP}${NC}\n"
+  printf "  Backend URL   : ${GREEN}${BOLD}${BACKEND_URL}${NC}\n"
+fi
 printf "  Phone target  : "
 if $DO_WIFI; then
   printf "${CYAN}Wi-Fi ADB${NC}\n"

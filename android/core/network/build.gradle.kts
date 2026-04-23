@@ -31,6 +31,9 @@ android {
             "\"${pinsProps.getProperty("TLS_PIN_SHA256", "")}\"")
         buildConfigField("String", "TLS_PIN_HOST",
             "\"${pinsProps.getProperty("API_HOST", "")}\"")
+        buildConfigField("String", "OTA_CONFIG_URL",
+            "\"${apiProps.getProperty("OTA_CONFIG_URL",
+                "https://scanvault-staging-vault-203a9e83.s3.ap-south-1.amazonaws.com/ota/config.json")}\"")
     }
 
     compileOptions {

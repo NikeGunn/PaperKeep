@@ -3,6 +3,7 @@ package com.scanvault.core.network.di
 import android.content.Context
 import com.scanvault.core.network.BuildConfig
 import com.scanvault.core.network.auth.TokenStore
+import com.scanvault.core.network.ota.OtaConfigManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -109,4 +110,19 @@ object NetworkModule {
             }
         }
     }
+
+    /**
+     * OTA config URL: S3 object served with public read (or presigned URL from CDN).
+     * Points at staging bucket — production overridden via BuildConfig.OTA_CONFIG_URL.
+     */
+    @Provides
+    @Named("ota_config_url")
+    fun provideOtaConfigUrl(): String = BuildConfig.OTA_CONFIG_URL
+
+    @Provides
+    @Singleton
+    fun provideOtaConfigManager(
+        httpClient: HttpClient,
+        @Named("ota_config_url") configUrl: String,
+    ): OtaConfigManager = OtaConfigManager(httpClient, configUrl)
 }

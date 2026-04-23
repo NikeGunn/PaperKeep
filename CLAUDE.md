@@ -1,339 +1,222 @@
-# ScanVault — Claude Code Brain
+# Paperkeep — Claude Code Brain
 
-> **This file is the ONLY file you read first.** It tells you where everything is, what state the project is in, and what to do next. Do NOT read spec files unless directed here.
+> **This file is the ONLY file you read first.** It tells you where everything is, the product state, and what to do next. Do NOT read spec files unless this file or `PROGRESS.md` directs you there.
 
 ---
 
-## Who
+## Who and what
 
 - **Developer:** Nikhil (solo dev, AI engineer + cybersecurity background)
-- **Product:** ScanVault — Android document scanner that beats CamScanner
-- **Stack:** Kotlin/Compose (Android) + Go (backend) + Python/FastAPI (intelligence) + DevOps (GitHub Actions)
+- **Product:** **Paperkeep** — Android document scanner that beats CamScanner on trust, speed, and feel
+- **Stack:** Kotlin 2.0 + Jetpack Compose Material 3 Expressive + Hilt (KSP) + Room + CameraX + ML Kit + TFLite + OpenCV
+- **Platform:** **Android only.** No backend. No cloud. No telemetry.
+- **Repo layout:** a single Android project under `android/` plus design docs under `docs/`. Everything else is legacy waiting to be deleted (see §Cleanup below).
+
+**Naming history:** the working codename was "ScanVault" but collided with existing Play Store apps. Product name is now **Paperkeep**, package `app.paperkeep`. Rename across the codebase is Phase 1, task P1.1.
 
 ---
 
 ## Project Root Map
 
 ```
-ScanVault/
-├── CLAUDE.md              ← YOU ARE HERE. Read this first, always.
-├── PROGRESS.md            ← Build tracker. Check what's done, find next task.
-├── prompt-guide.txt       ← 45-session roadmap (copy-paste prompts per session)
+Paperkeep/
+├── CLAUDE.md                       ← YOU ARE HERE. Read this first, always.
+├── PROGRESS.md                     ← v2 build tracker. Find the next unchecked task here.
+├── VERSION                         ← single version source (reset to 2.0.0-alpha.1 in P1.1)
 ├── docs/
-│   ├── FRONTEND_MVP.md        ← Android spec (5 phases). Read ONLY when building android/.
-│   ├── BACKEND_MVP.md         ← Go backend spec (5 phases). Read ONLY when building backend/.
-│   ├── INTELLIGENCE_LAYER.md  ← Python AI spec (3 phases). Read ONLY when building intelligence/.
-│   ├── DESIGN_SYSTEM.md       ← UI/UX spec. Read ONLY when implementing UI components.
-│   └── DEVOPS_AUTOMATION.md   ← CI/CD spec. Read ONLY when building .github/ or scripts/.
-├── android/               ← Kotlin Android app
-├── backend/               ← Go API
-├── intelligence/          ← Python FastAPI AI services (stubs exist, being built Phase 3C+)
-├── .github/workflows/     ← CI/CD pipelines
-├── ota/                   ← Over-the-air config
-├── scripts/               ← Dev scripts
-└── VERSION                ← Single version source
+│   ├── PAPERKEEP_DESIGN.md         ← master system design (5 phases + top-notch security §6)
+│   ├── PROMPT.md                   ← reference prompt Claude reads per session
+│   ├── PRIVACY_POLICY.md           ← in-app privacy policy (needs Paperkeep rename)
+│   └── TERMS_OF_SERVICE.md         ← Play Store ToS (needs Paperkeep rename)
+├── android/                        ← the product
+│   ├── app/
+│   ├── core/
+│   │   ├── ui, common, crypto, security, data, domain,
+│   │   ├── imaging, ml, pdf, ads
+│   │   └── backup                  ← NEW in v2 (replaces :core:network)
+│   ├── feature/
+│   │   ├── scanner, library, reader, settings, onboarding
+│   │   └── (account, sync → DELETED in P1.2)
+│   ├── benchmark/                  ← Macrobenchmark module
+│   └── store/                      ← Play Store metadata
+└── .github/workflows/              ← one unified Android workflow (others deleted in P1.3)
+
+# Legacy v1 trees live in scrape/ (archived 2026-04-23). Do NOT read, do NOT build against.
+# scrape/ gets deleted entirely AFTER task P1.0 (terraform destroy) confirms AWS = $0/mo.
+# See scrape/README.md for what's in there and when it's safe to rm -rf.
 ```
 
 ---
 
-## Three-Layer Architecture (READ THIS — it prevents the biggest mistakes)
+## The One-Layer Architecture (read this — it prevents the biggest mistakes)
 
 ```
-┌─────────────────────────────────────┐
-│     Android App  (Kotlin/Compose)    │  ← Phases 1B–5 (FRONTEND_MVP.md)
-│  On-device: ML Kit, OpenCV, Room    │
-│  Phase 4B+: Ktor Client, E2E crypto │
-└──────────────┬──────────────────────┘
-               │ HTTPS (Ktor + cert pinning, Phase 4B+)
-               ▼
-┌─────────────────────────────────────┐
-│       Go Backend  (chi + pgx)        │  ← Phases 1A–5 (BACKEND_MVP.md)
-│  accounts / vault / sync / audit    │
-│  Phase 4C+: internal/intelligence/  │  ← NEW proxy package
-└──────────────┬──────────────────────┘
-               │ HTTP (internal only) + Redis queue (Phase 4C+)
-               ▼
-┌─────────────────────────────────────┐
-│  Python Intelligence  (FastAPI/ARQ)  │  ← Phases 3C–5 (INTELLIGENCE_LAYER.md)
-│  OCR / Vision / AI / Classification │
-│  Port 8100 — NEVER exposed to net   │
-└─────────────────────────────────────┘
+┌────────────────────────────────────────────────┐
+│          Paperkeep Android App                  │
+│  (Kotlin / Compose / Material 3 Expressive)     │
+│                                                 │
+│  Capture → OpenCV → ML Kit/TFLite → Room       │
+│  Encrypted on disk (AES-256-GCM + Keystore)    │
+│  Optional: AdMob interstitials, Play Billing   │
+└────────────────────────────────────────────────┘
+         │                             ▲
+         │ (user-initiated export)     │ (user-initiated backup)
+         ▼                             │
+  Share sheet / FileProvider      SAF → any location
+   (system-handled)             (Drive / Dropbox / SD / USB-OTG)
 ```
 
-### Critical interconnection rules — never violate these:
+### Critical rules — never violate these
 
-1. **Android NEVER talks to Python directly.** All AI requests go Android → Go → Python.
-2. **Go proxies intelligence calls** via `internal/intelligence/` package (built in Phase 4C).
-3. **Android only calls Go** at `https://api.scanvault.app/v1/` (or staging equivalent).
-4. **Intelligence endpoints in Go:** `POST /v1/intelligence/classify`, `POST /v1/intelligence/tasks`, `GET /v1/intelligence/tasks/{id}`, `DELETE /v1/intelligence/tasks/{id}` — all require Paseto auth.
-5. **Python service port:** 8100, Docker container, only reachable from Go on the same host.
-6. **Zero-knowledge is preserved:** Go never decrypts vault data. For server-side AI, user opts in per-document, app decrypts locally, uploads plaintext to **separate** `processing/` R2 prefix (1-hour TTL).
-7. **Phases 1–3 are 100% offline.** No network calls on Android until Phase 4B.
-8. **Intelligence layer is optional.** If Python is down, app works. Go degrades gracefully.
-
-### Integration Points by Phase (when things connect)
-
-| Phase | What connects | Spec section |
-|---|---|---|
-| **4B.1** | Android account screens call Go `/v1/accounts` + `/v1/sessions` | FRONTEND_MVP.md Phase 4 |
-| **4B.2** | Android E2E crypto (libsodium) — keys never leave device | FRONTEND_MVP.md Phase 4, BACKEND_MVP.md §4 |
-| **4B.3** | Android WorkManager sync calls Go `/v1/vault/*` endpoints | FRONTEND_MVP.md Phase 4 |
-| **4B.6** | Android cert pinning against Go backend TLS cert SHA-256 | FRONTEND_MVP.md Phase 4 |
-| **4C.4** | Go `internal/intelligence/` HTTP client calls Python `:8100` | INTELLIGENCE_LAYER.md §3.3 |
-| **4C.5** | Go migration 0004 adds `intelligence_tasks` table | INTELLIGENCE_LAYER.md §2.1 |
-| **4C.6** | Go `/v1/intelligence/*` endpoints proxy to Python | INTELLIGENCE_LAYER.md §4 |
-| **3C.5** | Python ARQ worker reads from Redis queue `scanvault:intelligence:tasks` | INTELLIGENCE_LAYER.md §3.1 |
-| **3C.6** | Python reads/writes R2 `processing/<account>/<task>/` prefix | INTELLIGENCE_LAYER.md §5 |
+1. **No backend. No server. No API we own.** There is no Go, no Python, no AWS. If a task description mentions any of these, the task description is wrong — stop and ask.
+2. **No network traffic except Google SDKs.** AdMob, UMP, Play Billing, Play Integrity, ML Kit module download. That is the complete list. Any other outbound request is a bug.
+3. **Nothing auto-uploads.** Every data exit from the device is a user tap on share / export / backup.
+4. **All on-disk data is encrypted.** Every page image, thumbnail, OCR blob, signature, crash log → AES-256-GCM ciphertext in `filesDir/`. Plaintext-on-disk is a bug. The only exception is `cacheDir/exports/*.pdf` which lives for 60 seconds during a share.
+5. **Keys live in Keystore only.** Hardware-backed (StrongBox when available). Never in DataStore, never in a file, never logged.
+6. **Android-only in v2.** iOS is a future rewrite; do not try to "make things portable" at the expense of Android quality.
+7. **No telemetry.** No Firebase Analytics, no Crashlytics, no Sentry, no AppsFlyer, no Adjust. AdMob + UMP + Play are the only Google SDKs with network access.
 
 ---
 
 ## Rules for Claude Code
 
-### Token Saving Rules (CRITICAL)
+### Token-saving rules (critical)
 
-1. **NEVER read a spec file unless PROGRESS.md points you there.** Each spec is 500-800 lines. Read only the section you need.
-2. **Read PROGRESS.md FIRST** to find the current task and which spec section to reference.
-3. **After completing any task**, update PROGRESS.md immediately — check the box, write the date, add notes if needed.
-4. **One task per session.** Don't try to do everything. Do one PROGRESS.md task well.
-5. **When a session starts**, read only: this file (CLAUDE.md) + PROGRESS.md. That's ~200 lines total vs ~3000 lines if you read all specs.
+1. **Never read `docs/PAPERKEEP_DESIGN.md` in full unless truly needed.** It's ~800 lines. Read only the section the current task requires. The file-reading map below says exactly what to open.
+2. **Read `PROGRESS.md` first** to find the current task and which design section to reference.
+3. **Update `PROGRESS.md` immediately** after completing a task — check the box, write the date, add a one-line note.
+4. **One task per session.** Do one task well.
+5. At session start, read only: this file + `PROGRESS.md` + `docs/PROMPT.md`. That's ~500 lines total. Everything else is on-demand.
 
-### Test-Gate Rule (MANDATORY — NO EXCEPTIONS)
-
-Every task follows this exact sequence. You CANNOT skip steps.
+### Test-gate rule (mandatory — no exceptions)
 
 ```
-1. BUILD   → Write the implementation code
-2. TEST    → Write tests for every behavior (see test requirements below)
-3. RUN     → Execute ALL tests (new + existing)
-4. PASS    → ALL tests must pass. If any fail, fix code and re-run.
+1. BUILD   → write the implementation
+2. TEST    → write tests for every behavior
+3. RUN     → execute ALL tests (new + existing)
+4. PASS    → every test green. If any fail, fix code and re-run.
 5. UPDATE  → ONLY after step 4 passes, check the box in PROGRESS.md
 ```
 
-**If tests fail, DO NOT update PROGRESS.md. Fix the code first.**
-**If you skip writing tests, the task is NOT done even if the code works.**
+If tests fail → do not check the box. Fix the code.
+If you skip tests → the task is not done even if the code works.
 
-### What Tests to Write
+Per-task-type test requirements live in `docs/PROMPT.md` §4.
 
-| Stack | Framework | Test types required |
-|---|---|---|
-| Go backend | `go test` + testcontainers-go | Unit tests for every function. Integration tests for every endpoint (real Postgres). |
-| Android | JUnit 5 + Turbine + MockK + Compose UI tests | Unit tests for ViewModels, UseCases, Repositories. UI tests for every screen flow. |
-| Python | pytest + pytest-asyncio + httpx TestClient | Unit tests for every service method. API tests for every endpoint. |
-
-### Test Requirements Per Task Type
-
-**Backend endpoint task:**
-- Test happy path (correct input → correct output)
-- Test auth required (no token → 401)
-- Test invalid input (bad JSON, missing fields → 400)
-- Test not found (wrong UUID → 404)
-- Test authorization (other user's resource → 404, never 403)
-- Test rate limiting (exceed limit → 429)
-- Test idempotency (same request twice → same result)
-- Test concurrent access where applicable (race conditions)
-
-**Backend intelligence proxy task (Phase 4C+):**
-- Test Go calls Python classify endpoint (mock Python, use httptest server)
-- Test Go publishes task to Redis (mock Redis)
-- Test Go handles Python service timeout gracefully
-- Test Go handles Python service down (returns 503, not panic)
-- Test rate limiting on intelligence endpoints (20/min sync, 100/hr async)
-- Test auth required (all intelligence endpoints need valid Paseto token)
-
-**Frontend screen task:**
-- Test screen renders without crash
-- Test all user interactions (tap, swipe, long-press, back)
-- Test state survives rotation
-- Test empty state
-- Test error state (permission denied, disk full)
-- Test accessibility (contentDescription exists, touch targets ≥ 48dp)
-
-**Frontend sync/network task (Phase 4B+):**
-- Test successful API call returns expected response
-- Test network failure → WorkManager retries with exponential backoff
-- Test offline state → operation queued, not dropped
-- Test cert pinning rejects wrong cert
-- Test E2E encrypt → upload → download → decrypt → same plaintext
-
-**Frontend data task (Room, encryption, storage):**
-- Test round-trip (write → read → same data)
-- Test encryption (raw file is unreadable)
-- Test migration (old schema → new schema preserves data)
-- Test concurrent access (two coroutines writing)
-- Test edge cases (empty string, max size, unicode)
-
-**Python service task:**
-- Test happy path (valid image → correct result)
-- Test invalid input (corrupted image → graceful error, not crash)
-- Test model not loaded (first request triggers lazy load)
-- Test timeout (processing exceeds limit → timeout error)
-- Test large input (50MB image → handled or rejected)
-
-**CI/CD task:**
-- Validate YAML syntax
-- Verify all secrets are referenced (not hardcoded)
-- Dry-run if possible
-
-### Code Rules
-
-- `from __future__ import annotations` in all Python files
-- Go: no ORM, use sqlc + raw SQL. Router is chi. No Gin/Echo/Fiber.
-- Kotlin: Jetpack Compose only, no XML layouts. Hilt for DI. Material 3.
-- **Android networking (Phase 4B+):** Ktor Client with OkHttp engine. No Retrofit, no Volley.
-- **Hilt on Windows:** use KSP plugin (`alias(libs.plugins.ksp)`), NOT kapt. kapt has a Windows path bug with Hilt's ProGuard resource generation.
-- Security is non-negotiable. Read section 3 of docs/FRONTEND_MVP.md and section 4 of docs/BACKEND_MVP.md before writing any code that touches auth, storage, or network.
-- Every phase must pass its acceptance criteria before moving to the next.
-- Never rewrite earlier phase code. New phases ADD modules, they don't replace.
-- **Tests live next to the code they test.** Go: `_test.go` files. Android: `src/test/` and `src/androidTest/`. Python: `tests/` directory.
-
-### Known Platform Gotchas (save 2+ hours per session)
-
-| Problem | Root cause | Fix |
-|---|---|---|
-| `kapt` fails with "Invalid relative name: META-INF\proguard\..." | Windows kapt + Hilt backslash bug | Replace `alias(libs.plugins.kotlin.kapt)` + `kapt(libs.hilt.compiler)` with `alias(libs.plugins.ksp)` + `ksp(libs.hilt.compiler)` |
-| `go test -race` fails with CGO errors | Race detector needs GCC | `PATH="/c/msys64/mingw64/bin:$PATH" CGO_ENABLED=1 go test -race ./...` |
-| `sqlc generate` not in PATH | Go bin not in shell PATH | `/c/Users/Nautilus/go/bin/sqlc generate` |
-| Paseto key too short | 32 ASCII chars ≠ 32 decoded bytes | Use base64 of 32 bytes: `"QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="` |
-| `terraform init` fails — IPv6 timeout to registry.terraform.io | Windows uses IPv6, some ISPs block it | Ensure `%APPDATA%\terraform.rc` has `filesystem_mirror` block pointing to `.terraform/providers` |
-| `terraform apply` — stage 409 ConflictException | Stage manually created via CLI is not in Terraform state | `terraform import -var-file=terraform.tfvars module.api_gateway.aws_apigatewayv2_stage.default "API_ID/\$default"` |
-| Lambda 500 on all requests | Placeholder Docker image returning 503 | Build real image: `docker buildx build --platform linux/arm64 --provenance=false --push ...` |
-| Lambda 404 for /v1/health | API Gateway stage `v1` adds prefix, chi has `/health` not `/v1/health` | Use `$default` stage (no prefix added to request path) |
-| Lambda DB auth failure | `scanvault_app` user not created on Aurora | See docs/TERRAFORM_GUIDE.md "Database Operations" section |
-| Docker push to Lambda → "manifest not supported" | Multi-platform OCI index (with provenance) not supported by Lambda | Add `--provenance=false --sbom=false` to `docker buildx build` |
-
-### File Reading Strategy (saves ~80% tokens)
-
-When PROGRESS.md says to work on a task:
+### File reading map (saves ~80% tokens)
 
 | Task area | Read ONLY these sections |
 |---|---|
-| DevOps setup | docs/DEVOPS_AUTOMATION.md sections 1-3 only |
-| CI workflows | docs/DEVOPS_AUTOMATION.md section 6 only |
-| Backend Phase N | docs/BACKEND_MVP.md section 6 → Phase N subsection only |
-| Frontend Phase N | docs/FRONTEND_MVP.md section 4 → Phase N subsection only |
-| Intelligence Phase N | docs/INTELLIGENCE_LAYER.md section 9 → Phase N only |
-| Go intelligence proxy (4C) | docs/INTELLIGENCE_LAYER.md sections 2-4 |
-| UI components | docs/DESIGN_SYSTEM.md section 2.7 only |
-| Colors/Theme | docs/DESIGN_SYSTEM.md sections 2.2-2.3 only |
-| Any security work | docs/BACKEND_MVP.md section 4 (always, full) |
-| Android sync (4B) | docs/FRONTEND_MVP.md Phase 4 + docs/BACKEND_MVP.md §5 API contract |
-| Terraform / AWS infra | docs/TERRAFORM_GUIDE.md |
+| Any security-touching code (crypto, keys, storage, biometric, integrity, FLAG_SECURE) | `docs/PAPERKEEP_DESIGN.md` §6 — **in full, mandatory** |
+| Phase N deliverables | `docs/PAPERKEEP_DESIGN.md` §5 → Phase N subsection only |
+| UI / theme / motion / haptics | `docs/PAPERKEEP_DESIGN.md` §7 |
+| Data model / Room / FTS | §4 + §6.4 |
+| Module layout / Gradle | §2 + §3 |
+| v1→v2 migration (deleting legacy modules) | §10 |
+| Privacy policy / ToS copy | `docs/PRIVACY_POLICY.md`, `docs/TERMS_OF_SERVICE.md` |
 
-### Commit Convention
+### Code rules
 
-All commits: `<type>(<scope>): <subject>` where type is feat/fix/perf/refactor/docs/test/build/ci/chore and scope is android/backend/intelligence/ci/docs/deps.
+- Jetpack Compose only. No XML layouts except the splash.
+- **Hilt via KSP**, never kapt (Windows path bug).
+- Material 3 with Expressive motion/shape tokens where available.
+- Navigation Compose with type-safe routes.
+- Coroutines + Flow only. No Thread, no AsyncTask, no RxJava.
+- Feature modules depend on `:core:*` only, never on each other.
+- Security is non-negotiable. Re-read `PAPERKEEP_DESIGN.md` §6 before any PR touching keys, storage, auth, or integrity.
+- Never rewrite earlier-phase code. New phases ADD modules — they do not replace.
+- Tests live next to the code: `src/test/` for unit, `src/androidTest/` for instrumented.
 
----
+### Banned
 
-## Build Order (the execution roadmap)
+- No WebView (RCE history)
+- No Ktor/OkHttp/Retrofit in app code — we have no backend
+- No libsodium, no zxcvbn-kotlin — no passwords to strengthen
+- No Firebase Analytics, Crashlytics, Sentry, AppsFlyer, Adjust, or any telemetry SDK
+- No `Log.*` in release (Detekt rule enforces this)
+- No `execSQL` with user input — use Room typed queries
+- No `file://` URIs shared across apps — FileProvider only
+- No `android:exported="true"` without a comment explaining why
 
-```
-WEEK 1-2: Foundation (Sessions 1-16)
-  ├── DevOps skeleton (repo structure, scripts, VERSION, .gitignore)
-  ├── Backend Phase 1A (Go scaffold, auth, Postgres, deploy to staging)
-  ├── Frontend Phase 1B (Android scaffold, camera, edge detection, encrypted storage)
-  └── CI/CD Phase 1C (GitHub Actions for all three stacks)
+### Commit convention
 
-WEEK 3-4: Phase 2 (Sessions 17-23)
-  ├── Backend Phase 2A (vault, R2, upload/download, sync manifest) ← DONE
-  └── Frontend Phase 2B (library, OCR, PDF export, biometric lock) ← IN PROGRESS
-
-WEEK 5-6: Phase 3 (Sessions 24-30)
-  ├── Backend Phase 3A (sync engine, conflict resolution, abuse prevention)
-  ├── Frontend Phase 3B (AI modes, AdMob, onboarding, Play Store prep)
-  └── Intelligence Phase 3C (Python scaffold, classify, enhanced OCR, vision, Redis queue)
-        ↑ Intelligence stubs already exist in intelligence/ — just needs implementation
-
-WEEK 7-9: Phase 4 (Sessions 31-36)
-  ├── Backend Phase 4A (observability, performance, backups)
-  ├── Frontend Phase 4B (cloud sync, E2E crypto, account screens)
-  │     ↑ THIS IS WHERE ANDROID FIRST CALLS THE GO BACKEND
-  └── Intelligence Phase 4C (layout, extraction, super-res + Go proxy integration)
-        ↑ THIS IS WHERE GO FIRST CALLS PYTHON
-
-WEEK 10-11: Phase 5 (Sessions 37-45)
-  ├── Backend Phase 5 (production hardening, launch)
-  ├── Frontend Phase 5 (polish, accessibility, Play Store submission)
-  └── Intelligence Phase 3 (summarization, embeddings, LLM proxy — post-launch v2)
-```
-
-**Backend and Frontend run in PARALLEL** — they're independent until:
-- Phase 4B: Android starts calling Go endpoints for the first time
-- Phase 4C: Go starts calling Python for the first time
-
-**Intelligence layer starts at Week 5 (Phase 3C)** — it's additive, never a blocker.
+`<type>(<scope>): <subject>`
+- `type` ∈ {feat, fix, perf, refactor, docs, test, build, ci, chore}
+- `scope` ∈ {android, core, feature, docs, deps}
 
 ---
 
-## Current State (as of last session)
+## Known platform gotchas (save hours per session)
 
-- **Phase 0:** COMPLETE
-- **Phase 1A (Backend):** COMPLETE — accounts, auth, vault, deploy
-- **Phase 1B (Android):** COMPLETE — camera, encryption, Room, navigation
-- **Phase 1C (CI/CD):** COMPLETE — all 5 workflows validated
-- **Phase 2A (Backend Vault):** COMPLETE — R2, upload/download, quota, manifest, purge
-- **Phase 2B (Android Library):** COMPLETE — library, OCR, PDF, biometric, reader
-- **Phase 3A (Backend Sync):** COMPLETE — conflict resolution, Redis rate limiter, account security
-- **Phase 3B (Android AI Modes):** COMPLETE — all 13 tasks done
-- **Phase 3C (Intelligence):** COMPLETE — FastAPI, classify, OCR, vision, Redis queue, S3, Docker
-- **Phase 4A (Backend Observability):** COMPLETE — CloudWatch, Sentry, deep health, LRU cache, backup
-- **Phase 4B (Android Sync):** IN PROGRESS — 4B.1–4B.4 done, 4B.5–4B.10 pending
-- **INFRA:** COMPLETE — 62 AWS resources deployed in staging (ap-south-1)
-
-## Live Staging Infrastructure
-
-| Resource | URL / Value |
-|---|---|
-| **API Base URL** | `https://4dbidumnq3.execute-api.ap-south-1.amazonaws.com` |
-| **Health** | `GET /health` → 200 `{"status":"ok","version":"0.1.0"}` |
-| **Ready** | `GET /ready` → 200 `{"status":"ok","components":{"postgres":"ok"}}` |
-| **Deep Health** | `GET /v1/health/deep` → 200 `{"status":"ok","components":{"db":"ok","redis":"ok","s3":"ok"}}` |
-| **S3 Bucket** | `scanvault-staging-vault-203a9e83` |
-| **Aurora** | `scanvault-staging-aurora.cluster-cjk6c26cyw2o.ap-south-1.rds.amazonaws.com` |
-| **Redis** | DELETED (no Redis in staging — in-memory rate limiter used) |
-| **ECR Go** | `345594608526.dkr.ecr.ap-south-1.amazonaws.com/scanvault-staging-go-backend` |
-
-### Dev Cost Budget (updated 2026-04-16)
-
-**Target: under $10/month with zero users.** Current estimate: ~$3.50/month.
-
-| Resource | Cost | Notes |
+| Problem | Root cause | Fix |
 |---|---|---|
-| Aurora Serverless v2 | ~$0/mo idle, ~$0.10/hr active | min ACU=0, auto-pauses after 5min idle |
-| Lambda (Go + Python) | ~$0/mo | free tier: 1M requests + 400K GB-s/mo |
-| API Gateway HTTP API | ~$0/mo | free tier: 300 requests/mo |
-| S3 | ~$0.02/mo | 5GB free tier |
-| ECR | ~$0.10/mo | 2 repos, small images |
-| Secrets Manager | ~$1.20/mo | 3 secrets × $0.40/mo |
-| CloudWatch | ~$0/mo | 5GB free tier |
-| VPC / networking | ~$0/mo | S3 Gateway endpoint is FREE; no Interface endpoints |
-| **TOTAL** | **~$1.30–$3.50/mo** | spikes when Aurora warms up (first request of the day) |
-
-**Deleted to cut costs:** ElastiCache Redis ($15+/mo), 4 VPC Interface endpoints ($57.60/mo), captcha secret ($0.40/mo).
-**REDIS_URL is now optional** — empty string = in-memory rate limiter (already what's used). Re-add when Phase 4C needs real async queue.
-
-## Terraform Operations
-
-```bash
-cd infra/
-terraform init \
-  -backend-config="access_key=${AWS_ACCESS_KEY_ID}" \
-  -backend-config="secret_key=${AWS_SECRET_ACCESS_KEY}" \
-  -backend-config="region=ap-south-1" \
-  -backend-config="bucket=scanvault-tfstate" \
-  -backend-config="key=scanvault/terraform.tfstate" \
-  -reconfigure
-
-terraform plan -var-file=terraform.tfvars
-terraform apply -var-file=terraform.tfvars
-```
-
-**PREREQUISITE:** `%APPDATA%\terraform.rc` must exist with `filesystem_mirror` block (already set up on Nikhil's machine). See docs/TERRAFORM_GUIDE.md for full setup.
+| `kapt` fails with "Invalid relative name: META-INF\proguard\..." | Windows kapt + Hilt backslash bug | Use `alias(libs.plugins.ksp)` + `ksp(libs.hilt.compiler)` |
+| Shell tool runs bash — avoid Windows-style paths | — | Use forward slashes, `/dev/null`, not `NUL` |
+| Instrumented tests for Keystore-backed crypto can't run on JVM | Keys only exist on-device/emulator | Put them in `src/androidTest/`, start an emulator or connect a phone |
+| ML Kit language model not present | Not bundled for non-Latin scripts | Use `ModuleInstallClient` to download on demand; test with a fixture image in English first |
+| StrongBox not available on the test device | Pixel 6a has it, older emulators don't | Try StrongBox → catch `StrongBoxUnavailableException` → fall back to TEE |
 
 ---
 
-## Daily Prompt (copy-paste this to start a session)
+## Build order (the execution roadmap)
+
+Paperkeep ships in **5 phases, ~25 sessions total, one stack**.
 
 ```
-Read CLAUDE.md and PROGRESS.md. Find the next unchecked task. Do it. Update PROGRESS.md when done.
+PHASE 1 — Foundation, rename, capture, encrypted storage      (Sessions 1–5)
+PHASE 2 — Library, OCR, PDF export, biometric lock            (Sessions 6–11)
+PHASE 3 — Smart modes (ID/receipt/whiteboard/book), AdMob     (Sessions 12–16)
+PHASE 4 — Local backup (SAF encrypted ZIP), polish, a11y,    (Sessions 17–21)
+          i18n, widgets, storage manager
+PHASE 5 — On-device summarizer, Pro IAP, perf pass, launch    (Sessions 22–25)
+```
+
+Phases are sequential. Do not start phase N+1 until phase N's acceptance criteria pass (see `docs/PAPERKEEP_DESIGN.md` §5).
+
+---
+
+## Current State (post-pivot, as of 2026-04-23)
+
+### Product state
+- **Pivot decision:** v1 (Go backend + Python intelligence + AWS infra) abandoned for cost. Paperkeep v2 is Android-only, backend-free.
+- **v1 Android work partially reusable:** existing modules `:core:{ui,common,crypto,data,domain,imaging,ml,pdf,security,ads}` and `:feature:{scanner,library,reader,settings,onboarding}` carry over. Phase 1 and 2 of the old FRONTEND_MVP were substantially built — most of that code is still valuable after the rename.
+- **v1 Android modules to DELETE:** `:core:network`, `:feature:account`, `:feature:sync`. Their code is coupled to the dead backend.
+- **v1 non-Android directories:** moved to `scrape/` on 2026-04-23 (backend, intelligence, infra, ota, deploy, old scripts, 7 backend-focused workflows, Makefile, nuke-config.yml, costs.csv). See `scrape/README.md`.
+- **AWS infra:** needs teardown (`terraform destroy` against `scrape/infra/`) BEFORE `scrape/` is deleted, so billing stops immediately. Tracked as task P1.0.
+
+### What Claude Code should do on the very next session
+Open `PROGRESS.md`. The first unchecked task is `P1.1 — Rename codebase (ScanVault → Paperkeep)` across `android/`. Do it.
+
+---
+
+## Cleanup status (what's already done, what's pending)
+
+Already done (2026-04-23):
+- ✅ Deleted obsolete spec docs: `BACKEND_MVP.md`, `INTELLIGENCE_LAYER.md`, `DEVOPS_AUTOMATION.md`, `TERRAFORM_GUIDE.md`, `DEPLOY.md`, `RUNBOOK.md`, `POST_LAUNCH_MONITORING.md`, `FRONTEND_MVP.md` (v1), `DESIGN_SYSTEM.md` (v1)
+- ✅ Deleted old prompt files at root: `prompt-guide.txt`, `scanvault prompt 1.txt`, `Scanvault Prompt 2.txt`
+- ✅ Renamed `v2_Frontend_design.md` → `PAPERKEEP_DESIGN.md`
+- ✅ Created `docs/PROMPT.md` (Claude reference prompt)
+- ✅ Rewrote `CLAUDE.md` (this file) and `PROGRESS.md` for Paperkeep v2
+
+Already done (2026-04-23, continued):
+- ✅ Moved v1 legacy trees to `scrape/` (backend, intelligence, infra, ota, deploy, 12 backend scripts, 7 backend workflows, Makefile, nuke-config.yml, costs.csv) with a `scrape/README.md` explaining what's there and when it's safe to delete
+- ✅ Pruned `scripts/` to Android-only: `dev.sh`, `dev-check.sh`, `dev-wifi-pair.sh`, `run-phone.sh`
+- ✅ Pruned `.github/workflows/` to Android-only: `android-ci.yml`, `android-release.yml`, `security-scan.yml`
+- ✅ `P1.0` — AWS teardown complete. User manually removed every resource from the AWS account (Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, VPC — all gone). Cost should be $0 going forward.
+- ✅ `P1.5` — Privacy Policy & ToS rewritten for Paperkeep v2 (not just renamed — full rewrite to reflect no-server / no-account / on-device-only reality)
+
+Pending (these are the first tasks in `PROGRESS.md`):
+- ⏳ `P1.1` — Rename codebase (ScanVault → Paperkeep, `com.scanvault.app` → `app.paperkeep`), reset `VERSION` to `2.0.0-alpha.1`
+- ⏳ `P1.2` — Delete dead Android modules (`:core:network`, `:feature:account`, `:feature:sync`) and all their references
+- ⏳ `P1.3` — `rm -rf scrape/` (AWS is clean, so this is unblocked — just do a final cost-explorer check first)
+- ⏳ `P1.4` — Update `android-ci.yml` to reflect Android-only flow (unit → instrumented → assembleRelease → Firebase App Distribution)
+
+---
+
+## Daily prompt (copy-paste this at session start)
+
+```
+Read CLAUDE.md, PROGRESS.md, and docs/PROMPT.md. Find the next unchecked task.
+Do it per the test-gate rule. Update PROGRESS.md when done.
+The product is Paperkeep — Android-only, no backend, top-notch security.
 ```

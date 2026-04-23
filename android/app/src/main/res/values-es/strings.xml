@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanVault</string>
+    <string name="action_scan">Escanear</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_share">Compartir</string>
+    <string name="action_export">Exportar</string>
+    <string name="action_retry">Reintentar</string>
+    <string name="action_done">Hecho</string>
+    <string name="action_next">Siguiente</string>
+    <string name="action_back">Atrás</string>
+    <string name="action_settings">Configuración</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_open_settings">Abrir configuración</string>
+    <string name="action_restore">Restaurar</string>
+    <string name="action_backup">Copia de seguridad</string>
+    <string name="scanner_capture_button_description">Capturar documento</string>
+    <string name="scanner_permission_title">Se requiere permiso de cámara</string>
+    <string name="scanner_permission_rationale">ScanVault necesita acceso a la cámara para escanear documentos.</string>
+    <string name="library_empty_title">No hay documentos aún</string>
+    <string name="library_empty_subtitle">Toca el botón de cámara para escanear tu primer documento.</string>
+    <string name="library_search_hint">Buscar documentos…</string>
+    <string name="onboarding_skip">Saltar</string>
+    <string name="onboarding_get_started">Comenzar</string>
+    <string name="onboarding_page1_title">Escanea cualquier documento</string>
+    <string name="onboarding_page2_title">Privado y cifrado</string>
+    <string name="onboarding_page3_title">Sincroniza entre dispositivos</string>
+    <string name="settings_title">Configuración</string>
+    <string name="biometric_prompt_title">Desbloquear ScanVault</string>
+    <string name="widget_scan_now_title">Escanear ahora</string>
+    <string name="widget_recent_scans_title">Escaneos recientes</string>
+    <string name="qs_tile_label">Escanear documento</string>
+    <string name="error_network">Sin conexión a internet</string>
+    <string name="error_unknown">Algo salió mal. Por favor inténtalo de nuevo.</string>
+</resources>

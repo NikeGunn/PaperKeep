@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanVault</string>
+    <string name="action_scan">مسح ضوئي</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_share">مشاركة</string>
+    <string name="action_export">تصدير</string>
+    <string name="action_retry">إعادة المحاولة</string>
+    <string name="action_done">تم</string>
+    <string name="action_next">التالي</string>
+    <string name="action_back">رجوع</string>
+    <string name="action_settings">الإعدادات</string>
+    <string name="action_close">إغلاق</string>
+    <string name="action_open_settings">فتح الإعدادات</string>
+    <string name="action_restore">استعادة</string>
+    <string name="action_backup">نسخ احتياطي</string>
+    <string name="scanner_capture_button_description">التقاط المستند</string>
+    <string name="scanner_permission_title">مطلوب إذن الكاميرا</string>
+    <string name="scanner_permission_rationale">يحتاج ScanVault إلى الوصول إلى الكاميرا لمسح المستندات ضوئيًا.</string>
+    <string name="library_empty_title">لا توجد مستندات بعد</string>
+    <string name="library_empty_subtitle">اضغط على زر الكاميرا لمسح مستندك الأول.</string>
+    <string name="library_search_hint">البحث في المستندات…</string>
+    <string name="onboarding_skip">تخطي</string>
+    <string name="onboarding_get_started">البدء</string>
+    <string name="onboarding_page1_title">امسح أي مستند ضوئيًا</string>
+    <string name="onboarding_page2_title">خاص ومشفر</string>
+    <string name="onboarding_page3_title">المزامنة بين الأجهزة</string>
+    <string name="settings_title">الإعدادات</string>
+    <string name="biometric_prompt_title">فتح ScanVault</string>
+    <string name="widget_scan_now_title">مسح الآن</string>
+    <string name="widget_recent_scans_title">المسوحات الأخيرة</string>
+    <string name="qs_tile_label">مسح مستند</string>
+    <string name="error_network">لا يوجد اتصال بالإنترنت</string>
+    <string name="error_unknown">حدث خطأ ما. الرجاء المحاولة مرة أخرى.</string>
+</resources>

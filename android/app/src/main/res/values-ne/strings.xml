@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanVault</string>
+    <string name="action_scan">स्क्यान गर्नुहोस्</string>
+    <string name="action_save">बचाउनुहोस्</string>
+    <string name="action_cancel">रद्द गर्नुहोस्</string>
+    <string name="action_delete">मेटाउनुहोस्</string>
+    <string name="action_share">साझा गर्नुहोस्</string>
+    <string name="action_export">निर्यात गर्नुहोस्</string>
+    <string name="action_retry">पुनः प्रयास गर्नुहोस्</string>
+    <string name="action_done">सम्पन्न</string>
+    <string name="action_next">अर्को</string>
+    <string name="action_back">पछाडि</string>
+    <string name="action_settings">सेटिङ्स</string>
+    <string name="action_close">बन्द गर्नुहोस्</string>
+    <string name="action_open_settings">सेटिङ्स खोल्नुहोस्</string>
+    <string name="action_restore">पुनर्स्थापना</string>
+    <string name="action_backup">ब्याकअप</string>
+    <string name="scanner_capture_button_description">कागजात खिच्नुहोस्</string>
+    <string name="scanner_permission_title">क्यामेरा अनुमति चाहिन्छ</string>
+    <string name="scanner_permission_rationale">ScanVault लाई कागजात स्क्यान गर्न क्यामेरा पहुँच चाहिन्छ।</string>
+    <string name="library_empty_title">अहिले कुनै कागजात छैन</string>
+    <string name="library_empty_subtitle">पहिलो कागजात स्क्यान गर्न क्यामेरा बटन थिच्नुहोस्।</string>
+    <string name="library_search_hint">कागजात खोज्नुहोस्…</string>
+    <string name="onboarding_skip">छोड्नुहोस्</string>
+    <string name="onboarding_get_started">सुरु गर्नुहोस्</string>
+    <string name="onboarding_page1_title">जुनसुकै कागजात स्क्यान गर्नुहोस्</string>
+    <string name="onboarding_page2_title">निजी र इन्क्रिप्टेड</string>
+    <string name="onboarding_page3_title">उपकरणहरूमा सिंक</string>
+    <string name="settings_title">सेटिङ्स</string>
+    <string name="biometric_prompt_title">ScanVault अनलक गर्नुहोस्</string>
+    <string name="widget_scan_now_title">अहिले स्क्यान गर्नुहोस्</string>
+    <string name="widget_recent_scans_title">हालका स्क्यानहरू</string>
+    <string name="qs_tile_label">कागजात स्क्यान गर्नुहोस्</string>
+    <string name="error_network">इन्टरनेट जडान छैन</string>
+    <string name="error_unknown">केही गलत भयो। कृपया पुनः प्रयास गर्नुहोस्।</string>
+</resources>

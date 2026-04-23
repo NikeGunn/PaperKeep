@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScanVault</string>
+    <string name="action_scan">स्कैन करें</string>
+    <string name="action_save">सहेजें</string>
+    <string name="action_cancel">रद्द करें</string>
+    <string name="action_delete">हटाएं</string>
+    <string name="action_share">साझा करें</string>
+    <string name="action_export">निर्यात करें</string>
+    <string name="action_retry">पुनः प्रयास करें</string>
+    <string name="action_done">हो गया</string>
+    <string name="action_next">अगला</string>
+    <string name="action_back">वापस</string>
+    <string name="action_settings">सेटिंग्स</string>
+    <string name="action_close">बंद करें</string>
+    <string name="action_open_settings">सेटिंग्स खोलें</string>
+    <string name="action_restore">पुनर्स्थापित करें</string>
+    <string name="action_backup">बैकअप</string>
+    <string name="scanner_capture_button_description">दस्तावेज़ कैप्चर करें</string>
+    <string name="scanner_permission_title">कैमरा अनुमति आवश्यक है</string>
+    <string name="scanner_permission_rationale">ScanVault को दस्तावेज़ स्कैन करने के लिए कैमरा एक्सेस चाहिए।</string>
+    <string name="library_empty_title">अभी कोई दस्तावेज़ नहीं</string>
+    <string name="library_empty_subtitle">अपना पहला दस्तावेज़ स्कैन करने के लिए कैमरा बटन दबाएं।</string>
+    <string name="library_search_hint">दस्तावेज़ खोजें…</string>
+    <string name="onboarding_skip">छोड़ें</string>
+    <string name="onboarding_get_started">शुरू करें</string>
+    <string name="onboarding_page1_title">कोई भी दस्तावेज़ स्कैन करें</string>
+    <string name="onboarding_page2_title">निजी और एन्क्रिप्टेड</string>
+    <string name="onboarding_page3_title">डिवाइसेज़ के बीच सिंक</string>
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="biometric_prompt_title">ScanVault अनलॉक करें</string>
+    <string name="widget_scan_now_title">अभी स्कैन करें</string>
+    <string name="widget_recent_scans_title">हाल के स्कैन</string>
+    <string name="qs_tile_label">दस्तावेज़ स्कैन करें</string>
+    <string name="error_network">इंटरनेट कनेक्शन नहीं है</string>
+    <string name="error_unknown">कुछ गड़बड़ हो गई। कृपया पुनः प्रयास करें।</string>
+</resources>

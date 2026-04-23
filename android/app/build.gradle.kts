@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
@@ -35,6 +35,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // R8 full mode: more aggressive dead-code elimination
+            // Uncomment if minSdk >= 24 (no legacy class backporting needed)
+            // proguardFile("$rootDir/r8-full-mode.pro")
         }
         debug {
             isMinifyEnabled = false
@@ -81,7 +84,7 @@ dependencies {
 
     // Hilt
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
 
     // Core AndroidX
     implementation(libs.androidx.core.ktx)
@@ -101,6 +104,13 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
 
+    // Glance AppWidget
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+
+    // Baseline Profile installer — ships pre-compiled hot paths with the APK
+    implementation(libs.androidx.profileinstaller)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
@@ -112,7 +122,7 @@ dependencies {
     testImplementation(libs.hilt.android.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
-    kaptTest(libs.hilt.compiler)
+    kspTest(libs.hilt.compiler)
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
@@ -120,5 +130,5 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.hilt.android.testing)
-    kaptAndroidTest(libs.hilt.compiler)
+    kspAndroidTest(libs.hilt.compiler)
 }

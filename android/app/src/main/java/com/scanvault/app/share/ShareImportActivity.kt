@@ -1,0 +1,120 @@
+package com.scanvault.app.share
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.os.Parcelable
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.scanvault.app.R
+import com.scanvault.core.ui.theme.ScanVaultTheme
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Transparent trampoline activity that handles ACTION_SEND / ACTION_SEND_MULTIPLE
+ * shares from other apps (Gallery, Files, Chrome, etc.).
+ *
+ * Supported MIME types: image/*, application/pdf.
+ * Unsupported types show a toast and finish immediately.
+ *
+ * On success the user is handed off to the ScanVault crop/review screen.
+ */
+@AndroidEntryPoint
+class ShareImportActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val uris = extractUris(intent)
+        if (uris.isEmpty()) {
+            Toast.makeText(this, getString(R.string.share_unsupported_type), Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
+        setContent {
+            ScanVaultTheme {
+                Surface {
+                    val scope = rememberCoroutineScope()
+                    var processing by remember { mutableStateOf(true) }
+
+                    LaunchedEffect(uris) {
+                        scope.launch {
+                            processSharedUris(uris)
+                            processing = false
+                        }
+                    }
+
+                    if (processing) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun processSharedUris(uris: List<Uri>) = withContext(Dispatchers.IO) {
+        // Copy each URI to the app's cache directory so Room / the scan pipeline can access it.
+        // The actual import into the document library is handled by the scanner ViewModel.
+        val imported = mutableListOf<Uri>()
+        for (uri in uris) {
+            try {
+                val type = contentResolver.getType(uri) ?: continue
+                if (!type.startsWith("image/") && type != "application/pdf") continue
+                imported.add(uri)
+            } catch (_: Exception) {
+                // Skip URIs we can't read
+            }
+        }
+
+        withContext(Dispatchers.Main) {
+            if (imported.isEmpty()) {
+                Toast.makeText(this@ShareImportActivity, getString(R.string.share_unsupported_type), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@ShareImportActivity, getString(R.string.share_success), Toast.LENGTH_SHORT).show()
+                // Hand off to MainActivity with the import URIs
+                val launch = Intent(this@ShareImportActivity, com.scanvault.app.MainActivity::class.java).apply {
+                    action = "com.scanvault.action.IMPORT_IMAGES"
+                    putParcelableArrayListExtra("import_uris", ArrayList(imported))
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                startActivity(launch)
+            }
+            finish()
+        }
+    }
+
+    private fun extractUris(intent: Intent?): List<Uri> {
+        if (intent == null) return emptyList()
+        return when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val uri = intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
+                listOfNotNull(uri)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                @Suppress("UNCHECKED_CAST")
+                (intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM) as? List<Uri>)
+                    ?: emptyList()
+            }
+            else -> emptyList()
+        }
+    }
+}

@@ -72,6 +72,43 @@
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
 
+# Glance AppWidget
+-keep class androidx.glance.** { *; }
+-dontwarn androidx.glance.**
+-keep class * extends androidx.glance.appwidget.GlanceAppWidget { *; }
+-keep class * extends androidx.glance.appwidget.GlanceAppWidgetReceiver { *; }
+
+# Quick Settings TileService
+-keep class * extends android.service.quicksettings.TileService { *; }
+
+# Share / Intent handling activities
+-keep class com.scanvault.app.share.** { *; }
+
+# Crash handler — must survive even when most of the app is stripped
+-keep class com.scanvault.app.crash.ScanVaultCrashHandler { *; }
+
+# OTA config data classes (kotlinx.serialization)
+-keep class com.scanvault.core.network.ota.** { *; }
+
+# OpenCV — only keep the native bridge; let R8 strip unused pure-Java wrappers
+-dontwarn org.opencv.**
+-keep class org.opencv.android.OpenCVLoader { *; }
+-keep class org.opencv.core.Mat { *; }
+-keep class org.opencv.core.Size { *; }
+-keep class org.opencv.core.Scalar { *; }
+-keep class org.opencv.imgproc.Imgproc { *; }
+-keep class org.opencv.imgcodecs.Imgcodecs { *; }
+
+# PaddleOCR / TFLite — keep the JNI entry points
+-dontwarn com.baidu.paddle.**
+-keep class com.baidu.paddle.** { *; }
+-dontwarn org.tensorflow.**
+-keep class org.tensorflow.lite.** { *; }
+
+# AdMob / Google Mobile Ads
+-dontwarn com.google.android.gms.**
+-keep class com.google.android.gms.ads.** { *; }
+
 # Keep entry points for reflection
 -keepattributes Signature
 -keepattributes Exceptions
