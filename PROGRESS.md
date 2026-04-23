@@ -8,8 +8,8 @@
 
 ## Current state (2026-04-23)
 
-**Status:** v1 pivoted → v2 Paperkeep started · AWS fully torn down · docs on Paperkeep branding
-**Last session:** 2026-04-23 — AWS teardown complete (P1.0), Privacy Policy & ToS rewritten for Paperkeep v2 (P1.5)
+**Status:** v1 pivoted → v2 Paperkeep started · AWS fully torn down · `scrape/` deleted · docs on Paperkeep branding
+**Last session:** 2026-04-23 — AWS teardown (P1.0), Privacy Policy & ToS rewrite (P1.5), `scrape/` deleted and committed (P1.3)
 **Next task:** `P1.1` — Rename codebase (ScanVault → Paperkeep) across `android/`
 
 ### What exists from v1 that survives the pivot
@@ -21,7 +21,7 @@ Android modules (keep and rename in P1.1):
 
 Android modules scheduled for DELETE in P1.2: `:core:network`, `:feature:account`, `:feature:sync`.
 
-Non-Android trees already moved to `scrape/` (2026-04-23): `backend/`, `intelligence/`, `infra/`, `ota/`, `deploy/`, 12 backend scripts, 7 backend workflows, `Makefile`, `nuke-config.yml`, `costs.csv`. See `scrape/README.md`. P1.3 deletes the whole `scrape/` directory AFTER AWS teardown (P1.0) is verified.
+Non-Android trees have been fully deleted (2026-04-23, P1.3): `backend/`, `intelligence/`, `infra/`, `ota/`, `deploy/`, 12 backend scripts, 7 backend workflows, `Makefile`, `nuke-config.yml`, `costs.csv`. All reachable via `git log` if ever needed.
 
 Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY_POLICY.md`, `docs/TERMS_OF_SERVICE.md`.
 
@@ -34,10 +34,10 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 
 ### Cleanup (do these FIRST — they unblock everything)
 
-- [x] **P1.0** — AWS teardown. **Completed 2026-04-23** — user manually removed every resource from the AWS account. No Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, or VPC resources remain. `scrape/infra/` (Terraform state config) is now unblocked for deletion by P1.3.
+- [x] **P1.0** — AWS teardown. **Completed 2026-04-23** — user manually removed every resource from the AWS account. No Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, or VPC resources remain. $0 ongoing cost.
 - [ ] **P1.1** — Rename. Global find-replace across `android/` only: `ScanVault` → `Paperkeep`, `scanvault` → `paperkeep`, `com.scanvault.app` → `app.paperkeep`. Update `applicationId` in `:app/build.gradle.kts`, all `namespace = ` declarations in module `build.gradle.kts` files, `strings.xml` app label, `AndroidManifest.xml` package references. Reset `VERSION` to `2.0.0-alpha.1`. Verify `assembleDebug` still builds.
 - [ ] **P1.2** — Delete dead Android modules. Remove dirs `android/core/network/`, `android/feature/account/`, `android/feature/sync/`. Remove them from `settings.gradle.kts`. Delete imports of these modules in all `build.gradle.kts` files. Delete Hilt modules/interfaces that referenced them. Delete navigation graph entries for account/sync screens. Verify `assembleDebug` builds. If code in `:app` references account/sync features, stub with TODO comments and track in P1.8.
-- [ ] **P1.3** — `rm -rf scrape/`. P1.0 is done (AWS empty). Confirm once more with `aws ce get-cost-and-usage --time-period Start=$(date -d 'yesterday' +%F),End=$(date +%F) --granularity DAILY --metrics UnblendedCost` that no unexpected cost is still accruing, then delete. Commit as a single "chore(repo): remove v1 legacy trees" commit so the diff history is clean.
+- [x] **P1.3** — `scrape/` deleted and committed. **Completed 2026-04-23.** All v1 legacy trees (backend, intelligence, infra, ota, deploy, old scripts/workflows, Makefile, nuke-config.yml, costs.csv) are gone from the working tree; recoverable via `git log` if ever needed.
 - [ ] **P1.4** — Update the 3 kept workflows (`android-ci.yml`, `android-release.yml`, `security-scan.yml`) so they no longer reference any backend/infra paths. `android-ci.yml` should run: `lint → detekt → unit tests → instrumented tests on emulator → assembleRelease → upload to Firebase App Distribution`. Merge `security-scan.yml` into it if duplicative.
 - [x] **P1.5** — Privacy Policy & Terms of Service rewritten for Paperkeep v2 (not just renamed — the v1 versions described a backend world that no longer exists: cloud sync, accounts, AWS, server-side AI). New content: no-account/no-server reality, on-device AI only, SAF-based user-initiated backups, AdMob + Play Billing + Play Integrity as the only third parties, one-time Pro IAP (not subscription), GDPR/CCPA clarified as N/A because we hold no server-side personal data. **Completed 2026-04-23.**
 

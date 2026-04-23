@@ -41,9 +41,9 @@ Paperkeep/
 │   └── store/                      ← Play Store metadata
 └── .github/workflows/              ← one unified Android workflow (others deleted in P1.3)
 
-# Legacy v1 trees live in scrape/ (archived 2026-04-23). Do NOT read, do NOT build against.
-# scrape/ gets deleted entirely AFTER task P1.0 (terraform destroy) confirms AWS = $0/mo.
-# See scrape/README.md for what's in there and when it's safe to rm -rf.
+# Legacy v1 trees (backend/, intelligence/, infra/, ota/, deploy/, old scripts + workflows,
+# Makefile, nuke-config.yml, costs.csv) were deleted on 2026-04-23 (task P1.3).
+# Recoverable via git log if ever needed.
 ```
 
 ---
@@ -181,8 +181,8 @@ Phases are sequential. Do not start phase N+1 until phase N's acceptance criteri
 - **Pivot decision:** v1 (Go backend + Python intelligence + AWS infra) abandoned for cost. Paperkeep v2 is Android-only, backend-free.
 - **v1 Android work partially reusable:** existing modules `:core:{ui,common,crypto,data,domain,imaging,ml,pdf,security,ads}` and `:feature:{scanner,library,reader,settings,onboarding}` carry over. Phase 1 and 2 of the old FRONTEND_MVP were substantially built — most of that code is still valuable after the rename.
 - **v1 Android modules to DELETE:** `:core:network`, `:feature:account`, `:feature:sync`. Their code is coupled to the dead backend.
-- **v1 non-Android directories:** moved to `scrape/` on 2026-04-23 (backend, intelligence, infra, ota, deploy, old scripts, 7 backend-focused workflows, Makefile, nuke-config.yml, costs.csv). See `scrape/README.md`.
-- **AWS infra:** needs teardown (`terraform destroy` against `scrape/infra/`) BEFORE `scrape/` is deleted, so billing stops immediately. Tracked as task P1.0.
+- **v1 non-Android directories:** fully deleted on 2026-04-23 (backend, intelligence, infra, ota, deploy, 12 old scripts, 7 backend-focused workflows, Makefile, nuke-config.yml, costs.csv). Recoverable via `git log`.
+- **AWS infra:** fully torn down on 2026-04-23. All resources manually removed. $0 ongoing cost.
 
 ### What Claude Code should do on the very next session
 Open `PROGRESS.md`. The first unchecked task is `P1.1 — Rename codebase (ScanVault → Paperkeep)` across `android/`. Do it.
@@ -199,16 +199,15 @@ Already done (2026-04-23):
 - ✅ Rewrote `CLAUDE.md` (this file) and `PROGRESS.md` for Paperkeep v2
 
 Already done (2026-04-23, continued):
-- ✅ Moved v1 legacy trees to `scrape/` (backend, intelligence, infra, ota, deploy, 12 backend scripts, 7 backend workflows, Makefile, nuke-config.yml, costs.csv) with a `scrape/README.md` explaining what's there and when it's safe to delete
 - ✅ Pruned `scripts/` to Android-only: `dev.sh`, `dev-check.sh`, `dev-wifi-pair.sh`, `run-phone.sh`
 - ✅ Pruned `.github/workflows/` to Android-only: `android-ci.yml`, `android-release.yml`, `security-scan.yml`
-- ✅ `P1.0` — AWS teardown complete. User manually removed every resource from the AWS account (Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, VPC — all gone). Cost should be $0 going forward.
-- ✅ `P1.5` — Privacy Policy & ToS rewritten for Paperkeep v2 (not just renamed — full rewrite to reflect no-server / no-account / on-device-only reality)
+- ✅ `P1.0` — AWS teardown complete. Every resource manually removed from AWS (Aurora, Lambda, API Gateway, S3, ECR, Secrets Manager, CloudWatch, VPC). Cost is $0 going forward.
+- ✅ `P1.5` — Privacy Policy & ToS rewritten for Paperkeep v2 (full rewrite, not just rename — reflects no-server / no-account / on-device-only reality)
+- ✅ `P1.3` — `scrape/` directory deleted and committed. All v1 legacy code lives in git history only.
 
 Pending (these are the first tasks in `PROGRESS.md`):
 - ⏳ `P1.1` — Rename codebase (ScanVault → Paperkeep, `com.scanvault.app` → `app.paperkeep`), reset `VERSION` to `2.0.0-alpha.1`
 - ⏳ `P1.2` — Delete dead Android modules (`:core:network`, `:feature:account`, `:feature:sync`) and all their references
-- ⏳ `P1.3` — `rm -rf scrape/` (AWS is clean, so this is unblocked — just do a final cost-explorer check first)
 - ⏳ `P1.4` — Update `android-ci.yml` to reflect Android-only flow (unit → instrumented → assembleRelease → Firebase App Distribution)
 
 ---
