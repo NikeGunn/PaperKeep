@@ -1,8 +1,6 @@
 package app.paperkeep.core.ui.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import org.junit.Assert.assertEquals
@@ -14,10 +12,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Tests for 1B.5: Material 3 theme — light/dark color correctness + dynamic color fallback.
+ * Material 3 theme — color correctness, dynamic-color fallback, shape wiring.
  *
- * Note: Dynamic color (Android 12+) reads from wallpaper, which is unavailable in Robolectric.
- * We verify that the fallback static palette matches our brand colors when dynamicColor=false.
+ * Dynamic color (Android 12+) reads from wallpaper and is unavailable in Robolectric,
+ * so we test the static saffron palette (dynamicColor = false) for determinism.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -26,10 +24,10 @@ class ThemeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    // ── 1B.5: Light mode color correctness ────────────────────────────────────
+    // ── Light palette ─────────────────────────────────────────────────────────
 
     @Test
-    fun lightTheme_primary_matchesBrandAmberDerivative() {
+    fun lightTheme_primary_matchesSaffronDarkTone() {
         var primary = Color.Unspecified
         composeRule.setContent {
             PaperkeepTheme(darkTheme = false, dynamicColor = false) {
@@ -37,11 +35,11 @@ class ThemeTest {
             }
         }
         composeRule.waitForIdle()
-        assertEquals("Light primary must match LightColors.primary", LightColors.primary, primary)
+        assertEquals("Light primary must be saffron dark tone", LightColors.primary, primary)
     }
 
     @Test
-    fun lightTheme_background_isWarmSurface() {
+    fun lightTheme_background_isWarmNearWhite() {
         var background = Color.Unspecified
         composeRule.setContent {
             PaperkeepTheme(darkTheme = false, dynamicColor = false) {
@@ -76,10 +74,22 @@ class ThemeTest {
         assertEquals(LightColors.onPrimary, onPrimary)
     }
 
-    // ── 1B.5: Dark mode color correctness ─────────────────────────────────────
+    @Test
+    fun lightTheme_tertiary_isPresent() {
+        var tertiary = Color.Unspecified
+        composeRule.setContent {
+            PaperkeepTheme(darkTheme = false, dynamicColor = false) {
+                tertiary = MaterialTheme.colorScheme.tertiary
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(LightColors.tertiary, tertiary)
+    }
+
+    // ── Dark palette ──────────────────────────────────────────────────────────
 
     @Test
-    fun darkTheme_primary_isAmberTint() {
+    fun darkTheme_primary_isSaffronLightTone() {
         var primary = Color.Unspecified
         composeRule.setContent {
             PaperkeepTheme(darkTheme = true, dynamicColor = false) {
@@ -87,11 +97,11 @@ class ThemeTest {
             }
         }
         composeRule.waitForIdle()
-        assertEquals("Dark primary must match DarkColors.primary", DarkColors.primary, primary)
+        assertEquals("Dark primary must be saffron light tone", DarkColors.primary, primary)
     }
 
     @Test
-    fun darkTheme_background_isDarkSurface() {
+    fun darkTheme_background_isDarkWarmSurface() {
         var background = Color.Unspecified
         composeRule.setContent {
             PaperkeepTheme(darkTheme = true, dynamicColor = false) {
@@ -103,36 +113,90 @@ class ThemeTest {
     }
 
     @Test
-    fun darkTheme_colorsAreDifferentFromLight() {
-        // Verify via the static color objects — no need to compose twice.
-        assertNotEquals(
-            "Light and dark primary colors must differ",
-            LightColors.primary,
-            DarkColors.primary
-        )
-        assertNotEquals(
-            "Light and dark background colors must differ",
-            LightColors.background,
-            DarkColors.background
-        )
+    fun darkTheme_tertiary_isPresent() {
+        var tertiary = Color.Unspecified
+        composeRule.setContent {
+            PaperkeepTheme(darkTheme = true, dynamicColor = false) {
+                tertiary = MaterialTheme.colorScheme.tertiary
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(DarkColors.tertiary, tertiary)
     }
 
-    // ── 1B.5: Dynamic color fallback ──────────────────────────────────────────
+    @Test
+    fun lightAndDark_primaryColors_areDifferent() {
+        assertNotEquals(
+            "Light and dark primary must differ (saffron dark vs light tone)",
+            LightColors.primary,
+            DarkColors.primary,
+        )
+        assertNotEquals(LightColors.background, DarkColors.background)
+    }
+
+    // ── Shape wiring ──────────────────────────────────────────────────────────
 
     @Test
-    fun dynamicColorFallback_onUnsupportedDevice_usesStaticPalette() {
-        // Robolectric uses SDK 33 but has no wallpaper engine, so dynamic color
-        // safely falls back to our static LightColors on API < S or when unavailable.
-        // We verify the theme still renders without crashing.
+    fun theme_shapes_areWired() {
+        var largeShape: androidx.compose.ui.graphics.Shape? = null
+        composeRule.setContent {
+            PaperkeepTheme(darkTheme = false, dynamicColor = false) {
+                largeShape = MaterialTheme.shapes.large
+            }
+        }
+        composeRule.waitForIdle()
+        // Verify shapes is non-null (MaterialTheme.shapes is always set when PaperkeepShapes is wired)
+        assertEquals(PaperkeepShapes.large, largeShape)
+    }
+
+    // ── Dynamic color fallback ────────────────────────────────────────────────
+
+    @Test
+    fun dynamicColorFallback_rendersWithoutCrash() {
+        // dynamicColor = true on Robolectric/SDK 33: dynamic color IS available but uses
+        // a test-wallpaper color. We just verify no crash and primary is non-Unspecified.
         var primary = Color.Unspecified
         composeRule.setContent {
-            // dynamicColor=true — on Robolectric this path falls back gracefully
             PaperkeepTheme(darkTheme = false, dynamicColor = true) {
                 primary = MaterialTheme.colorScheme.primary
             }
         }
         composeRule.waitForIdle()
-        // The theme rendered; primary is non-default (not Unspecified)
-        assertNotEquals(Color.Unspecified, primary)
+        assertNotEquals("Dynamic theme must produce a non-Unspecified primary", Color.Unspecified, primary)
+    }
+
+    @Test
+    fun allColorRoles_areNonDefault_lightTheme() {
+        var scheme: androidx.compose.material3.ColorScheme? = null
+        composeRule.setContent {
+            PaperkeepTheme(darkTheme = false, dynamicColor = false) {
+                scheme = MaterialTheme.colorScheme
+            }
+        }
+        composeRule.waitForIdle()
+        val s = checkNotNull(scheme)
+        assertNotEquals(Color.Unspecified, s.primary)
+        assertNotEquals(Color.Unspecified, s.secondary)
+        assertNotEquals(Color.Unspecified, s.tertiary)
+        assertNotEquals(Color.Unspecified, s.background)
+        assertNotEquals(Color.Unspecified, s.error)
+        assertNotEquals(Color.Unspecified, s.surface)
+    }
+
+    @Test
+    fun allColorRoles_areNonDefault_darkTheme() {
+        var scheme: androidx.compose.material3.ColorScheme? = null
+        composeRule.setContent {
+            PaperkeepTheme(darkTheme = true, dynamicColor = false) {
+                scheme = MaterialTheme.colorScheme
+            }
+        }
+        composeRule.waitForIdle()
+        val s = checkNotNull(scheme)
+        assertNotEquals(Color.Unspecified, s.primary)
+        assertNotEquals(Color.Unspecified, s.secondary)
+        assertNotEquals(Color.Unspecified, s.tertiary)
+        assertNotEquals(Color.Unspecified, s.background)
+        assertNotEquals(Color.Unspecified, s.error)
     }
 }

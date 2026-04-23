@@ -9,8 +9,8 @@
 ## Current state (2026-04-23)
 
 **Status:** v1 pivoted → v2 Paperkeep started · AWS fully torn down · `scrape/` deleted · codebase fully renamed to Paperkeep/app.paperkeep
-**Last session:** 2026-04-23 — P1.4 complete: CI workflows rewritten for Android-only Paperkeep; 49 validation checks pass
-**Next task:** `P1.6` — Audit `:core:ui` design system; add Expressive motion tokens + haptic tokens + saffron accent
+**Last session:** 2026-04-23 — P1.6 complete: saffron palette, Motion/Haptics/Shape tokens, 458 tests 0 failures
+**Next task:** `P1.7` — Verify onboarding copy matches spec §7; remove account/sync language; DataStore shown-once flag
 
 ### What exists from v1 that survives the pivot
 
@@ -43,7 +43,7 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 
 ### Foundation + capture (Phase 1 proper)
 
-- [ ] **P1.6** — Audit `:core:ui` design system against `docs/PAPERKEEP_DESIGN.md` §7. Add Expressive motion tokens (spring stiffness 380 / damping 0.85, and the tighter 600/0.85 for edge-corner snap). Add haptic tokens (CONFIRM, TEXT_HANDLE_MOVE, LONG_PRESS, REJECT). Accent color set to saffron `#F59E0B`. Verify dynamic color works on Android 12+.
+- [x] **P1.6** — Audit `:core:ui` design system. **Completed 2026-04-23.** Added `Motion.kt` (spring Standard stiffness=380/damping=0.85, EdgeSnap stiffness=600/damping=0.85). Added `Haptics.kt` (PaperkeepHaptic enum: CONFIRM, TEXT_HANDLE_MOVE, LONG_PRESS, REJECT; `hapticConstantFor()` pure function with API-30 / API-26 fallback paths; `View.performHaptic()` extension; `rememberPaperkeepHaptic()` composable). Added `Shape.kt` (PaperkeepShapes: cards 20dp, FAB 50%/squircle, sheet 28dp top, chip 8dp). Updated `Color.kt`: brand anchor renamed `ScanAmber`→`Saffron` (#F59E0B), full M3 tonal palette re-derived (light primary #7A4F00 ≈7:1 contrast, dark primary #FFB951 ≈7.8:1), added tertiary + surfaceContainerHigh roles. Updated `Theme.kt`: wires tertiary colors + PaperkeepShapes into MaterialTheme. Dynamic color guard on Android 12+ (API 31+) unchanged and correct. 32 new tests (MotionTest 8, HapticsTest 14, ShapeTest 5, ThemeTest updated). Full suite: 458 tests, 0 failures.
 - [ ] **P1.7** — `:feature:onboarding` — verify 3-screen onboarding copy matches §7 "Onboarding copy (v2, locked)". Replace any "account" / "sync" language. Skippable, shown once via DataStore flag.
 - [ ] **P1.8** — Remove any settings / library / app entry points that referenced the deleted account or sync features. Replace the "Sync" settings section with a placeholder "Backup & restore" section that's wired in Phase 4 (P4.x).
 - [ ] **P1.9** — Verify camera screen still meets §5 Phase 1 criteria after rename: CameraX preview, edge detection overlay ≤ 16ms/frame on downsampled 640px frame, pinch zoom, tap-to-focus, torch toggle, grid overlay, batch-mode toggle, bottom session-buffer strip. Fix any regressions caused by the module deletions.
