@@ -35,6 +35,11 @@ class AppRoutesTest {
         assertNotNull(SettingsRoute)
     }
 
+    @Test
+    fun onboardingRoute_isNotNull() {
+        assertNotNull(OnboardingRoute)
+    }
+
     // ── 1B.18: Parameterised routes serialize/deserialize correctly ───────────
 
     @Test

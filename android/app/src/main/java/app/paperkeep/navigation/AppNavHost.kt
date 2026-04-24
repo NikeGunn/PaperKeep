@@ -7,17 +7,23 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import app.paperkeep.feature.onboarding.OnboardingScreen
 import app.paperkeep.feature.scanner.ScannerScreen
+import app.paperkeep.feature.scanner.capture.CropScreen
+import app.paperkeep.feature.settings.SettingsScreen
 
 /**
- * Root navigation graph (1B.18).
+ * Root navigation graph.
  *
  * Uses the type-safe Navigation Compose API (Navigation 2.8+):
- *  - composable<T> instead of composable(route = "...") strings
- *  - navigate<T>() for compile-time route safety
+ *  - composable<T> instead of string routes
+ *  - navigate<T>() for compile-time safety
  *
- * Screens are simple placeholders for Phase 1; full implementations come in
- * Phase 2 (Library, Reader) and Phase 3 (Settings, Onboarding).
+ * Onboarding gate: start destination is [OnboardingRoute]. The OnboardingScreen
+ * itself observes a DataStore flag and calls onComplete() immediately if the user
+ * has already completed onboarding — no flash, no delay.
+ *
+ * Placeholder screens (Library, Reader) are replaced in Phase 2.
  */
 @Composable
 fun AppNavHost(
@@ -26,9 +32,19 @@ fun AppNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = ScannerRoute,
+        startDestination = OnboardingRoute,
         modifier = modifier,
     ) {
+        composable<OnboardingRoute> {
+            OnboardingScreen(
+                onComplete = {
+                    navController.navigate(ScannerRoute) {
+                        popUpTo<OnboardingRoute> { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable<ScannerRoute> {
             ScannerScreen(
                 onCaptureDone = { imagePath ->
@@ -42,14 +58,12 @@ fun AppNavHost(
 
         composable<CropRoute> { backStack ->
             val route = backStack.toRoute<CropRoute>()
-            CropPlaceholderScreen(
-                capturedImagePath = route.capturedImagePath,
+            CropScreen(
                 onNext = {
                     navController.navigate(LibraryRoute) {
                         popUpTo<ScannerRoute>()
                     }
                 },
-                onRetake = { navController.popBackStack() },
             )
         }
 
@@ -57,6 +71,9 @@ fun AppNavHost(
             LibraryPlaceholderScreen(
                 onOpenScan = { scanId ->
                     navController.navigate(ReaderRoute(scanId))
+                },
+                onOpenSettings = {
+                    navController.navigate(SettingsRoute)
                 },
             )
         }
@@ -67,36 +84,26 @@ fun AppNavHost(
         }
 
         composable<SettingsRoute> {
-            SettingsPlaceholderScreen()
+            SettingsScreen(
+                appVersion = "2.0.0-alpha.1",
+                onNavigateBack = { navController.popBackStack() },
+            )
         }
     }
 }
 
-// ── Phase-1 placeholder screens ───────────────────────────────────────────────
-// These are replaced by real implementations in later phases.
+// ── Phase-1/2 placeholder screens ─────────────────────────────────────────────
+// These are replaced by real implementations in Phase 2.
 
 @Composable
-private fun CropPlaceholderScreen(
-    capturedImagePath: String,
-    onNext: () -> Unit,
-    onRetake: () -> Unit,
+private fun LibraryPlaceholderScreen(
+    onOpenScan: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
-    // Real CropScreen (1B.14) will be wired here; for now it's a no-op placeholder
-    // that the navigation tests can verify exists in the graph.
-    androidx.compose.material3.Text("Crop: $capturedImagePath")
-}
-
-@Composable
-private fun LibraryPlaceholderScreen(onOpenScan: (String) -> Unit) {
     androidx.compose.material3.Text("Library")
 }
 
 @Composable
 private fun ReaderPlaceholderScreen(scanId: String) {
     androidx.compose.material3.Text("Reader: $scanId")
-}
-
-@Composable
-private fun SettingsPlaceholderScreen() {
-    androidx.compose.material3.Text("Settings")
 }

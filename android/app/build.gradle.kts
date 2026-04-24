@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:data"))
     implementation(project(":core:domain"))
+    implementation(project(":feature:onboarding"))
     implementation(project(":feature:scanner"))
     implementation(project(":feature:library"))
     implementation(project(":feature:reader"))

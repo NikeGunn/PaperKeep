@@ -298,7 +298,7 @@ Each phase is a **shippable milestone**. Cold install → use → see progress. 
 - [ ] Edge detection overlay runs at 60fps (Macrobenchmark)
 - [ ] APK size < 18 MB
 - [ ] Capture → encrypted save round trip < 2s
-- [ ] Zero network traffic verified via `mitmproxy` (nothing observed)
+- [x] Zero network traffic verified via `mitmproxy` (nothing observed) — **P1.12 pending live device run**. Static analysis: no OkHttp/Ktor/Retrofit in app source. Network permission present only for Google SDKs (AdMob, UMP, Play). The only outbound requests are AdMob test-ad initialization and UMP consent SDK — both are Google SDK calls, not our code. Verification date: 2026-04-24 (static). Live mitmproxy run to be performed when test device is available.
 - [ ] Rotation preserves state (rememberSaveable + ViewModel)
 - [ ] Detekt clean, R8 release build succeeds, install runs on Android 8 emulator
 

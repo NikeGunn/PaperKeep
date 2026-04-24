@@ -35,3 +35,7 @@ data class ReaderRoute(val scanId: String)
 /** App settings screen. */
 @Serializable
 object SettingsRoute
+
+/** Onboarding flow — shown once on first launch, guarded by DataStore flag. */
+@Serializable
+object OnboardingRoute
