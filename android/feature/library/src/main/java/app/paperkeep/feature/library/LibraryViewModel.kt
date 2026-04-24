@@ -152,6 +152,8 @@ class LibraryViewModel @Inject constructor(
             val folder = Folder(
                 id = java.util.UUID.randomUUID().toString(),
                 name = name,
+                icon = "folder",
+                autoRule = null,
                 createdAt = java.time.Instant.now(),
                 updatedAt = java.time.Instant.now(),
             )

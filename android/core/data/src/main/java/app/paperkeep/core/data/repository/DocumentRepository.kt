@@ -2,13 +2,14 @@ package app.paperkeep.core.data.repository
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import app.paperkeep.core.data.db.DocumentDao
-import app.paperkeep.core.data.db.FolderEntity
+import app.paperkeep.core.data.db.DocumentWithPages
 import app.paperkeep.core.data.db.toDomain
 import app.paperkeep.core.data.db.toEntity
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.DocumentSort
 import app.paperkeep.core.domain.model.Folder
-import app.paperkeep.core.domain.model.SyncStatus
+import app.paperkeep.core.domain.model.Page
+import app.paperkeep.core.domain.model.PageOcr
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -18,6 +19,9 @@ import javax.inject.Singleton
 class DocumentRepository @Inject constructor(
     private val dao: DocumentDao,
 ) {
+
+    // ── Documents ──────────────────────────────────────────────────────────────
+
     fun observeDocuments(sort: DocumentSort): Flow<List<Document>> = when (sort) {
         DocumentSort.NEWEST -> dao.observeAllWithPages()
         DocumentSort.OLDEST -> dao.observeAllSortedOldest()
@@ -28,18 +32,20 @@ class DocumentRepository @Inject constructor(
     fun observeByFolder(folderId: String): Flow<List<Document>> =
         dao.observeByFolder(folderId).map { list -> list.map { it.toDomain() } }
 
-    fun observeRootDocuments(): Flow<List<Document>> =
-        dao.observeRootDocuments().map { list -> list.map { it.toDomain() } }
+    fun observeFavorites(): Flow<List<Document>> =
+        dao.observeFavorites().map { list -> list.map { it.toDomain() } }
+
+    fun observeArchived(): Flow<List<Document>> =
+        dao.observeArchived().map { list -> list.map { it.toDomain() } }
+
+    fun observeByDocType(docType: String): Flow<List<Document>> =
+        dao.observeByDocType(docType).map { list -> list.map { it.toDomain() } }
 
     fun observeFolders(): Flow<List<Folder>> =
         dao.observeFolders().map { list -> list.map { it.toDomain() } }
 
     suspend fun getDocumentById(id: String): Document? =
-        dao.getDocumentById(id)?.let { entity ->
-            // Build a DocumentWithPages-like structure by querying pages too
-            val pages = dao.getPagesForDocument(id)
-            app.paperkeep.core.data.db.DocumentWithPages(entity, pages).toDomain()
-        }
+        dao.getDocumentWithPagesById(id)?.toDomain()
 
     suspend fun saveDocument(document: Document) {
         dao.insertDocument(document.toEntity())
@@ -49,13 +55,63 @@ class DocumentRepository @Inject constructor(
         dao.updateDocument(document.toEntity())
     }
 
-    suspend fun deleteDocument(document: Document) {
-        dao.deleteDocumentById(document.id)
-    }
-
     suspend fun deleteDocumentById(id: String) {
         dao.deleteDocumentById(id)
     }
+
+    suspend fun setFavorite(documentId: String, favorite: Boolean) {
+        dao.setFavorite(documentId, favorite)
+    }
+
+    suspend fun setArchived(documentId: String, archived: Boolean) {
+        dao.setArchived(documentId, archived)
+    }
+
+    suspend fun setDocType(documentId: String, docType: String?) {
+        dao.setDocType(documentId, docType)
+    }
+
+    suspend fun updateTitle(documentId: String, title: String) {
+        dao.updateTitle(documentId, title, System.currentTimeMillis())
+        refreshFtsRow(documentId)
+    }
+
+    suspend fun moveDocumentToFolder(documentId: String, folderId: String?) {
+        val entity = dao.getDocumentById(documentId) ?: return
+        dao.updateDocument(entity.copy(folderId = folderId))
+    }
+
+    // ── Pages ──────────────────────────────────────────────────────────────────
+
+    suspend fun savePage(page: Page) {
+        dao.insertPage(page.toEntity())
+    }
+
+    suspend fun savePages(pages: List<Page>) {
+        dao.insertPages(pages.map { it.toEntity() })
+    }
+
+    suspend fun updateOcrStatus(pageId: String, status: String, language: String?) {
+        dao.updateOcrStatus(pageId, status, language)
+    }
+
+    suspend fun updateOcrText(pageId: String, text: String?) {
+        dao.updateOcrText(pageId, text)
+    }
+
+    suspend fun getPendingOcrPages(limit: Int = 20): List<Page> =
+        dao.getPendingOcrPages(limit).map { it.toDomain() }
+
+    // ── PageOcr ────────────────────────────────────────────────────────────────
+
+    suspend fun savePageOcr(ocr: PageOcr) {
+        dao.insertPageOcr(ocr.toEntity())
+    }
+
+    suspend fun getPageOcr(pageId: String): PageOcr? =
+        dao.getPageOcr(pageId)?.toDomain()
+
+    // ── Folders ────────────────────────────────────────────────────────────────
 
     suspend fun createFolder(folder: Folder) {
         dao.insertFolder(folder.toEntity())
@@ -70,22 +126,13 @@ class DocumentRepository @Inject constructor(
         dao.deleteFolder(folder.toEntity())
     }
 
-    suspend fun updateSyncStatus(documentId: String, status: SyncStatus) {
-        dao.updateSyncStatus(documentId, status)
-    }
-
-    suspend fun moveDocumentToFolder(documentId: String, folderId: String?) {
-        val entity = dao.getDocumentById(documentId) ?: return
-        dao.updateDocument(entity.copy(folderId = folderId))
-    }
+    // ── Full-text search (FTS4) ────────────────────────────────────────────────
 
     /**
-     * Full-text search across document titles and OCR text content.
+     * Full-text search across document titles and OCR text.
      *
-     * The [query] is sanitised before forwarding to FTS4 MATCH:
-     * - Non-alphanumeric chars (except spaces and hyphens) are stripped.
-     * - Each word becomes a prefix token (e.g. "inv" → "inv*").
-     * - Returns empty list for blank queries rather than all documents.
+     * [query] is sanitised before forwarding to FTS4 MATCH (see [sanitiseFtsQuery]).
+     * Returns empty list for blank queries rather than returning all documents.
      */
     suspend fun searchDocuments(query: String): List<Document> {
         val sanitised = sanitiseFtsQuery(query)
@@ -103,8 +150,8 @@ class DocumentRepository @Inject constructor(
     }
 
     /**
-     * Rebuild FTS index row for a single document after its title or pages change.
-     * Call this after saving/updating a document or its OCR text.
+     * Rebuild the FTS row for a single document after its title or pages change.
+     * Call after any write that affects searchable content.
      */
     suspend fun refreshFtsRow(documentId: String) {
         val sql = SimpleSQLiteQuery(
@@ -124,15 +171,14 @@ class DocumentRepository @Inject constructor(
         dao.updateFtsRowRaw(sql)
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    // ── Internal helpers ───────────────────────────────────────────────────────
 
     /**
      * Convert a user-supplied query string into a safe FTS4 MATCH expression.
      *
-     * Rules:
-     * 1. Strip any character that is not alphanumeric, space, or hyphen.
-     * 2. Split on whitespace → each token becomes a prefix term ("token*").
-     * 3. Join tokens with " ".
+     *  1. Strip characters that are not alphanumeric, space, or hyphen.
+     *  2. Split on whitespace → each word becomes a prefix term ("word*").
+     *  3. Join with space. Drop tokens shorter than 3 chars (FTS minimum).
      *
      * Example: "  hello  world  " → "hello* world*"
      */
@@ -140,6 +186,6 @@ class DocumentRepository @Inject constructor(
         raw.replace(Regex("[^\\w\\s\\-]"), "")
             .trim()
             .split(Regex("\\s+"))
-            .filter { it.isNotEmpty() }
+            .filter { it.length >= 3 }
             .joinToString(" ") { "$it*" }
 }

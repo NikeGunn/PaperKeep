@@ -4,14 +4,14 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import app.paperkeep.core.domain.model.SyncStatus
 
 /**
  * A scanned document — one entity may have many [PageEntity] rows.
  *
- * [folderId] is nullable; null means the document lives at the root level.
- * Deleting the parent [FolderEntity] sets [folderId] to null via the
- * application layer (see [DocumentDao.clearFolderReference]).
+ * [folderId] null → document lives at the root level ("All" system folder).
+ * Deleting a folder sets child documents' folderId to null (SET_NULL, never CASCADE).
+ *
+ * [docType] values: "receipt" | "id" | "a4" | "whiteboard" | "book" | "business_card" | null
  */
 @Entity(
     tableName = "documents",
@@ -27,26 +27,27 @@ import app.paperkeep.core.domain.model.SyncStatus
         Index("createdAt"),
         Index("folderId"),
         Index("updatedAt"),
+        Index("isFavorite"),
+        Index("isArchived"),
+        Index("docType"),
     ],
 )
 data class DocumentEntity(
     @PrimaryKey val id: String,
     val title: String,
-    /** Epoch millis */
+    /** Epoch millis. */
     val createdAt: Long,
-    /** Epoch millis */
+    /** Epoch millis. */
     val updatedAt: Long,
-    /** Nullable — null means root level. */
+    /** Null = root level ("All"). */
     val folderId: String?,
     val pageCount: Int,
-    /**
-     * Optional colour tag for visual organisation.
-     * Stored as an ARGB integer (e.g. 0xFF_E53935.toInt()). Null = no tag.
-     */
+    /** Optional ARGB colour tag (e.g. 0xFF_E53935.toInt()). Null = no tag. */
     val colorTag: Int?,
-    /**
-     * Current sync state. Stored as the enum name (TEXT column).
-     * Default: LOCAL_ONLY for newly created documents.
-     */
-    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    /** Document type from TFLite classifier. Null = not yet classified. */
+    val docType: String? = null,
+    /** True if the user has starred/favourited this document. */
+    val isFavorite: Boolean = false,
+    /** True if moved to the Archive system folder. */
+    val isArchived: Boolean = false,
 )

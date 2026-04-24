@@ -62,8 +62,10 @@ class DocumentPipelineIntegrationTest {
         id = "page-$index",
         documentId = DOC_ID,
         pageIndex = index,
-        imagePath = "/data/enc/page$index.enc",
-        thumbPath = "/data/thumbs/page$index.enc",
+        encryptedImagePath = "/data/enc/page$index.enc",
+        encryptedThumbPath = "/data/thumbs/page$index.enc",
+        ocrStatus = "done",
+        ocrLanguage = null,
         ocrText = ocrText,
         width = 1080,
         height = 1920,
@@ -78,6 +80,9 @@ class DocumentPipelineIntegrationTest {
         folderId = null,
         pageCount = pages.size,
         colorTag = null,
+        docType = null,
+        isFavorite = false,
+        isArchived = false,
         pages = pages,
     )
 

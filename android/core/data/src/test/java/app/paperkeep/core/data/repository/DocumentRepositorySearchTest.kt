@@ -87,9 +87,17 @@ class DocumentRepositorySearchTest {
 
     @Test
     fun sanitiseFtsQuery_sqlInjectionChars_areStripped() {
-        // ' ; ( ) are stripped; alphanumeric words remain
-        val result = repo.sanitiseFtsQuery("' OR 1 1")
-        assertEquals("OR* 1* 1*", result)
+        // ' ; ( ) are stripped; short tokens (< 3 chars) are also dropped
+        val result = repo.sanitiseFtsQuery("' OR hello world")
+        // 'OR' is 2 chars → dropped; 'hello' and 'world' kept
+        assertEquals("hello* world*", result)
+    }
+
+    @Test
+    fun sanitiseFtsQuery_shortTokens_areDropped() {
+        // Tokens shorter than 3 chars are dropped (FTS minimum)
+        val result = repo.sanitiseFtsQuery("ab invoice")
+        assertEquals("invoice*", result)
     }
 
     @Test

@@ -110,7 +110,7 @@ fun ReaderScreen(
         ) { pageIndex ->
             val page = pages[pageIndex]
             ZoomablePage(
-                imagePath = page.imagePath,
+                imagePath = page.encryptedImagePath,
                 ocrText = if (ocrOverlayEnabled) page.ocrText else null,
             )
         }

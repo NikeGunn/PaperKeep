@@ -59,8 +59,9 @@ class DocumentSearchSanitisationTest {
 
     @Test
     fun sanitise_singleQuote_isStripped() {
-        // ' is not alphanumeric/space/hyphen — stripped
-        assertEquals("OR* 1* 1*", repo.sanitiseFtsQuery("' OR 1 1"))
+        // ' stripped; short tokens (< 3 chars: 'OR'=2, '1'=1) also dropped
+        val result = repo.sanitiseFtsQuery("' OR invoice 1")
+        assertEquals("invoice*", result)
     }
 
     @Test

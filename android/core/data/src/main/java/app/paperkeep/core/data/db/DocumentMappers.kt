@@ -3,7 +3,7 @@ package app.paperkeep.core.data.db
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.Folder
 import app.paperkeep.core.domain.model.Page
-import app.paperkeep.core.domain.model.SyncStatus
+import app.paperkeep.core.domain.model.PageOcr
 import java.time.Instant
 
 fun DocumentWithPages.toDomain() = Document(
@@ -14,16 +14,20 @@ fun DocumentWithPages.toDomain() = Document(
     folderId = document.folderId,
     pageCount = document.pageCount,
     colorTag = document.colorTag,
-    pages = pages.map { it.toDomain() },
-    syncStatus = document.syncStatus,
+    docType = document.docType,
+    isFavorite = document.isFavorite,
+    isArchived = document.isArchived,
+    pages = pages.sortedBy { it.pageIndex }.map { it.toDomain() },
 )
 
 fun PageEntity.toDomain() = Page(
     id = id,
     documentId = documentId,
     pageIndex = pageIndex,
-    imagePath = imagePath,
-    thumbPath = thumbPath,
+    encryptedImagePath = encryptedImagePath,
+    encryptedThumbPath = encryptedThumbPath,
+    ocrStatus = ocrStatus,
+    ocrLanguage = ocrLanguage,
     ocrText = ocrText,
     width = width,
     height = height,
@@ -33,8 +37,15 @@ fun PageEntity.toDomain() = Page(
 fun FolderEntity.toDomain() = Folder(
     id = id,
     name = name,
+    icon = icon,
+    autoRule = autoRule,
     createdAt = Instant.ofEpochMilli(createdAt),
     updatedAt = Instant.ofEpochMilli(updatedAt),
+)
+
+fun PageOcrEntity.toDomain() = PageOcr(
+    pageId = pageId,
+    encryptedText = encryptedText,
 )
 
 fun Document.toEntity() = DocumentEntity(
@@ -45,12 +56,35 @@ fun Document.toEntity() = DocumentEntity(
     folderId = folderId,
     pageCount = pageCount,
     colorTag = colorTag,
-    syncStatus = syncStatus,
+    docType = docType,
+    isFavorite = isFavorite,
+    isArchived = isArchived,
+)
+
+fun Page.toEntity() = PageEntity(
+    id = id,
+    documentId = documentId,
+    pageIndex = pageIndex,
+    encryptedImagePath = encryptedImagePath,
+    encryptedThumbPath = encryptedThumbPath,
+    ocrStatus = ocrStatus,
+    ocrLanguage = ocrLanguage,
+    ocrText = ocrText,
+    width = width,
+    height = height,
+    filter = filter,
 )
 
 fun Folder.toEntity() = FolderEntity(
     id = id,
     name = name,
+    icon = icon,
+    autoRule = autoRule,
     createdAt = createdAt.toEpochMilli(),
     updatedAt = updatedAt.toEpochMilli(),
+)
+
+fun PageOcr.toEntity() = PageOcrEntity(
+    pageId = pageId,
+    encryptedText = encryptedText,
 )

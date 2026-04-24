@@ -5,14 +5,29 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/**
+ * Room database for Paperkeep.
+ *
+ * Version history:
+ *  1 → 2: Added folders, documents, pages tables.
+ *  2 → 3: Added documents_fts FTS4 virtual table.
+ *  3 → 4: Added syncStatus column to documents (later superseded).
+ *  4 → 5: P2.1 data-model audit.
+ *          - documents: added docType, isFavorite, isArchived; removed syncStatus.
+ *          - pages: renamed imagePath→encryptedImagePath, thumbPath→encryptedThumbPath;
+ *                   added ocrStatus, ocrLanguage.
+ *          - folders: added icon, autoRule.
+ *          - page_ocr: new table (encrypted OCR blobs + bboxes).
+ */
 @Database(
     entities = [
         ScanEntity::class,
         FolderEntity::class,
         DocumentEntity::class,
         PageEntity::class,
+        PageOcrEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class PaperkeepDatabase : RoomDatabase() {
@@ -20,45 +35,134 @@ abstract class PaperkeepDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 
     companion object {
-        /**
-         * Migration 3 → 4: adds syncStatus column to documents table.
-         * Default 'LOCAL_ONLY' applied to all existing rows.
-         */
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE documents ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_documents_syncStatus ON documents(syncStatus)"
-                )
-            }
-        }
 
         /**
-         * Migration 2 → 3: adds the FTS4 virtual table for full-text search over
-         * document titles and OCR text.
+         * Migration 4 → 5 (P2.1 data-model audit).
          *
-         * The FTS content table is backed by [DocumentEntity]; the initial rowid
-         * population copies existing data so search works immediately after upgrade.
+         * Because SQLite does not support DROP COLUMN or RENAME COLUMN on all API
+         * levels we target (min SDK 26), column renames are done via a table-copy
+         * strategy (new table → copy → drop old → rename new).
+         *
+         * Documents:
+         *  - DROP syncStatus (no longer meaningful — no backend)
+         *  - ADD docType TEXT (nullable)
+         *  - ADD isFavorite INTEGER NOT NULL DEFAULT 0
+         *  - ADD isArchived INTEGER NOT NULL DEFAULT 0
+         *  - ADD indices for isFavorite, isArchived, docType
+         *
+         * Pages (rename two columns + add two):
+         *  - RENAME imagePath → encryptedImagePath
+         *  - RENAME thumbPath → encryptedThumbPath
+         *  - ADD ocrStatus TEXT NOT NULL DEFAULT 'pending'
+         *  - ADD ocrLanguage TEXT (nullable)
+         *  - ADD index on ocrStatus
+         *
+         * Folders:
+         *  - ADD icon TEXT NOT NULL DEFAULT 'folder'
+         *  - ADD autoRule TEXT (nullable)
+         *
+         * page_ocr:
+         *  - CREATE TABLE page_ocr (pageId TEXT PK, encryptedText BLOB NOT NULL)
          */
-        val MIGRATION_2_3 = object : Migration(2, 3) {
+        val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Create standalone FTS4 virtual table. This is NOT a content table
-                // (no content= parameter) so Room won't try to sync it automatically.
-                // The repository layer calls updateFtsRow() after every write.
+                // ── 1. documents table ──────────────────────────────────────────
+                // SQLite on API 26-28 cannot drop columns, so we do a table-copy.
                 db.execSQL(
                     """
-                    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
-                    USING fts4(
-                        docId,
-                        title,
-                        ocrText
+                    CREATE TABLE documents_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        folderId TEXT,
+                        pageCount INTEGER NOT NULL,
+                        colorTag INTEGER,
+                        docType TEXT,
+                        isFavorite INTEGER NOT NULL DEFAULT 0,
+                        isArchived INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(folderId) REFERENCES folders(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO documents_new
+                        (id, title, createdAt, updatedAt, folderId, pageCount, colorTag,
+                         docType, isFavorite, isArchived)
+                    SELECT id, title, createdAt, updatedAt, folderId, pageCount, colorTag,
+                           NULL, 0, 0
+                    FROM documents
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE documents")
+                db.execSQL("ALTER TABLE documents_new RENAME TO documents")
+
+                // Recreate indices for documents
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_createdAt ON documents(createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_folderId ON documents(folderId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_updatedAt ON documents(updatedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_isFavorite ON documents(isFavorite)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_isArchived ON documents(isArchived)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_docType ON documents(docType)")
+
+                // ── 2. pages table (rename columns + add new) ───────────────────
+                db.execSQL(
+                    """
+                    CREATE TABLE pages_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        documentId TEXT NOT NULL,
+                        pageIndex INTEGER NOT NULL,
+                        encryptedImagePath TEXT NOT NULL,
+                        encryptedThumbPath TEXT NOT NULL,
+                        ocrStatus TEXT NOT NULL DEFAULT 'pending',
+                        ocrLanguage TEXT,
+                        ocrText TEXT,
+                        width INTEGER NOT NULL,
+                        height INTEGER NOT NULL,
+                        filter TEXT NOT NULL DEFAULT 'original',
+                        FOREIGN KEY(documentId) REFERENCES documents(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO pages_new
+                        (id, documentId, pageIndex, encryptedImagePath, encryptedThumbPath,
+                         ocrStatus, ocrLanguage, ocrText, width, height, filter)
+                    SELECT id, documentId, pageIndex, imagePath, thumbPath,
+                           CASE WHEN ocrText IS NOT NULL THEN 'done' ELSE 'pending' END,
+                           NULL, ocrText, width, height, filter
+                    FROM pages
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE pages")
+                db.execSQL("ALTER TABLE pages_new RENAME TO pages")
+
+                // Recreate indices for pages
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_pages_documentId ON pages(documentId)")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_pages_documentId_pageIndex ON pages(documentId, pageIndex)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_pages_ocrStatus ON pages(ocrStatus)")
+
+                // ── 3. folders table (additive — SQLite ALTER TABLE ADD COLUMN ok) ─
+                db.execSQL("ALTER TABLE folders ADD COLUMN icon TEXT NOT NULL DEFAULT 'folder'")
+                db.execSQL("ALTER TABLE folders ADD COLUMN autoRule TEXT")
+
+                // ── 4. page_ocr table ──────────────────────────────────────────
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS page_ocr (
+                        pageId TEXT NOT NULL PRIMARY KEY,
+                        encryptedText BLOB NOT NULL,
+                        FOREIGN KEY(pageId) REFERENCES pages(id) ON DELETE CASCADE
                     )
                     """.trimIndent()
                 )
 
-                // Populate FTS index with existing documents + their OCR text.
+                // ── 5. Rebuild FTS index so existing docs still find-able ──────
+                db.execSQL("DELETE FROM documents_fts")
                 db.execSQL(
                     """
                     INSERT INTO documents_fts(docId, title, ocrText)
@@ -74,10 +178,39 @@ abstract class PaperkeepDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * Migration 1 → 2: adds folders, documents, and pages tables.
-         * The existing `scans` table is left untouched for backwards compatibility.
-         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE documents ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_documents_syncStatus ON documents(syncStatus)"
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
+                    USING fts4(docId, title, ocrText)
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO documents_fts(docId, title, ocrText)
+                    SELECT d.id, d.title,
+                           COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')
+                                     FROM pages p
+                                     WHERE p.documentId = d.id
+                                       AND p.ocrText IS NOT NULL), '')
+                    FROM documents d
+                    """.trimIndent()
+                )
+            }
+        }
+
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -90,9 +223,7 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_folders_createdAt ON folders(createdAt)"
-                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_folders_createdAt ON folders(createdAt)")
 
                 db.execSQL(
                     """
@@ -108,15 +239,9 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_documents_createdAt ON documents(createdAt)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_documents_folderId ON documents(folderId)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_documents_updatedAt ON documents(updatedAt)"
-                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_createdAt ON documents(createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_folderId ON documents(folderId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_documents_updatedAt ON documents(updatedAt)")
 
                 db.execSQL(
                     """
@@ -134,9 +259,7 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_pages_documentId ON pages(documentId)"
-                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_pages_documentId ON pages(documentId)")
                 db.execSQL(
                     """
                     CREATE UNIQUE INDEX IF NOT EXISTS index_pages_documentId_pageIndex

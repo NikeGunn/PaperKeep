@@ -9,8 +9,8 @@
 ## Current state (2026-04-24)
 
 **Status:** Phase 1 complete — onboarding copy locked per §7, settings screen with Backup placeholder, camera/crop verified, AES-256-GCM instrumented tests added, zero-network static analysis, benchmark baselines created.
-**Last session:** 2026-04-24 — P1.7–P1.13 complete: 501 tests, 0 failures, assembleDebug BUILD SUCCESSFUL
-**Next task:** `P2.1` — Data model audit (`DocumentEntity`, `PageEntity`, `FolderEntity`, `PageOcrEntity`)
+**Last session:** 2026-04-24 — P2.1 complete: schema v5, full data model audit, 531 tests, 0 failures
+**Next task:** `P2.2` — Searchable HMAC'd FTS4 OCR index (§6.4)
 
 ### What exists from v1 that survives the pivot
 
@@ -70,7 +70,18 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 > **Depends on:** Phase 1 complete
 > **Goal:** End-to-end offline flow: capture 10 pages → reorder → filter → searchable PDF → share. Biometric lock shipped.
 
-- [ ] **P2.1** — Data model audit. Confirm `DocumentEntity`, `PageEntity`, `FolderEntity`, `PageOcrEntity` match §4. Add `isFavorite`, `isArchived`, `docType`, `colorTag` fields if missing.
+- [x] **P2.1** — Data model audit. **Completed 2026-04-24.** Full schema v5 migration delivered:
+  - `DocumentEntity`: added `docType String?`, `isFavorite Boolean`, `isArchived Boolean`; removed dead `syncStatus` (no backend). New indices on isFavorite, isArchived, docType.
+  - `PageEntity`: renamed `imagePath`→`encryptedImagePath`, `thumbPath`→`encryptedThumbPath`; added `ocrStatus String` (PENDING/DONE/FAILED), `ocrLanguage String?`. New index on ocrStatus.
+  - `FolderEntity`: added `icon String` (default "folder"), `autoRule String?`.
+  - `PageOcrEntity`: new entity — AES-256-GCM encrypted OCR blob + bboxes JSON, cascade-deletes with page.
+  - Domain models: `Document`, `Page`, `Folder`, `PageOcr` updated to match; `SyncStatus` removed from domain.
+  - `DocumentCard.kt`: replaced cloud/sync icon with "on device" trust pill per spec §7.
+  - `DocumentDao`: added `setFavorite`, `setArchived`, `setDocType`, `observeFavorites`, `observeArchived`, `observeByDocType`, `updateOcrStatus`, `updateOcrText`, `getPendingOcrPages`, `insertPageOcr`, `getPageOcr`, `deletePageOcr`; removed `updateSyncStatus`, `observeRootDocuments`.
+  - `DocumentRepository`: updated to match new DAO; added `setFavorite`, `setArchived`, `setDocType`, `savePageOcr`, `getPageOcr`, `observeFavorites`, `observeArchived`; FTS token minimum raised to 3 chars.
+  - `MIGRATION_4_5` implemented via table-copy strategy (safe on API 26+).
+  - All call sites updated: BackupManager, ReaderScreen, LibraryViewModel, all tests.
+  - 531 unit tests, 0 failures. assembleDebug BUILD SUCCESSFUL.
 - [ ] **P2.2** — Searchable OCR index. Implement the HMAC'd FTS4 scheme from §6.4: `page_ocr_fts` stores HMAC-SHA256(K_search, normalized_token) hex. Drop 1- and 2-character tokens. K_search lives in Keystore. Add instrumented test: insert OCR text, search returns correct page, raw DB inspection shows only opaque hex.
 - [ ] **P2.3** — Library screen. Compose `LazyVerticalStaggeredGrid` (2 cols phone, 4 cols tablet). Card = thumbnail + title + page count + relative timestamp + "on device" pill. Long-press multi-select with bottom action bar. Sort menu. Empty state illustration + single accent CTA.
 - [ ] **P2.4** — Folders (one level). System folders: All / Favorites / Archive. User folders with icon + optional auto-rule field (rule wiring is P4.x). Drag-to-move onto folder chip.

@@ -84,7 +84,7 @@ class BackupManager @Inject constructor(
                     documents.forEachIndexed { docIdx, docWithPages ->
                         docWithPages.pages.forEachIndexed { pageIdx, page ->
                             try {
-                                val imageBytes = imageStore.read(File(context.filesDir, page.imagePath))
+                                val imageBytes = imageStore.read(File(context.filesDir, page.encryptedImagePath))
                                 val entryName = "pages/${"%04d".format(docIdx)}_p$pageIdx.jpg"
                                 zos.putNextEntry(ZipEntry(entryName))
                                 zos.write(imageBytes)

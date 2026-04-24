@@ -31,8 +31,10 @@ class ReaderViewModelTest {
         id = "page-$index",
         documentId = "doc-1",
         pageIndex = index,
-        imagePath = "/images/page$index.enc",
-        thumbPath = "/thumbs/page$index.enc",
+        encryptedImagePath = "/images/page$index.enc",
+        encryptedThumbPath = "/thumbs/page$index.enc",
+        ocrStatus = "done",
+        ocrLanguage = null,
         ocrText = ocrText,
         width = 1080,
         height = 1920,
@@ -47,6 +49,9 @@ class ReaderViewModelTest {
         folderId = null,
         pageCount = pages.size,
         colorTag = null,
+        docType = null,
+        isFavorite = false,
+        isArchived = false,
         pages = pages,
     )
 

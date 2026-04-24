@@ -7,7 +7,6 @@ import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.DocumentEntity
 import app.paperkeep.core.data.db.DocumentWithPages
 import app.paperkeep.core.data.db.PageEntity
-import app.paperkeep.core.domain.model.SyncStatus
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -161,15 +160,14 @@ class BackupManagerTest {
         folderId = null,
         pageCount = 0,
         colorTag = null,
-        syncStatus = SyncStatus.LOCAL_ONLY,
     )
 
     private fun fakePage(imagePath: String) = PageEntity(
         id = "page-$imagePath",
         documentId = "uuid-1",
         pageIndex = 0,
-        imagePath = imagePath,
-        thumbPath = imagePath,
+        encryptedImagePath = imagePath,
+        encryptedThumbPath = imagePath,
         ocrText = null,
         width = 1080,
         height = 1920,

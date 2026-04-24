@@ -370,12 +370,17 @@ class LibraryViewModelTest {
         folderId = null,
         pageCount = 1,
         colorTag = null,
+        docType = null,
+        isFavorite = false,
+        isArchived = false,
         pages = emptyList(),
     )
 
     private fun buildFolder(id: String, name: String) = Folder(
         id = id,
         name = name,
+        icon = "folder",
+        autoRule = null,
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
     )

@@ -9,7 +9,6 @@ import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.sqlite.db.SimpleSQLiteQuery
-import app.paperkeep.core.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -29,49 +28,74 @@ interface DocumentDao {
     @Query("DELETE FROM documents WHERE id = :id")
     suspend fun deleteDocumentById(id: String)
 
+    @Transaction
+    @Query("SELECT * FROM documents WHERE id = :id")
+    suspend fun getDocumentWithPagesById(id: String): DocumentWithPages?
+
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getDocumentById(id: String): DocumentEntity?
 
-    /** All documents newest-first. */
+    /** All documents, newest-first. */
     @Transaction
-    @Query("SELECT * FROM documents ORDER BY createdAt DESC")
+    @Query("SELECT * FROM documents WHERE isArchived = 0 ORDER BY createdAt DESC")
     fun observeAllWithPages(): Flow<List<DocumentWithPages>>
 
-    /** Documents in a specific folder, newest-first. */
+    /** Documents in a specific user folder, newest-first. */
     @Transaction
-    @Query("SELECT * FROM documents WHERE folderId = :folderId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM documents WHERE folderId = :folderId AND isArchived = 0 ORDER BY createdAt DESC")
     fun observeByFolder(folderId: String): Flow<List<DocumentWithPages>>
 
-    /** Root-level documents (no folder), newest-first. */
+    /** Favourited documents, newest-first. */
     @Transaction
-    @Query("SELECT * FROM documents WHERE folderId IS NULL ORDER BY createdAt DESC")
-    fun observeRootDocuments(): Flow<List<DocumentWithPages>>
+    @Query("SELECT * FROM documents WHERE isFavorite = 1 AND isArchived = 0 ORDER BY createdAt DESC")
+    fun observeFavorites(): Flow<List<DocumentWithPages>>
 
-    /** Sort by title A-Z. */
+    /** Archived documents, newest-first. */
     @Transaction
-    @Query("SELECT * FROM documents ORDER BY title COLLATE NOCASE ASC")
+    @Query("SELECT * FROM documents WHERE isArchived = 1 ORDER BY createdAt DESC")
+    fun observeArchived(): Flow<List<DocumentWithPages>>
+
+    /** Documents filtered by docType, newest-first. */
+    @Transaction
+    @Query("SELECT * FROM documents WHERE docType = :docType AND isArchived = 0 ORDER BY createdAt DESC")
+    fun observeByDocType(docType: String): Flow<List<DocumentWithPages>>
+
+    /** Sort by title A-Z, excluding archived. */
+    @Transaction
+    @Query("SELECT * FROM documents WHERE isArchived = 0 ORDER BY title COLLATE NOCASE ASC")
     fun observeAllSortedByTitle(): Flow<List<DocumentWithPages>>
 
-    /** Sort by oldest first. */
+    /** Sort by oldest-first, excluding archived. */
     @Transaction
-    @Query("SELECT * FROM documents ORDER BY createdAt ASC")
+    @Query("SELECT * FROM documents WHERE isArchived = 0 ORDER BY createdAt ASC")
     fun observeAllSortedOldest(): Flow<List<DocumentWithPages>>
 
-    /** Sort by most pages first. */
+    /** Sort by most pages, excluding archived. */
     @Transaction
-    @Query("SELECT * FROM documents ORDER BY pageCount DESC")
+    @Query("SELECT * FROM documents WHERE isArchived = 0 ORDER BY pageCount DESC")
     fun observeAllSortedByPageCount(): Flow<List<DocumentWithPages>>
 
-    @Query("SELECT COUNT(*) FROM documents")
+    @Query("SELECT COUNT(*) FROM documents WHERE isArchived = 0")
     suspend fun countDocuments(): Int
 
-    /** Nullify folderId for all documents in [folderId] before deleting the folder. */
+    /** Nullify folderId for all documents in a folder before the folder is deleted. */
     @Query("UPDATE documents SET folderId = NULL WHERE folderId = :folderId")
     suspend fun clearFolderReference(folderId: String)
 
-    /** Update only the syncStatus for a document. */
-    @Query("UPDATE documents SET syncStatus = :status WHERE id = :id")
-    suspend fun updateSyncStatus(id: String, status: SyncStatus)
+    @Query("UPDATE documents SET isFavorite = :favorite WHERE id = :id")
+    suspend fun setFavorite(id: String, favorite: Boolean)
+
+    @Query("UPDATE documents SET isArchived = :archived WHERE id = :id")
+    suspend fun setArchived(id: String, archived: Boolean)
+
+    @Query("UPDATE documents SET docType = :docType WHERE id = :id")
+    suspend fun setDocType(id: String, docType: String?)
+
+    @Query("UPDATE documents SET title = :title, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String, updatedAt: Long)
+
+    @Query("UPDATE documents SET pageCount = :count, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updatePageCount(id: String, count: Int, updatedAt: Long)
 
     // ── Pages ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +111,9 @@ interface DocumentDao {
     @Delete
     suspend fun deletePage(page: PageEntity)
 
+    @Query("DELETE FROM pages WHERE id = :id")
+    suspend fun deletePageById(id: String)
+
     @Query("SELECT * FROM pages WHERE documentId = :documentId ORDER BY pageIndex ASC")
     suspend fun getPagesForDocument(documentId: String): List<PageEntity>
 
@@ -95,6 +122,29 @@ interface DocumentDao {
 
     @Query("SELECT COUNT(*) FROM pages WHERE documentId = :documentId")
     suspend fun countPages(documentId: String): Int
+
+    /** Update OCR status and detected language for a page. */
+    @Query("UPDATE pages SET ocrStatus = :status, ocrLanguage = :language WHERE id = :id")
+    suspend fun updateOcrStatus(id: String, status: String, language: String?)
+
+    /** Update the inline OCR text cache (used by FTS). */
+    @Query("UPDATE pages SET ocrText = :text WHERE id = :id")
+    suspend fun updateOcrText(id: String, text: String?)
+
+    /** Fetch pages pending OCR, ordered by pageIndex. */
+    @Query("SELECT * FROM pages WHERE ocrStatus = 'pending' ORDER BY pageIndex ASC LIMIT :limit")
+    suspend fun getPendingOcrPages(limit: Int = 20): List<PageEntity>
+
+    // ── PageOcr ──────────────────────────────────────────────────────────────
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPageOcr(ocr: PageOcrEntity)
+
+    @Query("SELECT * FROM page_ocr WHERE pageId = :pageId")
+    suspend fun getPageOcr(pageId: String): PageOcrEntity?
+
+    @Query("DELETE FROM page_ocr WHERE pageId = :pageId")
+    suspend fun deletePageOcr(pageId: String)
 
     // ── Folders ───────────────────────────────────────────────────────────────
 
@@ -118,33 +168,17 @@ interface DocumentDao {
 
     // ── Full-text search (FTS4) ───────────────────────────────────────────────
     //
-    // These queries use @RawQuery to bypass Room's compile-time schema validation
-    // for the FTS4 virtual table `documents_fts`, which is created in Migration 2→3
-    // and not declared as a Room @Entity (Room's KSP processor cannot validate
-    // virtual table schemas at build time).
-    //
-    // The FTS query is always sanitised before reaching here (see
-    // DocumentRepository.sanitiseFtsQuery). Do NOT call these methods directly
-    // with unsanitised user input.
+    // These use @RawQuery to bypass Room's compile-time validation for the FTS4
+    // virtual table. Always pre-sanitise the FTS expression before calling these
+    // (see DocumentRepository.sanitiseFtsQuery — never pass raw user input).
 
-    /**
-     * Full-text search over document titles and OCR text.
-     *
-     * [query] must be a valid FTS4 MATCH expression (pre-sanitised by the
-     * repository layer). Results are ordered newest-first.
-     */
     @Transaction
     @RawQuery(observedEntities = [DocumentEntity::class])
     suspend fun searchDocumentsRaw(query: SimpleSQLiteQuery): List<DocumentWithPages>
 
-    /**
-     * Upsert the FTS row for a single document (title + aggregated OCR text).
-     * Call after inserting/updating a document or saving OCR results for its pages.
-     */
     @RawQuery
     suspend fun updateFtsRowRaw(query: SimpleSQLiteQuery): Int
 
-    /** Rebuild the entire FTS index from scratch (use after bulk inserts). */
     @RawQuery
     suspend fun rebuildFtsIndexRaw(query: SimpleSQLiteQuery): Int
 }
