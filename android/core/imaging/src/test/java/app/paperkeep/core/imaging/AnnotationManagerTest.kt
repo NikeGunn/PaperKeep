@@ -2,6 +2,7 @@ package app.paperkeep.core.imaging
 
 import android.graphics.RectF
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -117,5 +118,79 @@ class AnnotationManagerTest {
         assertTrue(stack.canRedo())
         stack.push("c")
         assertTrue("redo stack must be cleared after new push", !stack.canRedo())
+    }
+
+    // ── erase (eraser tool) ───────────────────────────────────────────────────
+
+    @Test
+    fun `erase removes target annotation from list`() {
+        val ann = textAnnotation("Erase me")
+        manager.addAnnotation(ann)
+        val removed = manager.erase(ann)
+        assertTrue("erase must return true when found", removed)
+        assertEquals(0, manager.annotations.size)
+    }
+
+    @Test
+    fun `erase returns false when annotation not found`() {
+        val other = textAnnotation("Ghost")
+        assertFalse("erase on absent annotation must return false", manager.erase(other))
+    }
+
+    @Test
+    fun `erase does not affect other annotations`() {
+        val keep = textAnnotation("Keep")
+        val remove = textAnnotation("Remove")
+        manager.addAnnotation(keep)
+        manager.addAnnotation(remove)
+        manager.erase(remove)
+        assertEquals(1, manager.annotations.size)
+        assertEquals(keep, manager.annotations.first())
+    }
+
+    @Test
+    fun `erase followed by undo restores the annotation`() {
+        val ann = textAnnotation("Restore after erase")
+        manager.addAnnotation(ann)
+        manager.erase(ann)
+        assertEquals(0, manager.annotations.size)
+        manager.undo()
+        assertEquals(1, manager.annotations.size)
+        assertEquals(ann, manager.annotations.first())
+    }
+
+    // ── size ──────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `size returns correct count`() {
+        assertEquals(0, manager.size)
+        manager.addAnnotation(textAnnotation())
+        assertEquals(1, manager.size)
+        manager.addAnnotation(highlightAnnotation())
+        assertEquals(2, manager.size)
+        manager.undo()
+        assertEquals(1, manager.size)
+    }
+
+    // ── All three annotation types ────────────────────────────────────────────
+
+    @Test
+    fun `redaction annotation added and undone correctly`() {
+        val redaction = Annotation.Redaction(RedactionAnnotation(region = RectF(0f, 0f, 50f, 50f)))
+        manager.addAnnotation(redaction)
+        assertEquals(1, manager.annotations.size)
+        manager.undo()
+        assertEquals(0, manager.annotations.size)
+    }
+
+    @Test
+    fun `mixed annotation types coexist`() {
+        manager.addAnnotation(textAnnotation("Note"))
+        manager.addAnnotation(highlightAnnotation())
+        manager.addAnnotation(Annotation.Redaction(RedactionAnnotation(region = RectF(0f, 0f, 10f, 10f))))
+        assertEquals(3, manager.annotations.size)
+        assertTrue(manager.annotations.any { it is Annotation.Text })
+        assertTrue(manager.annotations.any { it is Annotation.Highlight })
+        assertTrue(manager.annotations.any { it is Annotation.Redaction })
     }
 }

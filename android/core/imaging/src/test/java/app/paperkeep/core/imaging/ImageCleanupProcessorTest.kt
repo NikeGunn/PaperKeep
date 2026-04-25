@@ -122,4 +122,39 @@ class ImageCleanupProcessorTest {
         assertEquals("result must have same pixel as input for empty filter set",
             Color.BLUE, result.getPixel(5, 5))
     }
+
+    @Test
+    fun `applyFilters DENOISE only — result differs from input`() {
+        val input = noisyBitmap()
+        val result = ImageCleanupProcessor.applyFilters(input, setOf(NonDestructiveFilter.DENOISE))
+        val diff = pixelDifference(input, result)
+        assertNotEquals("DENOISE filter should change pixels", 0, diff)
+    }
+
+    @Test
+    fun `applyFilters SHARPEN only — result differs from input`() {
+        val input = noisyBitmap()
+        val result = ImageCleanupProcessor.applyFilters(input, setOf(NonDestructiveFilter.SHARPEN))
+        val diff = pixelDifference(input, result)
+        assertNotEquals("SHARPEN filter should change pixels", 0, diff)
+    }
+
+    @Test
+    fun `applyFilters FIX_LIGHTING only — result differs from input`() {
+        val input = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888)
+        input.eraseColor(Color.rgb(80, 80, 80))
+        val result = ImageCleanupProcessor.applyFilters(input, setOf(NonDestructiveFilter.FIX_LIGHTING))
+        val diff = pixelDifference(input, result)
+        assertNotEquals("FIX_LIGHTING filter should change pixels", 0, diff)
+    }
+
+    @Test
+    fun `all NonDestructiveFilter values can be applied without crash`() {
+        val input = noisyBitmap()
+        NonDestructiveFilter.entries.forEach { filter ->
+            val result = ImageCleanupProcessor.applyFilters(input, setOf(filter))
+            assertEquals("output must have same dimensions", input.width,  result.width)
+            assertEquals("output must have same dimensions", input.height, result.height)
+        }
+    }
 }

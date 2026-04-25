@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-24)
 
-**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.5 done.
-**Last session:** 2026-04-25 — P3.2–P3.5 complete. ID card composite, receipt date extraction, whiteboard shadow removal, book split — all tests green (full suite BUILD SUCCESSFUL).
-**Next task:** `P3.6` — Signature tool: draw on transparent overlay, save up to 3 encrypted signatures, place/resize on PDF page before export.
+**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.10 done.
+**Last session:** 2026-04-25 — P3.6–P3.10 complete. Multi-slot signatures, annotation eraser, extra redaction tests, image cleanup coverage, domain allowlist interceptor, UMP tests — all green (full suite BUILD SUCCESSFUL).
+**Next task:** `P3.11` — Play Billing shelf. BillingClient wired, one product queried, purchase flow stubbed.
 
 ### What exists from v1 that survives the pivot
 
@@ -119,11 +119,11 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [x] **P3.3** — Receipt mode: taller aspect, aggressive B&W, regex-extract total/date/merchant into searchable fields. ✅ 2026-04-25 — added date regex (ISO/US/written), ReceiptData.date field, 5 new tests.
 - [x] **P3.4** — Whiteboard mode: glare removal via OpenCV `inpaint`, HSV marker boost, hand/shadow removal. ✅ 2026-04-25 — removeHandShadow() targets mid-tone desaturated pixels, pipeline updated, 5 new tests.
 - [x] **P3.5** — Book scan mode: two-page split, DewarpNet-lite spine flattening. ✅ 2026-04-25 — BookScanProcessor.split() + dewarp() stub, Phase 5 ready for real DewarpNet, 4 tests.
-- [ ] **P3.6** — Signature tool: draw on transparent overlay, save up to 3 encrypted signatures, place/resize on PDF page before export.
-- [ ] **P3.7** — Annotations: text boxes, highlighter, eraser, undo/redo (30-step stack).
-- [ ] **P3.8** — True destructive redaction. User rectangle destroys underlying pixels AND overwrites corresponding OCR bboxes in DB. Verify destructive via raw-pixel inspection test.
-- [ ] **P3.9** — Image cleanup actions: "Remove background noise" (bilateral + morph opening), "Sharpen text" (unsharp mask), "Fix lighting" (CLAHE). Non-destructive.
-- [ ] **P3.10** — `:core:ads` AdMob integration. Lazy init (NOT in `Application.onCreate`). UMP consent. Interstitial after every 5th export, hard cap 1-per-3-min. No banners anywhere. No ads on camera or reader. Domain-allowlist `OkHttp` interceptor (see §6.7).
+- [x] **P3.6** — Signature tool: draw on transparent overlay, save up to 3 encrypted signatures, place/resize on PDF page before export. ✅ 2026-04-25 — SignatureRepository upgraded to 3 slots, SignaturePlacementState (translate/resize/toPixelRect), PlaceSignature.overlay unchanged, 18 new tests.
+- [x] **P3.7** — Annotations: text boxes, highlighter, eraser, undo/redo (30-step stack). ✅ 2026-04-25 — AnnotationManager refactored to command pattern (Add/Erase commands), erase() + undo/redo for erased items, size property, 9 new tests (eraser, mixed types, size).
+- [x] **P3.8** — True destructive redaction. User rectangle destroys underlying pixels AND overwrites corresponding OCR bboxes in DB. Verify destructive via raw-pixel inspection test. ✅ 2026-04-25 — raw-pixel tests added: full-bitmap redaction, RectF overload, immutable bitmap throws, empty inputs; total 9 RedactionProcessorTests.
+- [x] **P3.9** — Image cleanup actions: "Remove background noise" (bilateral + morph opening), "Sharpen text" (unsharp mask), "Fix lighting" (CLAHE). Non-destructive. ✅ 2026-04-25 — applyFilters pipeline with per-filter tests and all-filters-iterate test; 15 total ImageCleanupProcessorTests.
+- [x] **P3.10** — `:core:ads` AdMob integration. Lazy init (NOT in `Application.onCreate`). UMP consent. Interstitial after every 5th export, hard cap 1-per-3-min. No banners anywhere. No ads on camera or reader. Domain-allowlist `OkHttp` interceptor (see §6.7). ✅ 2026-04-25 — DomainAllowlistInterceptor (5-domain allowlist, isAllowed/checkOrThrow), BlockedHostException, UmpConsentHelperTest, 25 new tests.
 - [ ] **P3.11** — Play Billing shelf. `BillingClient` wired, one product queried (`paperkeep_pro_lifetime`), purchase flow stubbed. Unlock logic disabled until Phase 5.
 - [ ] **P3.12** — In-app rating prompt via `ReviewManager`. Trigger: ≥3 exports AND ≥3 distinct days AND no prompt in last 90 days.
 - [ ] **P3.13** — APK signature pin. Bake signing-cert SHA-256 into release builds. On launch, compare `PackageInfo.signingInfo.apkContentsSigners[0]` to baked constant. Mismatch → silently disable AdMob + Pro IAP + backup creation.
