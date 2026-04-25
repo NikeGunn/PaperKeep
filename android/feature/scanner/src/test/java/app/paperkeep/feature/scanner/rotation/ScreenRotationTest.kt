@@ -64,7 +64,7 @@ class ScreenRotationTest {
     @Test
     fun captureViewModel_quadSurvivesRecreation_viaSavedState() = runTest {
         val savedState = SavedStateHandle()
-        val vm = CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        val vm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
 
         // Capture an image so state is ReadyToCrop
         val bitmap = makeBitmap()
@@ -82,7 +82,7 @@ class ScreenRotationTest {
         advanceUntilIdle()
 
         // Simulate rotation: VM is recreated with the SAME SavedStateHandle
-        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
         val restoredQuad = recreatedVm.restoreQuadFromSavedState()
 
         assertNotNull("Quad must survive rotation via SavedStateHandle", restoredQuad)
@@ -105,14 +105,14 @@ class ScreenRotationTest {
     @Test
     fun captureViewModel_retakeResetsToIdle_afterRotation() = runTest {
         val savedState = SavedStateHandle()
-        val vm = CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        val vm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
         vm.onImageCaptured(makeBitmap())
         advanceUntilIdle()
 
         vm.retake()
 
         // After retake + rotation the new VM instance has no saved quad
-        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
         assertEquals(CaptureState.Idle, recreatedVm.state.value)
         // Quad was cleared from SavedStateHandle
         assertNull(recreatedVm.restoreQuadFromSavedState(), "Quad must be null after retake")

@@ -34,6 +34,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:data"))
     implementation(project(":core:domain"))
+    implementation(project(":core:imaging"))
 
     // Hilt — KSP avoids Windows path issues with KAPT
     implementation(libs.hilt.android)

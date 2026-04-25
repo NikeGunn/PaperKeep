@@ -250,7 +250,7 @@ class ScanFlowTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildCaptureVm(savedState: SavedStateHandle = SavedStateHandle()) =
-        CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
 
     private fun makeDocumentBitmap(width: Int = 320, height: Int = 480): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bmp ->

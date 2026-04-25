@@ -203,7 +203,7 @@ class P110CropVerificationTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildVm(savedState: SavedStateHandle = SavedStateHandle()) =
-        CaptureViewModel(FakeEdgeDetector(), testDispatchers, savedState)
+        CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
 
     private fun makeBitmap(width: Int = 300, height: Int = 400): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.WHITE) }

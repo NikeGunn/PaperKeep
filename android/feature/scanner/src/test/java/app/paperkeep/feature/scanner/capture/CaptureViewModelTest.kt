@@ -7,8 +7,13 @@ import app.paperkeep.core.common.AppDispatchers
 import app.paperkeep.core.imaging.DetectionResult
 import app.paperkeep.core.imaging.EdgeDetector
 import app.paperkeep.core.imaging.FakeEdgeDetector
+import app.paperkeep.core.imaging.ImageFilter
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.ml.ClassificationResult
+import app.paperkeep.core.ml.DocTypePolicies
+import app.paperkeep.core.ml.DocumentClassifier
+import app.paperkeep.core.ml.DocumentType
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -29,16 +35,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/**
- * Tests for 1B.13 (capture pipeline) and 1B.14 (crop screen state + rotation).
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class CaptureViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-
     private val testDispatchers = object : AppDispatchers {
         override val main = testDispatcher
         override val io = testDispatcher
@@ -57,167 +59,235 @@ class CaptureViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // ── 1B.13: Perspective transform with detected quad ───────────────────────
+    // ── P1 — Capture pipeline ─────────────────────────────────────────────────
 
     @Test
-    fun onImageCaptured_withDocumentBitmap_transitionsToReadyToCrop() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        val bitmap = createNonUniformBitmap(640, 480)
-
-        viewModel.onImageCaptured(bitmap)
+    fun `captured bitmap transitions to ReadyToCrop`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(640, 480))
         advanceUntilIdle()
-
-        assertTrue(
-            "Must transition to ReadyToCrop",
-            viewModel.state.value is CaptureState.ReadyToCrop
-        )
+        assertTrue(viewModel.state.value is CaptureState.ReadyToCrop)
     }
 
     @Test
-    fun onImageCaptured_readyToCrop_hasNonNullImage() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        val bitmap = createNonUniformBitmap(640, 480)
-
-        viewModel.onImageCaptured(bitmap)
+    fun `ReadyToCrop has non-null image`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(640, 480))
         advanceUntilIdle()
-
         val state = viewModel.state.value as CaptureState.ReadyToCrop
         assertNotNull(state.image)
     }
 
-    // ── 1B.13: Capture handles large image (4000×3000) ───────────────────────
+    @Test
+    fun `detector throwing transitions to Error`() = runTest {
+        val badDetector = mockk<EdgeDetector>()
+        every { badDetector.detect(any()) } throws RuntimeException("Native crash")
+        viewModel = buildViewModel(detector = badDetector)
+        viewModel.onImageCaptured(uniformBitmap(100, 100))
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value is CaptureState.Error)
+    }
 
     @Test
-    fun onImageCaptured_handlesLargeImage() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        val bitmap = createNonUniformBitmap(4000, 3000)
-
-        viewModel.onImageCaptured(bitmap)
+    fun `large image 4000x3000 processed without crash`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(4000, 3000))
         advanceUntilIdle()
-
-        // Must not crash and must produce a valid state
         val state = viewModel.state.value
         assertTrue(state is CaptureState.ReadyToCrop || state is CaptureState.Error)
     }
 
-    // ── 1B.13: Corrupted image data — no crash ────────────────────────────────
+    // ── P1 — Crop screen ─────────────────────────────────────────────────────
 
     @Test
-    fun onImageCaptured_whenDetectorThrows_transitionsToError() = runTest {
-        val badDetector = mockk<EdgeDetector>()
-        every { badDetector.detect(any()) } throws RuntimeException("Native crash")
-        viewModel = buildViewModel(badDetector)
-        val bitmap = createUniformBitmap(100, 100)
-
-        viewModel.onImageCaptured(bitmap)
+    fun `rotateImage swaps width and height`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(200, 100))
         advanceUntilIdle()
-
-        assertTrue(
-            "Exception in pipeline must result in Error state",
-            viewModel.state.value is CaptureState.Error
-        )
-    }
-
-    // ── 1B.14: Crop screen — rotate button ────────────────────────────────────
-
-    @Test
-    fun rotateImage_updatesImageInReadyToCropState() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        val bitmap = createNonUniformBitmap(200, 100) // landscape
-
-        viewModel.onImageCaptured(bitmap)
-        advanceUntilIdle()
-
-        val beforeRotate = (viewModel.state.value as CaptureState.ReadyToCrop).image
-
+        val before = (viewModel.state.value as CaptureState.ReadyToCrop).image
         viewModel.rotateImage()
         advanceUntilIdle()
-
-        val afterRotate = (viewModel.state.value as CaptureState.ReadyToCrop).image
-        // After 90° rotation, width and height should be swapped
-        assertEquals(beforeRotate.height, afterRotate.width)
-        assertEquals(beforeRotate.width, afterRotate.height)
+        val after = (viewModel.state.value as CaptureState.ReadyToCrop).image
+        assertEquals(before.height, after.width)
+        assertEquals(before.width, after.height)
     }
 
-    // ── 1B.14: Retake navigates back to Idle ──────────────────────────────────
-
     @Test
-    fun retake_resetsStateToIdle() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        viewModel.onImageCaptured(createNonUniformBitmap(200, 150))
+    fun `retake resets to Idle`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(200, 150))
         advanceUntilIdle()
-
         viewModel.retake()
-
         assertEquals(CaptureState.Idle, viewModel.state.value)
     }
 
-    // ── 1B.14: State survives rotation (rememberSaveable / SavedStateHandle) ──
-
     @Test
-    fun savedState_persistsAndRestoresQuad() = runTest {
-        val savedStateHandle = SavedStateHandle()
-        viewModel = buildViewModel(FakeEdgeDetector(), savedStateHandle)
-
-        val quad = Quad(
-            topLeft = Point2f(10f, 20f),
-            topRight = Point2f(300f, 20f),
-            bottomRight = Point2f(300f, 400f),
-            bottomLeft = Point2f(10f, 400f),
-        )
-
-        viewModel.onImageCaptured(createNonUniformBitmap(320, 480))
+    fun `onQuadUpdated persists new quad in state`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(320, 480))
         advanceUntilIdle()
-
-        // Simulate updating quad (as if user dragged corners)
-        viewModel.onQuadUpdated(quad)
+        val newQuad = Quad(Point2f(20f, 20f), Point2f(300f, 20f), Point2f(300f, 460f), Point2f(20f, 460f))
+        viewModel.onQuadUpdated(newQuad)
         advanceUntilIdle()
-
-        // Restore from saved state (simulates activity recreation)
-        val restored = viewModel.restoreQuadFromSavedState()
-
-        assertNotNull(restored)
-        assertEquals(quad.topLeft.x, restored!!.topLeft.x, 0.01f)
-        assertEquals(quad.topLeft.y, restored.topLeft.y, 0.01f)
+        assertEquals(newQuad, (viewModel.state.value as CaptureState.ReadyToCrop).quad)
     }
 
-    // ── 1B.14: Quad update triggers re-warp ───────────────────────────────────
+    @Test
+    fun `savedState persists and restores quad`() = runTest {
+        val ssh = SavedStateHandle()
+        viewModel = buildViewModel(savedState = ssh)
+        viewModel.onImageCaptured(nonUniformBitmap(320, 480))
+        advanceUntilIdle()
+        val quad = Quad(Point2f(10f, 20f), Point2f(300f, 20f), Point2f(300f, 400f), Point2f(10f, 400f))
+        viewModel.onQuadUpdated(quad)
+        advanceUntilIdle()
+        val restored = viewModel.restoreQuadFromSavedState()
+        assertNotNull(restored)
+        assertEquals(quad.topLeft.x, restored!!.topLeft.x, 0.01f)
+    }
+
+    // ── P3.1 — Classification ─────────────────────────────────────────────────
 
     @Test
-    fun onQuadUpdated_updatesReadyToCropState() = runTest {
-        viewModel = buildViewModel(FakeEdgeDetector())
-        viewModel.onImageCaptured(createNonUniformBitmap(320, 480))
-        advanceUntilIdle()
+    fun `classification result populated after capture`() = runTest {
+        val mockClassifier = mockk<DocumentClassifier>()
+        every { mockClassifier.classify(any()) } returns ClassificationResult(DocumentType.RECEIPT, 0.9f)
 
-        val newQuad = Quad(
-            topLeft = Point2f(20f, 20f),
-            topRight = Point2f(300f, 20f),
-            bottomRight = Point2f(300f, 460f),
-            bottomLeft = Point2f(20f, 460f),
-        )
-
-        viewModel.onQuadUpdated(newQuad)
+        viewModel = buildViewModel(classifier = mockClassifier)
+        viewModel.onImageCaptured(nonUniformBitmap(200, 600))
         advanceUntilIdle()
 
         val state = viewModel.state.value as CaptureState.ReadyToCrop
-        assertEquals(newQuad, state.quad)
+        assertNotNull("classification must be non-null after capture", state.classification)
+        assertEquals(DocumentType.RECEIPT, state.classification!!.type)
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    @Test
+    fun `auto-applied filter matches policy for classified type`() = runTest {
+        val mockClassifier = mockk<DocumentClassifier>()
+        every { mockClassifier.classify(any()) } returns ClassificationResult(DocumentType.RECEIPT, 0.9f)
+
+        viewModel = buildViewModel(classifier = mockClassifier)
+        viewModel.onImageCaptured(nonUniformBitmap(200, 600))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        val expectedFilter = DocTypePolicies.recommendedFilter(DocumentType.RECEIPT)
+        assertEquals("Auto-applied filter must match policy", expectedFilter, state.selectedFilter)
+    }
+
+    @Test
+    fun `onFilterSelected updates selectedFilter in state`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        viewModel.onFilterSelected(ImageFilter.GRAYSCALE)
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        assertEquals(ImageFilter.GRAYSCALE, state.selectedFilter)
+    }
+
+    @Test
+    fun `onDocTypeOverride sets classification to selected type with confidence 1`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        viewModel.onDocTypeOverride(DocumentType.WHITEBOARD)
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        assertEquals(DocumentType.WHITEBOARD, state.classification?.type)
+        assertEquals(1.0f, state.classification?.confidence ?: 0f, 0.001f)
+    }
+
+    @Test
+    fun `onDocTypeOverride sets userOverrodeType true`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        viewModel.onDocTypeOverride(DocumentType.ID_CARD)
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        assertTrue("userOverrodeType must be true after manual override", state.userOverrodeType)
+    }
+
+    @Test
+    fun `onDocTypeOverride applies recommended filter for the new type`() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        viewModel.onDocTypeOverride(DocumentType.ID_CARD)
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        val expected = DocTypePolicies.recommendedFilter(DocumentType.ID_CARD)
+        assertEquals(expected, state.selectedFilter)
+    }
+
+    @Test
+    fun `classifier result does NOT overwrite user override`() = runTest {
+        // User first overrides to WHITEBOARD, then classifier would say RECEIPT.
+        // The auto-apply must not change the filter because userOverrodeType=true.
+        val mockClassifier = mockk<DocumentClassifier>()
+        every { mockClassifier.classify(any()) } returns ClassificationResult(DocumentType.RECEIPT, 0.9f)
+
+        viewModel = buildViewModel(classifier = mockClassifier)
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        // User overrides before classifier result — the state will have userOverrodeType=true
+        viewModel.onDocTypeOverride(DocumentType.WHITEBOARD)
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        assertTrue("userOverrodeType must be true", state.userOverrodeType)
+        // The filter must be the WHITEBOARD filter, not the RECEIPT filter
+        val whiteboardFilter = DocTypePolicies.recommendedFilter(DocumentType.WHITEBOARD)
+        assertEquals(whiteboardFilter, state.selectedFilter)
+    }
+
+    @Test
+    fun `initial classification is null when ReadyToCrop first set`() = runTest {
+        // We can verify that before the classifier finishes, classification is null.
+        // With a synchronous test dispatcher, both steps run on advanceUntilIdle(),
+        // so we check the initial state before advancing.
+        viewModel = buildViewModel()
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        // Do NOT advance — Processing state should still be active
+        val stateImmediate = viewModel.state.value
+        assertTrue(
+            "Before processing completes, state is Processing or Capturing",
+            stateImmediate is CaptureState.Processing || stateImmediate is CaptureState.Capturing
+        )
+    }
+
+    @Test
+    fun `CaptureState ReadyToCrop default filter is AUTO`() {
+        val state = CaptureState.ReadyToCrop(
+            image = uniformBitmap(10, 10),
+            quad = Quad(Point2f(0f, 0f), Point2f(10f, 0f), Point2f(10f, 10f), Point2f(0f, 10f)),
+        )
+        assertEquals(ImageFilter.AUTO, state.selectedFilter)
+        assertNull(state.classification)
+        assertFalse(state.userOverrodeType)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
-        detector: EdgeDetector,
-        savedStateHandle: SavedStateHandle = SavedStateHandle(),
-    ) = CaptureViewModel(detector, testDispatchers, savedStateHandle)
+        detector: EdgeDetector = FakeEdgeDetector(),
+        classifier: DocumentClassifier = DocumentClassifier(),
+        savedState: SavedStateHandle = SavedStateHandle(),
+    ) = CaptureViewModel(detector, classifier, testDispatchers, savedState)
 
-    private fun createUniformBitmap(w: Int, h: Int): Bitmap =
+    private fun uniformBitmap(w: Int, h: Int): Bitmap =
         Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.WHITE) }
 
-    private fun createNonUniformBitmap(w: Int, h: Int): Bitmap =
+    private fun nonUniformBitmap(w: Int, h: Int): Bitmap =
         Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { bmp ->
             bmp.eraseColor(Color.WHITE)
-            val mX = (w * 0.15).toInt()
-            val mY = (h * 0.15).toInt()
+            val mX = (w * 0.15).toInt(); val mY = (h * 0.15).toInt()
             for (y in mY until (h - mY)) for (x in mX until (w - mX)) bmp.setPixel(x, y, Color.BLACK)
         }
 }

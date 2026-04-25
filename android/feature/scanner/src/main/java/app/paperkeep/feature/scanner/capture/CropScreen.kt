@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,8 +41,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.paperkeep.core.imaging.ImageFilter
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.imaging.FilterPreviewStrip
 
 // Test tags
 const val TAG_CROP_SCREEN = "crop_screen"
@@ -54,15 +55,18 @@ const val TAG_CORNER_BL = "corner_handle_bl"
 const val TAG_ROTATE_BUTTON = "rotate_button"
 const val TAG_RETAKE_BUTTON = "retake_button"
 const val TAG_NEXT_BUTTON = "next_button"
+const val TAG_FILTER_STRIP = "filter_preview_strip"
 
 private val HandleRadius = 14.dp
-private val HandleColor = Color(0xFFFFB020) // ScanAmber
+private val HandleColor = Color(0xFFFFB020) // Saffron brand colour
 
 /**
- * Manual crop screen (1B.14).
+ * Crop screen — shown after document capture (P1.10 + P3.1).
  *
- * Shows the captured image with 4 draggable corner handles for precise quad adjustment.
- * State (quad corners) is preserved through rotation via [rememberSaveable].
+ * Phase 3.1 additions:
+ *  - [DocTypeChip] showing the detected document type with a tappable override
+ *  - [FilterPreviewStrip] at the bottom for manual filter selection
+ *  - Auto-applied filter from the classifier policy
  */
 @Composable
 fun CropScreen(
@@ -85,6 +89,8 @@ fun CropScreen(
                     onRotate = viewModel::rotateImage,
                     onRetake = viewModel::retake,
                     onNext = onNext,
+                    onFilterSelected = viewModel::onFilterSelected,
+                    onDocTypeOverride = viewModel::onDocTypeOverride,
                 )
             }
             is CaptureState.Processing,
@@ -92,7 +98,6 @@ fun CropScreen(
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
             else -> {
-                // Idle / Error — should not normally be shown on this screen
                 Text(
                     text = "No image to crop",
                     modifier = Modifier.align(Alignment.Center),
@@ -109,8 +114,9 @@ private fun CropContent(
     onRotate: () -> Unit,
     onRetake: () -> Unit,
     onNext: () -> Unit,
+    onFilterSelected: (ImageFilter) -> Unit,
+    onDocTypeOverride: (app.paperkeep.core.ml.DocumentType) -> Unit,
 ) {
-    // Quad corners saved through rotation via rememberSaveable
     var tlX by rememberSaveable { mutableStateOf(state.quad.topLeft.x) }
     var tlY by rememberSaveable { mutableStateOf(state.quad.topLeft.y) }
     var trX by rememberSaveable { mutableStateOf(state.quad.topRight.x) }
@@ -131,6 +137,19 @@ private fun CropContent(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // ── DocType chip row ───────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DocTypeChip(
+                classification = state.classification,
+                onTypeOverride = onDocTypeOverride,
+            )
+        }
+
         // ── Image canvas with draggable corner handles ──────────────────────
         Box(
             modifier = Modifier
@@ -140,7 +159,6 @@ private fun CropContent(
         ) {
             val bitmap = state.image
 
-            // Background image
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val bmp = bitmap.asImageBitmap()
                 val scaleX = size.width / bitmap.width
@@ -148,61 +166,42 @@ private fun CropContent(
                 val scale = minOf(scaleX, scaleY)
                 val offsetX = (size.width - bitmap.width * scale) / 2f
                 val offsetY = (size.height - bitmap.height * scale) / 2f
-
-                drawImage(
-                    image = bmp,
-                    topLeft = Offset(offsetX, offsetY),
-                )
+                drawImage(image = bmp, topLeft = Offset(offsetX, offsetY))
             }
 
-            // Quad outline
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(tlX, tlY)
-                    lineTo(trX, trY)
-                    lineTo(brX, brY)
-                    lineTo(blX, blY)
-                    close()
+                    moveTo(tlX, tlY); lineTo(trX, trY); lineTo(brX, brY); lineTo(blX, blY); close()
                 }
                 drawPath(path, color = HandleColor.copy(alpha = 0.7f), style = Stroke(width = 2.dp.toPx()))
             }
 
-            // Corner handle: Top-Left
-            CornerHandle(
-                x = tlX, y = tlY,
-                tag = TAG_CORNER_TL,
-                contentDescription = "Top-left corner handle",
-                onDrag = { dx, dy -> tlX += dx; tlY += dy; onQuadUpdated(currentQuad()) },
-            )
+            CornerHandle(x = tlX, y = tlY, tag = TAG_CORNER_TL, contentDescription = "Top-left corner handle",
+                onDrag = { dx, dy -> tlX += dx; tlY += dy; onQuadUpdated(currentQuad()) })
 
-            // Corner handle: Top-Right
-            CornerHandle(
-                x = trX, y = trY,
-                tag = TAG_CORNER_TR,
-                contentDescription = "Top-right corner handle",
-                onDrag = { dx, dy -> trX += dx; trY += dy; onQuadUpdated(currentQuad()) },
-            )
+            CornerHandle(x = trX, y = trY, tag = TAG_CORNER_TR, contentDescription = "Top-right corner handle",
+                onDrag = { dx, dy -> trX += dx; trY += dy; onQuadUpdated(currentQuad()) })
 
-            // Corner handle: Bottom-Right
-            CornerHandle(
-                x = brX, y = brY,
-                tag = TAG_CORNER_BR,
-                contentDescription = "Bottom-right corner handle",
-                onDrag = { dx, dy -> brX += dx; brY += dy; onQuadUpdated(currentQuad()) },
-            )
+            CornerHandle(x = brX, y = brY, tag = TAG_CORNER_BR, contentDescription = "Bottom-right corner handle",
+                onDrag = { dx, dy -> brX += dx; brY += dy; onQuadUpdated(currentQuad()) })
 
-            // Corner handle: Bottom-Left
-            CornerHandle(
-                x = blX, y = blY,
-                tag = TAG_CORNER_BL,
-                contentDescription = "Bottom-left corner handle",
-                onDrag = { dx, dy -> blX += dx; blY += dy; onQuadUpdated(currentQuad()) },
-            )
+            CornerHandle(x = blX, y = blY, tag = TAG_CORNER_BL, contentDescription = "Bottom-left corner handle",
+                onDrag = { dx, dy -> blX += dx; blY += dy; onQuadUpdated(currentQuad()) })
         }
 
-        // ── Bottom controls ────────────────────────────────────────────────
-        Spacer(modifier = Modifier.height(16.dp))
+        // ── Filter preview strip (P2.7 + P3.1 wire-up) ────────────────────────
+        Spacer(modifier = Modifier.height(8.dp))
+        FilterPreviewStrip(
+            sourceBitmap = state.image,
+            selectedFilter = state.selectedFilter,
+            onFilterSelected = onFilterSelected,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TAG_FILTER_STRIP),
+        )
 
+        // ── Bottom controls ────────────────────────────────────────────────────
+        Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -238,15 +237,10 @@ private fun CropContent(
                 Text("Next")
             }
         }
-
         Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
-/**
- * A single draggable corner handle drawn as an amber circle.
- * The drag gesture updates [x],[y] and calls [onDrag] with the delta.
- */
 @Composable
 private fun CornerHandle(
     x: Float,
@@ -255,7 +249,7 @@ private fun CornerHandle(
     contentDescription: String,
     onDrag: (dx: Float, dy: Float) -> Unit,
 ) {
-    val handleSize = 48.dp // meets min touch target
+    val handleSize = 48.dp
     Canvas(
         modifier = Modifier
             .size(handleSize)
@@ -268,15 +262,7 @@ private fun CornerHandle(
                 }
             },
     ) {
-        drawCircle(
-            color = HandleColor,
-            radius = HandleRadius.toPx(),
-            center = Offset(size.width / 2f, size.height / 2f),
-        )
-        drawCircle(
-            color = Color.White,
-            radius = HandleRadius.toPx() * 0.4f,
-            center = Offset(size.width / 2f, size.height / 2f),
-        )
+        drawCircle(color = HandleColor, radius = HandleRadius.toPx(), center = Offset(size.width / 2f, size.height / 2f))
+        drawCircle(color = Color.White, radius = HandleRadius.toPx() * 0.4f, center = Offset(size.width / 2f, size.height / 2f))
     }
 }

@@ -7,9 +7,14 @@ import androidx.lifecycle.viewModelScope
 import app.paperkeep.core.common.AppDispatchers
 import app.paperkeep.core.imaging.DetectionResult
 import app.paperkeep.core.imaging.EdgeDetector
+import app.paperkeep.core.imaging.ImageFilter
 import app.paperkeep.core.imaging.PerspectiveTransform
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.ml.ClassificationResult
+import app.paperkeep.core.ml.DocTypePolicies
+import app.paperkeep.core.ml.DocumentClassifier
+import app.paperkeep.core.ml.DocumentType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,15 +24,18 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Owns the capture pipeline (1B.13) and the crop screen state (1B.14).
+ * Owns the capture pipeline (P1.9), crop screen state (P1.10), and document
+ * classification (P3.1).
  *
- * All image processing runs on [AppDispatchers.default] — never the main thread.
- * [SavedStateHandle] is used so the crop quad survives process death / rotation
- * (state serialisation uses primitive Float values).
+ * Classification runs concurrently with the crop screen display so the user
+ * can immediately start adjusting corners while the classifier runs in the
+ * background. When the result arrives, the recommended filter is applied
+ * UNLESS the user has already manually changed the filter.
  */
 @HiltViewModel
 class CaptureViewModel @Inject constructor(
     private val edgeDetector: EdgeDetector,
+    private val classifier: DocumentClassifier,
     private val dispatchers: AppDispatchers,
     private val savedState: SavedStateHandle,
 ) : ViewModel() {
@@ -35,12 +43,8 @@ class CaptureViewModel @Inject constructor(
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
 
-    // ── 1B.13: Capture pipeline ────────────────────────────────────────────────
+    // ── Capture pipeline ──────────────────────────────────────────────────────
 
-    /**
-     * Entry point called when the user taps the capture button.
-     * [bitmap] is the full-resolution image from CameraX ImageCapture.
-     */
     fun onImageCaptured(bitmap: Bitmap) {
         _state.value = CaptureState.Processing(bitmap)
 
@@ -51,12 +55,31 @@ class CaptureViewModel @Inject constructor(
                     is DetectionResult.Found -> result.corners
                     DetectionResult.NotFound -> fullImageQuad(bitmap)
                 }
-
                 val warped = PerspectiveTransform.warp(bitmap, quad)
 
                 withContext(dispatchers.main) {
                     persistQuad(quad)
-                    _state.value = CaptureState.ReadyToCrop(warped, quad)
+                    _state.value = CaptureState.ReadyToCrop(
+                        image = warped,
+                        quad = quad,
+                        classification = null,
+                        selectedFilter = ImageFilter.AUTO,
+                    )
+                }
+
+                // Classification runs concurrently — does not block the crop screen
+                val classResult = classifier.classify(warped)
+                val policy = DocTypePolicies.forType(classResult.type)
+
+                withContext(dispatchers.main) {
+                    val current = _state.value as? CaptureState.ReadyToCrop ?: return@withContext
+                    // Only auto-apply the filter if the user hasn't manually changed it
+                    val filter = if (current.userOverrodeType) current.selectedFilter
+                                 else policy.recommendedFilter
+                    _state.value = current.copy(
+                        classification = classResult,
+                        selectedFilter = filter,
+                    )
                 }
             } catch (e: Exception) {
                 withContext(dispatchers.main) {
@@ -66,16 +89,10 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    // ── 1B.14: Manual crop / quad adjustment ──────────────────────────────────
+    // ── Crop / quad adjustment ────────────────────────────────────────────────
 
-    /**
-     * Called when the user drags a corner on the crop screen.
-     * Updates the current quad and re-warps the preview at reduced resolution.
-     */
     fun onQuadUpdated(newQuad: Quad) {
-        val current = _state.value
-        if (current !is CaptureState.ReadyToCrop) return
-
+        val current = _state.value as? CaptureState.ReadyToCrop ?: return
         viewModelScope.launch(dispatchers.default) {
             val rewarped = PerspectiveTransform.warp(current.image, newQuad)
             withContext(dispatchers.main) {
@@ -85,11 +102,8 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    /** Rotate the current cropped image 90° clockwise. */
     fun rotateImage() {
-        val current = _state.value
-        if (current !is CaptureState.ReadyToCrop) return
-
+        val current = _state.value as? CaptureState.ReadyToCrop ?: return
         viewModelScope.launch(dispatchers.default) {
             val rotated = PerspectiveTransform.rotate(current.image, 90)
             withContext(dispatchers.main) {
@@ -98,13 +112,41 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    /** Go back to the camera — discard the current capture. */
     fun retake() {
         _state.value = CaptureState.Idle
         savedState.remove<FloatArray>(KEY_QUAD)
     }
 
-    // ── SavedStateHandle persistence (survives rotation) ──────────────────────
+    // ── Filter override (user taps filter strip) ──────────────────────────────
+
+    /**
+     * Called when the user explicitly selects a filter from the preview strip.
+     * Sets [CaptureState.ReadyToCrop.userOverrodeType] = false because this only
+     * changes the filter, not the document type.
+     */
+    fun onFilterSelected(filter: ImageFilter) {
+        val current = _state.value as? CaptureState.ReadyToCrop ?: return
+        _state.value = current.copy(selectedFilter = filter)
+    }
+
+    // ── Document type override (user taps DocTypeChip and picks a type) ───────
+
+    /**
+     * Called when the user selects a document type from the chip picker overlay.
+     * Auto-applies the recommended filter for [type] and marks the state as
+     * user-overridden so future classifier updates don't overwrite the choice.
+     */
+    fun onDocTypeOverride(type: DocumentType) {
+        val current = _state.value as? CaptureState.ReadyToCrop ?: return
+        val policy = DocTypePolicies.forType(type)
+        _state.value = current.copy(
+            classification = ClassificationResult(type, 1.0f),
+            selectedFilter = policy.recommendedFilter,
+            userOverrodeType = true,
+        )
+    }
+
+    // ── SavedStateHandle persistence ──────────────────────────────────────────
 
     private fun persistQuad(quad: Quad) {
         savedState[KEY_QUAD] = floatArrayOf(
@@ -126,7 +168,7 @@ class CaptureViewModel @Inject constructor(
         )
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun fullImageQuad(bitmap: Bitmap): Quad {
         val w = bitmap.width.toFloat()

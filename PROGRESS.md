@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-24)
 
-**Status:** Phase 1 complete — onboarding copy locked per §7, settings screen with Backup placeholder, camera/crop verified, AES-256-GCM instrumented tests added, zero-network static analysis, benchmark baselines created.
-**Last session:** 2026-04-25 — P2.11–P2.15 complete. Phase 2 done. 900 total tests, 0 new failures (25 pre-existing core:ui).
-**Next task:** `P3.1` — TFLite document-type classifier
+**Status:** Phase 2 complete. Phase 3 started — P3.1 done.
+**Last session:** 2026-04-25 — P3.1 complete. TFLite classifier stub + multi-feature heuristic (6 types), DocTypeChip on crop screen, filter auto-apply, DocTypePolicy, all tests green (full suite BUILD SUCCESSFUL).
+**Next task:** `P3.2` — ID card mode: front + back auto-composed on a single A4 page.
 
 ### What exists from v1 that survives the pivot
 
@@ -114,7 +114,7 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 > **Depends on:** Phase 2 complete
 > **Goal:** Features that beat CamScanner + monetization wired up + Play Store assets ready.
 
-- [ ] **P3.1** — TFLite document-type classifier: receipt / ID / business card / A4 / whiteboard / book. Chip on crop screen, tappable override. Auto-applies best filter + aspect.
+- [x] **P3.1** — TFLite document-type classifier: receipt / ID / business card / A4 / whiteboard / book. Chip on crop screen, tappable override. Auto-applies best filter + aspect. ✅ 2026-04-25 — multi-feature heuristic (aspect/edge/luminance/saturation/contrast), DocTypeChip, DocTypePolicy, 61 new tests all green.
 - [ ] **P3.2** — ID card mode: front + back auto-composed on a single A4 page.
 - [ ] **P3.3** — Receipt mode: taller aspect, aggressive B&W, regex-extract total/date/merchant into searchable fields.
 - [ ] **P3.4** — Whiteboard mode: glare removal via OpenCV `inpaint`, HSV marker boost, hand/shadow removal.
