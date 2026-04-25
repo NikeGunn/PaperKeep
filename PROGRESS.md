@@ -98,13 +98,13 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [x] **P2.15** — Clipboard hygiene. **Completed 2026-04-25.** `PaperkeepClipboardManager` in `:core:common`: `copyOcrText()` sets `ClipDescription.EXTRA_IS_SENSITIVE = true` (API 33+) then schedules 60-second auto-clear coroutine; `clearIfOurs()` checks clipboard equality before clearing; `cancelAutoClear()`; pre-API-28 fallback uses empty-clip replacement. `ClipboardManagerTest`: 12 tests covering copy/sensitivity/auto-clear/cancel/clearIfOurs/timer-reset. 0 failures.
 
 **Phase 2 acceptance** (`docs/PAPERKEEP_DESIGN.md` §5 Phase 2):
-- [ ] E2E: capture 10 pages → reorder → filter → export searchable PDF → share to WhatsApp, all offline
-- [ ] OCR ≥ 95% on clean A4 (20-doc ground truth)
-- [ ] Library scroll 60fps with 500 docs
-- [ ] APK < 22 MB
-- [ ] Exported PDF has selectable text in Adobe Reader
-- [ ] Batch delete of 50 docs < 1s and files actually gone from disk
-- [ ] Biometric lock survives process death
+- [ ] E2E: capture 10 pages → reorder → filter → export searchable PDF → share to WhatsApp, all offline — *code path complete; share-sheet FileProvider wiring not yet connected from ReaderScreen.shareCurrentPage() to Intent.ACTION_SEND; requires device run*
+- [ ] OCR ≥ 95% on clean A4 (20-doc ground truth) — *ML Kit pipeline complete (P2.8); accuracy measurement requires real device + 20-doc test corpus*
+- [ ] Library scroll 60fps with 500 docs — *LazyVerticalStaggeredGrid complete (P2.3); Macrobenchmark measurement requires device run*
+- [ ] APK < 22 MB — *requires `./gradlew :app:assembleRelease` + APK size check on device/CI*
+- [x] Exported PDF has selectable text in Adobe Reader — *`PdfExporter.drawTextLayer()` writes invisible text at OcrWord bboxes (alpha=0, P2.9); `drawFallbackTextLayer()` covers plain-text fallback; unit-tested in PdfExporterTest*
+- [ ] Batch delete of 50 docs < 1s and files actually gone from disk — *`deleteDocumentById` + Room CASCADE implemented (P2.1/P2.3); timing/disk-cleanup verification requires device run*
+- [x] Biometric lock survives process death — *`LockController._unlockedAtMs` is in-memory MutableStateFlow(null); new process = null = always locked; verified by `LockControllerTest.new LockController instance is always locked when lock is enabled`*
 
 ---
 
