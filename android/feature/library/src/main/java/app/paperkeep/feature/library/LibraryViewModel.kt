@@ -7,19 +7,23 @@ import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.DocumentSort
 import app.paperkeep.core.domain.model.Folder
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+
+private const val FOLDER_FAVORITES = "favorites"
+private const val FOLDER_ARCHIVE = "archive"
 
 data class LibraryUiState(
     val documents: List<Document> = emptyList(),
@@ -33,8 +37,10 @@ data class LibraryUiState(
     val isSearchActive: Boolean = false,
 ) {
     val isMultiSelect: Boolean get() = selectedIds.isNotEmpty()
+
     /** Documents shown in the current view: search results when active, full list otherwise. */
-    val visibleDocuments: List<Document> get() = if (isSearchActive) searchResults else documents
+    val visibleDocuments: List<Document>
+        get() = if (isSearchActive) searchResults else documents
 }
 
 @HiltViewModel
@@ -50,8 +56,18 @@ class LibraryViewModel @Inject constructor(
     private val _searchResults = MutableStateFlow<List<Document>>(emptyList())
     private val _isSearchActive = MutableStateFlow(false)
 
-    private val documents: StateFlow<List<Document>> = _sort
-        .flatMapLatest { sort -> repo.observeDocuments(sort) }
+    private val documents: StateFlow<List<Document>> = combine(
+        _sort,
+        _activeFolderId,
+    ) { sort, folderId -> sort to folderId }
+        .flatMapLatest { (sort, folderId) ->
+            when (folderId) {
+                null -> repo.observeDocuments(sort)
+                FOLDER_FAVORITES -> repo.observeFavorites()
+                FOLDER_ARCHIVE -> repo.observeArchived()
+                else -> repo.observeByFolder(folderId)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val folders: StateFlow<List<Folder>> = repo.observeFolders()
@@ -97,7 +113,13 @@ class LibraryViewModel @Inject constructor(
                     _isSearchActive.value = false
                 } else {
                     _isSearchActive.value = true
-                    _searchResults.value = repo.searchDocuments(query)
+                    // Merge title-FTS results with HMAC'd OCR-FTS results (de-duplicated by id)
+                    val titleResults = repo.searchDocuments(query)
+                    val ocrResults = repo.searchByOcrContent(query)
+                    val merged = (titleResults + ocrResults)
+                        .distinctBy { it.id }
+                        .sortedByDescending { it.createdAt }
+                    _searchResults.value = merged
                 }
             }
             .launchIn(viewModelScope)
@@ -118,7 +140,6 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun refresh() {
-        // Room is reactive — just toggle the refreshing indicator briefly.
         viewModelScope.launch {
             _isRefreshing.value = true
             kotlinx.coroutines.delay(300)
@@ -134,6 +155,26 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    fun favoriteSelected() {
+        viewModelScope.launch {
+            val ids = _selectedIds.value.toList()
+            val currentDocs = documents.value
+            ids.forEach { id ->
+                val doc = currentDocs.firstOrNull { it.id == id } ?: return@forEach
+                repo.setFavorite(id, !doc.isFavorite)
+            }
+            clearSelection()
+        }
+    }
+
+    fun archiveSelected() {
+        viewModelScope.launch {
+            val ids = _selectedIds.value.toList()
+            ids.forEach { repo.setArchived(it, true) }
+            clearSelection()
+        }
+    }
+
     fun moveSelectedToFolder(folderId: String?) {
         viewModelScope.launch {
             _selectedIds.value.forEach { id ->
@@ -145,6 +186,7 @@ class LibraryViewModel @Inject constructor(
 
     fun setActiveFolder(folderId: String?) {
         _activeFolderId.value = folderId
+        clearSelection()
     }
 
     fun createFolder(name: String) {

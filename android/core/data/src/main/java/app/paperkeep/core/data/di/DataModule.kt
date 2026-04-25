@@ -43,6 +43,7 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_2_3,
                     PaperkeepDatabase.MIGRATION_3_4,
                     PaperkeepDatabase.MIGRATION_4_5,
+                    PaperkeepDatabase.MIGRATION_5_6,
                 )
                 .build()
 

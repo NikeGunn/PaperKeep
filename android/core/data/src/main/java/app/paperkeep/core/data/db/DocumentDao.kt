@@ -166,7 +166,7 @@ interface DocumentDao {
     @Query("SELECT COUNT(*) FROM folders")
     suspend fun countFolders(): Int
 
-    // ── Full-text search (FTS4) ───────────────────────────────────────────────
+    // ── Full-text search (FTS4 — title/OCR plaintext) ────────────────────────
     //
     // These use @RawQuery to bypass Room's compile-time validation for the FTS4
     // virtual table. Always pre-sanitise the FTS expression before calling these
@@ -181,4 +181,25 @@ interface DocumentDao {
 
     @RawQuery
     suspend fun rebuildFtsIndexRaw(query: SimpleSQLiteQuery): Int
+
+    // ── HMAC'd OCR FTS4 (page_ocr_fts) ───────────────────────────────────────
+    //
+    // The page_ocr_fts virtual table stores opaque HMAC tokens per §6.4.
+    // Callers must supply pre-HMAC'd token strings — never raw user text.
+
+    /** Upsert the HMAC token row for [pageId]. */
+    @RawQuery
+    suspend fun upsertOcrFtsRowRaw(query: SimpleSQLiteQuery): Int
+
+    /** Delete the HMAC token row for [pageId] (called when a page is deleted). */
+    @RawQuery
+    suspend fun deleteOcrFtsRowRaw(query: SimpleSQLiteQuery): Int
+
+    /**
+     * Search page_ocr_fts for documents whose OCR tokens MATCH the expression.
+     * Returns the matching document rows (via JOIN pages → documents).
+     */
+    @Transaction
+    @RawQuery(observedEntities = [DocumentEntity::class])
+    suspend fun searchByOcrFtsRaw(query: SimpleSQLiteQuery): List<DocumentWithPages>
 }

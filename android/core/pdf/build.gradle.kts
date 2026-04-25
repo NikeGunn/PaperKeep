@@ -39,6 +39,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // Argon2id KDF for encrypted ZIP export (§6.1)
+    implementation(libs.argon2.jvm)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

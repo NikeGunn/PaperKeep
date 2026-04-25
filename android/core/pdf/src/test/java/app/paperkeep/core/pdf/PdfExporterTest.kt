@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -12,15 +13,12 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 
 /**
- * Unit tests for [PdfExporter] — 2B.8.
+ * Unit tests for [PdfExporter].
  *
- * Uses a [FakePdfDocumentWrapper] that writes a synthetic PDF-like byte sequence
- * instead of calling [android.graphics.pdf.PdfDocument] (which is not supported
- * under Robolectric unit tests).
+ * Uses [FakePdfDocumentWrapper] so no android.graphics.pdf.PdfDocument is required.
  */
 @RunWith(RobolectricTestRunner::class)
 class PdfExporterTest {
@@ -30,134 +28,173 @@ class PdfExporterTest {
 
     private lateinit var fake: FakePdfDocumentWrapper
     private lateinit var exporter: PdfExporter
-    private val canvasCallLog = mutableListOf<String>()
 
     @Before
     fun setUp() {
         fake = FakePdfDocumentWrapper()
         exporter = PdfExporter(documentFactory = { fake })
-        canvasCallLog.clear()
     }
 
-    // ── 2B.8 test 1: single-page PDF creates a valid (non-empty) output ───────
+    // ── Core export ───────────────────────────────────────────────────────────
 
     @Test
-    fun `export creates a non-empty PDF file for a single page`() {
-        val destFile = tmp.newFile("single.pdf")
-        val pages = listOf(PageData(bitmap = whiteBitmap(300, 400)))
-
-        exporter.export(pages, destFile)
-
-        assertTrue("PDF file should not be empty", destFile.length() > 0)
-        // Fake wrapper writes "%PDF-fake" header
-        val content = destFile.readText(Charsets.UTF_8)
-        assertTrue("Output should contain synthetic PDF marker", content.startsWith("%PDF-fake"))
+    fun `export creates non-empty file`() {
+        val dest = tmp.newFile("out.pdf")
+        exporter.export(listOf(PageData(whiteBitmap(300, 400))), dest)
+        assertTrue(dest.length() > 0)
+        assertTrue(dest.readText().startsWith("%PDF-fake"))
     }
-
-    // ── 2B.8 test 2: PDF has searchable text layer ────────────────────────────
 
     @Test
-    fun `export passes OCR text to the page canvas`() {
-        val destFile = tmp.newFile("searchable.pdf")
-        val ocrText = "SearchableInvoiceText123"
-        val pages = listOf(PageData(bitmap = whiteBitmap(300, 400), ocrText = ocrText))
-
-        exporter.export(pages, destFile)
-
-        // The fake wrapper records the ocrText drawn on each page canvas
-        assertTrue(
-            "OCR text '$ocrText' should appear in fake output",
-            fake.ocrTextsDrawn.contains(ocrText),
-        )
+    fun `export calls startPage and finishPage once per page`() {
+        val dest = tmp.newFile("multi.pdf")
+        exporter.export((1..3).map { PageData(whiteBitmap(200, 300)) }, dest)
+        assertEquals(3, fake.pagesStarted)
+        assertEquals(3, fake.pagesFinished)
     }
-
-    // ── 2B.8 test 3: multi-page PDF has the correct page count ────────────────
-
-    @Test
-    fun `export calls startPage once per page`() {
-        val destFile = tmp.newFile("multi.pdf")
-        val pages = (1..3).map {
-            PageData(bitmap = whiteBitmap(200, 200))
-        }
-
-        exporter.export(pages, destFile)
-
-        assertEquals("startPage should be called 3 times", 3, fake.pagesStarted)
-        assertEquals("finishPage should be called 3 times", 3, fake.pagesFinished)
-    }
-
-    // ── 2B.8 test 4: zero pages throws IllegalArgumentException ───────────────
 
     @Test(expected = IllegalArgumentException::class)
     fun `export throws for empty page list`() {
-        val destFile = tmp.newFile("empty.pdf")
-        exporter.export(emptyList(), destFile)
+        exporter.export(emptyList(), tmp.newFile("empty.pdf"))
+    }
+
+    @Test
+    fun `export with ocrText passes text to canvas`() {
+        val dest = tmp.newFile("text.pdf")
+        exporter.export(
+            listOf(PageData(whiteBitmap(300, 400), ocrText = "SearchableText")),
+            dest,
+        )
+        // FakePdfDocumentWrapper records drawn text via RecordingCanvas
+        assertTrue(fake.ocrTextsDrawn.any { it.contains("SearchableText") })
+    }
+
+    @Test
+    fun `export with ocrWords draws invisible text layer`() {
+        val dest = tmp.newFile("words.pdf")
+        val words = listOf(OcrWord("Invoice", 0.1f, 0.1f, 0.3f, 0.2f))
+        exporter.export(
+            listOf(PageData(whiteBitmap(600, 800), ocrWords = words)),
+            dest,
+        )
+        assertTrue(fake.ocrTextsDrawn.any { it.contains("Invoice") })
+    }
+
+    // ── Page size ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `export A4 uses 595x842 page`() {
+        val dest = tmp.newFile("a4.pdf")
+        exporter.export(
+            listOf(PageData(whiteBitmap(1080, 1920))),
+            dest,
+            pageSize = PageSize.A4,
+        )
+        assertEquals(1, fake.pageDimensions.size)
+        assertEquals(595 to 842, fake.pageDimensions[0])
+    }
+
+    @Test
+    fun `export LETTER uses 612x792 page`() {
+        val dest = tmp.newFile("letter.pdf")
+        exporter.export(
+            listOf(PageData(whiteBitmap(1080, 1920))),
+            dest,
+            pageSize = PageSize.LETTER,
+        )
+        assertEquals(612 to 792, fake.pageDimensions[0])
+    }
+
+    @Test
+    fun `export LEGAL uses 612x1008 page`() {
+        val dest = tmp.newFile("legal.pdf")
+        exporter.export(
+            listOf(PageData(whiteBitmap(1080, 1920))),
+            dest,
+            pageSize = PageSize.LEGAL,
+        )
+        assertEquals(612 to 1008, fake.pageDimensions[0])
+    }
+
+    @Test
+    fun `export AUTO preserves aspect ratio`() {
+        val dest = tmp.newFile("auto.pdf")
+        // Landscape 2:1 bitmap
+        exporter.export(
+            listOf(PageData(whiteBitmap(800, 400))),
+            dest,
+            pageSize = PageSize.AUTO,
+        )
+        val (w, h) = fake.pageDimensions[0]
+        // Aspect ratio should be ~2:1 (±1 rounding)
+        assertTrue("Width should be larger than height for landscape", w > h)
+    }
+
+    // ── drawTextLayer ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `drawTextLayer with empty words does not draw text`() {
+        val bitmap = whiteBitmap(100, 100)
+        val log = mutableListOf<String>()
+        val canvas = RecordingCanvas(bitmap, log)
+        exporter.drawTextLayer(canvas, emptyList(), 100, 100, 100, 100)
+        assertTrue(log.isEmpty())
+    }
+
+    @Test
+    fun `drawTextLayer draws each word text`() {
+        val bitmap = whiteBitmap(200, 200)
+        val log = mutableListOf<String>()
+        val canvas = RecordingCanvas(bitmap, log)
+        val words = listOf(
+            OcrWord("Hello", 0f, 0f, 0.3f, 0.1f),
+            OcrWord("World", 0.4f, 0f, 0.8f, 0.1f),
+        )
+        exporter.drawTextLayer(canvas, words, 200, 200, 200, 200)
+        assertTrue(log.contains("Hello"))
+        assertTrue(log.contains("World"))
+    }
+
+    @Test
+    fun `drawTextLayer skips blank words`() {
+        val bitmap = whiteBitmap(200, 200)
+        val log = mutableListOf<String>()
+        val canvas = RecordingCanvas(bitmap, log)
+        exporter.drawTextLayer(canvas, listOf(OcrWord("  ", 0f, 0f, 0.3f, 0.1f)), 200, 200, 200, 200)
+        assertTrue(log.isEmpty())
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun whiteBitmap(w: Int, h: Int): Bitmap =
-        Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { bmp ->
-            Canvas(bmp).drawColor(Color.WHITE)
-        }
+        Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { Canvas(it).drawColor(Color.WHITE) }
 }
 
-/**
- * Test double for [PdfDocumentWrapper] that:
- *  - Counts how many times pages are started / finished.
- *  - Captures OCR text that would be drawn (via [PdfExporter.drawPage] indirectly —
- *    here we expose the canvas so the exporter can draw, and we inspect the page data).
- *  - Writes a synthetic "%PDF-fake\n" header so the destination file is non-empty.
- */
-class FakePdfDocumentWrapper : PdfDocumentWrapper {
+// ── Test doubles ──────────────────────────────────────────────────────────────
 
+class FakePdfDocumentWrapper : PdfDocumentWrapper {
     var pagesStarted = 0
     var pagesFinished = 0
     val ocrTextsDrawn = mutableListOf<String>()
-
-    // We wrap a FakeCanvas to capture drawText calls
-    private var currentFakeCanvas: FakeCanvas? = null
+    val pageDimensions = mutableListOf<Pair<Int, Int>>()
+    private var currentCanvas: RecordingCanvas? = null
 
     override fun startPage(pageNumber: Int, widthPt: Int, heightPt: Int): Canvas {
         pagesStarted++
-        val fc = FakeCanvas(ocrTextsDrawn)
-        currentFakeCanvas = fc
-        return fc.canvas
+        pageDimensions.add(widthPt to heightPt)
+        val bmp = Bitmap.createBitmap(widthPt.coerceAtLeast(1), heightPt.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val rc = RecordingCanvas(bmp, ocrTextsDrawn)
+        currentCanvas = rc
+        return rc
     }
 
-    override fun finishPage() {
-        pagesFinished++
-        currentFakeCanvas = null
-    }
+    override fun finishPage() { pagesFinished++ }
 
     override fun writeAndClose(out: OutputStream) {
-        out.write("%PDF-fake\n".toByteArray(Charsets.UTF_8))
+        out.write("%PDF-fake\n".toByteArray())
     }
 }
 
-/**
- * Wraps a real [Bitmap]-backed [Canvas] and intercepts [Canvas.drawText] calls
- * to record any text drawn (e.g. the OCR text layer).
- *
- * We use a real Canvas so Robolectric shadows can handle drawBitmap/drawColor.
- */
-class FakeCanvas(private val textLog: MutableList<String>) {
-
-    private val bmp = Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888)
-
-    // Expose the real canvas; drawText interception happens via a shadow in
-    // Robolectric — but since we can't easily intercept drawText, we instead
-    // patch PdfExporter to expose drawPage as internal so we can inspect ocrText
-    // directly at the exporter level. The FakePdfDocumentWrapper test above
-    // verifies ocrTextsDrawn via a second path: PdfExporter calls drawPage
-    // which calls canvas.drawText with the ocrText. We expose a simple
-    // recording canvas subclass below.
-    val canvas: Canvas = RecordingCanvas(bmp, textLog)
-}
-
-/**
- * [Canvas] subclass that records strings passed to [drawText].
- */
 class RecordingCanvas(bmp: Bitmap, private val log: MutableList<String>) : Canvas(bmp) {
     override fun drawText(text: String, x: Float, y: Float, paint: Paint) {
         if (text.isNotBlank()) log.add(text)

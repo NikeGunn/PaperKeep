@@ -18,6 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *                   added ocrStatus, ocrLanguage.
  *          - folders: added icon, autoRule.
  *          - page_ocr: new table (encrypted OCR blobs + bboxes).
+ *  5 → 6: P2.2 — added page_ocr_fts FTS4 virtual table for HMAC'd OCR search.
  */
 @Database(
     entities = [
@@ -27,7 +28,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PageEntity::class,
         PageOcrEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class PaperkeepDatabase : RoomDatabase() {
@@ -173,6 +174,27 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                                      WHERE p.documentId = d.id
                                        AND p.ocrText IS NOT NULL), '')
                     FROM documents d
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * Migration 5 → 6 (P2.2 HMAC'd OCR search index).
+         *
+         * Creates the page_ocr_fts FTS4 virtual table.  It stores:
+         *   pageId   – back-reference to pages.id
+         *   tokens   – space-joined HMAC-SHA256 hex tokens (see OcrFtsIndex)
+         *
+         * The table is intentionally NOT pre-populated here; OcrOrchestrator
+         * populates it on the next OCR run for existing pages.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE VIRTUAL TABLE IF NOT EXISTS page_ocr_fts
+                    USING fts4(pageId, tokens)
                     """.trimIndent()
                 )
             }

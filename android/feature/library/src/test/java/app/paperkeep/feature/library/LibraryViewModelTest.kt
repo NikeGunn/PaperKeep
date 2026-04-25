@@ -45,8 +45,12 @@ class LibraryViewModelTest {
         Dispatchers.setMain(testDispatcher)
         repo = mockk(relaxed = true) {
             every { observeDocuments(any()) } returns docsFlow
+            every { observeByFolder(any()) } returns docsFlow
+            every { observeFavorites() } returns MutableStateFlow(emptyList())
+            every { observeArchived() } returns MutableStateFlow(emptyList())
             every { observeFolders() } returns foldersFlow
             coEvery { searchDocuments(any<String>()) } returns emptyList()
+            coEvery { searchByOcrContent(any()) } returns emptyList()
         }
         vm = LibraryViewModel(repo)
     }

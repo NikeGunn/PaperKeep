@@ -1,10 +1,14 @@
 package app.paperkeep.core.data.db
 
+import app.paperkeep.core.data.fts.OcrFtsIndex
+import app.paperkeep.core.data.fts.OcrFtsKeyProvider
 import app.paperkeep.core.data.repository.DocumentRepository
+import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import javax.crypto.KeyGenerator
 
 /**
  * Unit tests for the FTS query sanitisation logic in [DocumentRepository] (2B.4).
@@ -19,7 +23,13 @@ import org.junit.Test
 class DocumentSearchSanitisationTest {
 
     private val dao = mockk<DocumentDao>(relaxed = true)
-    private val repo = DocumentRepository(dao)
+    private val ocrFtsIndex = run {
+        val key = KeyGenerator.getInstance("HmacSHA256").generateKey()
+        val provider = mockk<OcrFtsKeyProvider>()
+        every { provider.getKey() } returns key
+        OcrFtsIndex(provider)
+    }
+    private val repo = DocumentRepository(dao, ocrFtsIndex)
 
     // ── Empty / blank input ───────────────────────────────────────────────────
 

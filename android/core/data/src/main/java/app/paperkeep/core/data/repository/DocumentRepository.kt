@@ -5,6 +5,7 @@ import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.DocumentWithPages
 import app.paperkeep.core.data.db.toDomain
 import app.paperkeep.core.data.db.toEntity
+import app.paperkeep.core.data.fts.OcrFtsIndex
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.DocumentSort
 import app.paperkeep.core.domain.model.Folder
@@ -18,6 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class DocumentRepository @Inject constructor(
     private val dao: DocumentDao,
+    private val ocrFtsIndex: OcrFtsIndex,
 ) {
 
     // ── Documents ──────────────────────────────────────────────────────────────
@@ -110,6 +112,54 @@ class DocumentRepository @Inject constructor(
 
     suspend fun getPageOcr(pageId: String): PageOcr? =
         dao.getPageOcr(pageId)?.toDomain()
+
+    /**
+     * Index [plainText] OCR results for [pageId] into the HMAC'd FTS4 table.
+     *
+     * The tokens stored in the DB are opaque HMAC-SHA256 hex strings — no
+     * plaintext OCR content is persisted in the FTS table (§6.4).
+     */
+    suspend fun indexOcrForSearch(pageId: String, plainText: String) {
+        val tokens = ocrFtsIndex.indexText(plainText)
+        if (tokens.isBlank()) return
+        val sql = SimpleSQLiteQuery(
+            "INSERT OR REPLACE INTO page_ocr_fts(pageId, tokens) VALUES(?, ?)",
+            arrayOf<Any>(pageId, tokens),
+        )
+        dao.upsertOcrFtsRowRaw(sql)
+    }
+
+    /** Remove FTS index row when a page is deleted. */
+    suspend fun removeOcrIndex(pageId: String) {
+        val sql = SimpleSQLiteQuery(
+            "DELETE FROM page_ocr_fts WHERE pageId = ?",
+            arrayOf<Any>(pageId),
+        )
+        dao.deleteOcrFtsRowRaw(sql)
+    }
+
+    /**
+     * Search documents by OCR content using the HMAC'd FTS4 index.
+     *
+     * Complements [searchDocuments] (title/plaintext FTS) — this one searches
+     * the encrypted-token index.  Results are de-duplicated with title search
+     * upstream in [LibraryViewModel].
+     */
+    suspend fun searchByOcrContent(query: String): List<Document> {
+        val expr = ocrFtsIndex.queryExpression(query)
+        if (expr.isBlank()) return emptyList()
+        val sql = SimpleSQLiteQuery(
+            """
+            SELECT DISTINCT d.* FROM documents d
+            INNER JOIN pages p ON p.documentId = d.id
+            INNER JOIN page_ocr_fts fts ON fts.pageId = p.id
+            WHERE fts.tokens MATCH ?
+            ORDER BY d.createdAt DESC
+            """.trimIndent(),
+            arrayOf<Any>(expr),
+        )
+        return dao.searchByOcrFtsRaw(sql).map { it.toDomain() }
+    }
 
     // ── Folders ────────────────────────────────────────────────────────────────
 

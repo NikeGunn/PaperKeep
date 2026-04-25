@@ -4,14 +4,18 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.DocumentEntity
 import app.paperkeep.core.data.db.DocumentWithPages
+import app.paperkeep.core.data.fts.OcrFtsIndex
+import app.paperkeep.core.data.fts.OcrFtsKeyProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import javax.crypto.KeyGenerator
 
 /**
  * Unit tests for [DocumentRepository.searchDocuments] and
@@ -40,11 +44,16 @@ class DocumentRepositorySearchTest {
 
     @Before
     fun setUp() {
+        val key = KeyGenerator.getInstance("HmacSHA256").generateKey()
+        val keyProvider = mockk<OcrFtsKeyProvider>()
+        every { keyProvider.getKey() } returns key
+        val ocrFtsIndex = OcrFtsIndex(keyProvider)
+
         dao = mockk(relaxed = true) {
             coEvery { searchDocumentsRaw(any()) } returns
                 listOf(DocumentWithPages(emptyEntity, emptyList()))
         }
-        repo = DocumentRepository(dao)
+        repo = DocumentRepository(dao, ocrFtsIndex)
     }
 
     // ── Sanitisation: blank / empty queries ──────────────────────────────────
