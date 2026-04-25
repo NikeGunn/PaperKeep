@@ -4,78 +4,116 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+
 /**
- * Two-step ID card capture mode (3B.2).
+ * Two-step ID card capture mode (P3.2).
+ *
+ * Composites front and back sides onto a **single portrait A4 page**:
+ *  - Top half  → front side (centred, scaled to fit the slot)
+ *  - Bottom half → back side (centred, scaled to fit the slot)
+ *
+ * The resulting page is 595 × 842 px (1 pt = 1 px in this representation)
+ * and has a white background with a 1 px grey divider between the halves.
  *
  * Usage:
- * 1. Call [captureFront] with the front-side bitmap.
- * 2. Call [captureBack] with the back-side bitmap.
- * 3. Call [buildComposite] to receive a [CompositeDocument] with two A4 pages.
+ * 1. [captureFront] — store the front-side bitmap.
+ * 2. [captureBack]  — store the back-side bitmap.
+ * 3. [buildComposite] — returns the single [CompositeDocument].
  *
- * Each side is placed on its own A4 page (595 × 842 pt).
- * The bitmap is centred and scaled to fit while preserving aspect ratio.
+ * Calling [reset] clears both sides so the object can be reused for
+ * a fresh capture without reallocating.
  */
 class IdCardCaptureMode {
 
     private var frontBitmap: Bitmap? = null
     private var backBitmap: Bitmap? = null
 
-    /** Step 1: record the front-side capture. */
+    val hasFront: Boolean get() = frontBitmap != null
+    val hasBack: Boolean get() = backBitmap != null
+
     fun captureFront(bitmap: Bitmap) {
         frontBitmap = bitmap
     }
 
-    /** Step 2: record the back-side capture. */
     fun captureBack(bitmap: Bitmap) {
         backBitmap = bitmap
     }
 
+    fun reset() {
+        frontBitmap = null
+        backBitmap = null
+    }
+
     /**
-     * Build the composite A4 document.
+     * Build the single-page A4 composite.
      *
-     * @throws IllegalStateException if front or back capture has not been provided.
+     * @throws IllegalStateException if either side has not been captured yet.
      */
     fun buildComposite(): CompositeDocument {
         val front = checkNotNull(frontBitmap) { "Front side not captured" }
-        val back = checkNotNull(backBitmap) { "Back side not captured" }
+        val back  = checkNotNull(backBitmap)  { "Back side not captured"  }
 
-        val frontPage = renderOnA4(front)
-        val backPage = renderOnA4(back)
+        val page = Bitmap.createBitmap(A4_W, A4_H, Bitmap.Config.ARGB_8888)
+        page.eraseColor(Color.WHITE)
+        val canvas = Canvas(page)
 
-        return CompositeDocument(pages = listOf(frontPage, backPage))
+        // Top half: front side
+        renderInSlot(canvas, front, slotTop = 0, slotHeight = HALF_H)
+
+        // Divider
+        val dividerPaint = Paint().apply {
+            color = DIVIDER_COLOR
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawLine(0f, HALF_H.toFloat(), A4_W.toFloat(), HALF_H.toFloat(), dividerPaint)
+
+        // Bottom half: back side
+        renderInSlot(canvas, back, slotTop = HALF_H, slotHeight = HALF_H)
+
+        return CompositeDocument(page = page)
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    // ── Private ───────────────────────────────────────────────────────────────
 
-    /** Scale [source] to fit on an A4 canvas, centred, white background. */
-    private fun renderOnA4(source: Bitmap): Bitmap {
-        val page = Bitmap.createBitmap(A4_WIDTH_PT, A4_HEIGHT_PT, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(page)
-        canvas.drawColor(Color.WHITE)
+    /** Scale [source] to fit inside a horizontal slot and centre it. */
+    private fun renderInSlot(
+        canvas: Canvas,
+        source: Bitmap,
+        slotTop: Int,
+        slotHeight: Int,
+    ) {
+        val availW = A4_W - 2 * SLOT_PADDING
+        val availH = slotHeight - 2 * SLOT_PADDING
 
         val scale = minOf(
-            A4_WIDTH_PT.toFloat() / source.width,
-            A4_HEIGHT_PT.toFloat() / source.height,
-        )
-        val scaledW = (source.width * scale).toInt()
-        val scaledH = (source.height * scale).toInt()
-        val left = (A4_WIDTH_PT - scaledW) / 2f
-        val top = (A4_HEIGHT_PT - scaledH) / 2f
+            availW.toFloat() / source.width,
+            availH.toFloat() / source.height,
+        ).coerceAtMost(1f)  // never upscale
+
+        val scaledW = (source.width  * scale).toInt().coerceAtLeast(1)
+        val scaledH = (source.height * scale).toInt().coerceAtLeast(1)
+        val left    = (A4_W - scaledW) / 2f
+        val top     = slotTop + (slotHeight - scaledH) / 2f
 
         val scaled = Bitmap.createScaledBitmap(source, scaledW, scaledH, true)
         canvas.drawBitmap(scaled, left, top, Paint(Paint.FILTER_BITMAP_FLAG))
-        return page
+    }
+
+    companion object {
+        const val A4_W = 595
+        const val A4_H = 842
+        const val HALF_H = A4_H / 2          // 421 px per half
+        const val SLOT_PADDING = 16          // px margin inside each half
+        val DIVIDER_COLOR = Color.LTGRAY
     }
 }
 
-private const val A4_WIDTH_PT = 595
-private const val A4_HEIGHT_PT = 842
-
 /**
- * Result of an ID card composite operation.
+ * Result of a composite ID card operation.
  *
- * @param pages Always contains exactly 2 entries: index 0 = front, index 1 = back.
+ * [page] A single A4 bitmap with front on top, back on bottom.
  */
 data class CompositeDocument(
-    val pages: List<Bitmap>,
+    val page: Bitmap,
 )

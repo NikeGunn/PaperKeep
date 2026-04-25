@@ -2,6 +2,7 @@ package app.paperkeep.feature.scanner
 
 import android.graphics.Bitmap
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,44 +21,39 @@ class IdCardCaptureModeTest {
     }
 
     @Test
-    fun `front and back capture produces two pages in composite document`() {
+    fun `front and back capture produces single composite page`() {
         val front = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
-        val back = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
+        val back  = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
 
         mode.captureFront(front)
         mode.captureBack(back)
 
         val composite = mode.buildComposite()
-        assertEquals("Composite must have exactly 2 pages", 2, composite.pages.size)
+        assertNotNull("Composite page must not be null", composite.page)
     }
 
     @Test
-    fun `composite pages use A4 dimensions (595 x 842)`() {
+    fun `composite page uses A4 dimensions (595 x 842)`() {
         val front = Bitmap.createBitmap(300, 200, Bitmap.Config.ARGB_8888)
-        val back = Bitmap.createBitmap(300, 200, Bitmap.Config.ARGB_8888)
+        val back  = Bitmap.createBitmap(300, 200, Bitmap.Config.ARGB_8888)
 
         mode.captureFront(front)
         mode.captureBack(back)
 
         val composite = mode.buildComposite()
-
-        composite.pages.forEachIndexed { index, page ->
-            assertEquals("Page $index width should be 595pt (A4)", 595, page.width)
-            assertEquals("Page $index height should be 842pt (A4)", 842, page.height)
-        }
+        assertEquals("A4 width (595)", IdCardCaptureMode.A4_W, composite.page.width)
+        assertEquals("A4 height (842)", IdCardCaptureMode.A4_H, composite.page.height)
     }
 
     @Test(expected = IllegalStateException::class)
     fun `buildComposite throws if front not captured`() {
-        val back = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
-        mode.captureBack(back)
+        mode.captureBack(Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888))
         mode.buildComposite()
     }
 
     @Test(expected = IllegalStateException::class)
     fun `buildComposite throws if back not captured`() {
-        val front = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888)
-        mode.captureFront(front)
+        mode.captureFront(Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888))
         mode.buildComposite()
     }
 }

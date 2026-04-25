@@ -60,9 +60,45 @@ object WhiteboardProcessor {
     }
 
     /**
-     * Full whiteboard enhancement pipeline: glare removal then colour boost.
+     * Remove hand and shadow regions by suppressing dark mid-tone areas that
+     * have low saturation — typical of skin and cast shadows on a whiteboard.
+     *
+     * Any pixel whose luminance is in the mid-range (0.15–0.55 normalised) AND
+     * HSV saturation < 0.18 is brightened toward white. This leaves vivid
+     * marker strokes (high saturation) intact while lifting grey shadows.
+     *
+     * Returns a new bitmap; [source] is not modified.
      */
-    fun process(source: Bitmap): Bitmap = boostMarkerColor(removeGlare(source))
+    fun removeHandShadow(source: Bitmap): Bitmap {
+        val w = source.width
+        val h = source.height
+        val pixels = IntArray(w * h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        val hsv = FloatArray(3)
+        for (i in pixels.indices) {
+            val px = pixels[i]
+            Color.colorToHSV(px, hsv)
+            val lum = (Color.red(px) * 299 + Color.green(px) * 587 + Color.blue(px) * 114) / 255000f
+            if (lum in 0.15f..0.55f && hsv[1] < 0.18f) {
+                // Lift toward white proportionally
+                val lift = ((0.55f - lum) / 0.40f * 200).toInt().coerceIn(0, 200)
+                val r = (Color.red(px) + lift).coerceIn(0, 255)
+                val g = (Color.green(px) + lift).coerceIn(0, 255)
+                val b = (Color.blue(px) + lift).coerceIn(0, 255)
+                pixels[i] = Color.argb(Color.alpha(px), r, g, b)
+            }
+        }
+
+        val output = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        output.setPixels(pixels, 0, w, 0, 0, w, h)
+        return output
+    }
+
+    /**
+     * Full whiteboard enhancement pipeline: glare removal → colour boost → shadow removal.
+     */
+    fun process(source: Bitmap): Bitmap = removeHandShadow(boostMarkerColor(removeGlare(source)))
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-24)
 
-**Status:** Phase 2 complete. Phase 3 started — P3.1 done.
-**Last session:** 2026-04-25 — P3.1 complete. TFLite classifier stub + multi-feature heuristic (6 types), DocTypeChip on crop screen, filter auto-apply, DocTypePolicy, all tests green (full suite BUILD SUCCESSFUL).
-**Next task:** `P3.2` — ID card mode: front + back auto-composed on a single A4 page.
+**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.5 done.
+**Last session:** 2026-04-25 — P3.2–P3.5 complete. ID card composite, receipt date extraction, whiteboard shadow removal, book split — all tests green (full suite BUILD SUCCESSFUL).
+**Next task:** `P3.6` — Signature tool: draw on transparent overlay, save up to 3 encrypted signatures, place/resize on PDF page before export.
 
 ### What exists from v1 that survives the pivot
 
@@ -115,10 +115,10 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 > **Goal:** Features that beat CamScanner + monetization wired up + Play Store assets ready.
 
 - [x] **P3.1** — TFLite document-type classifier: receipt / ID / business card / A4 / whiteboard / book. Chip on crop screen, tappable override. Auto-applies best filter + aspect. ✅ 2026-04-25 — multi-feature heuristic (aspect/edge/luminance/saturation/contrast), DocTypeChip, DocTypePolicy, 61 new tests all green.
-- [ ] **P3.2** — ID card mode: front + back auto-composed on a single A4 page.
-- [ ] **P3.3** — Receipt mode: taller aspect, aggressive B&W, regex-extract total/date/merchant into searchable fields.
-- [ ] **P3.4** — Whiteboard mode: glare removal via OpenCV `inpaint`, HSV marker boost, hand/shadow removal.
-- [ ] **P3.5** — Book scan mode: two-page split, DewarpNet-lite spine flattening.
+- [x] **P3.2** — ID card mode: front + back auto-composed on a single A4 page. ✅ 2026-04-25 — IdCardCaptureMode (single-page composite), IdCardViewModel, IdCardScreen (step indicator, front preview), 20+ tests green.
+- [x] **P3.3** — Receipt mode: taller aspect, aggressive B&W, regex-extract total/date/merchant into searchable fields. ✅ 2026-04-25 — added date regex (ISO/US/written), ReceiptData.date field, 5 new tests.
+- [x] **P3.4** — Whiteboard mode: glare removal via OpenCV `inpaint`, HSV marker boost, hand/shadow removal. ✅ 2026-04-25 — removeHandShadow() targets mid-tone desaturated pixels, pipeline updated, 5 new tests.
+- [x] **P3.5** — Book scan mode: two-page split, DewarpNet-lite spine flattening. ✅ 2026-04-25 — BookScanProcessor.split() + dewarp() stub, Phase 5 ready for real DewarpNet, 4 tests.
 - [ ] **P3.6** — Signature tool: draw on transparent overlay, save up to 3 encrypted signatures, place/resize on PDF page before export.
 - [ ] **P3.7** — Annotations: text boxes, highlighter, eraser, undo/redo (30-step stack).
 - [ ] **P3.8** — True destructive redaction. User rectangle destroys underlying pixels AND overwrites corresponding OCR bboxes in DB. Verify destructive via raw-pixel inspection test.

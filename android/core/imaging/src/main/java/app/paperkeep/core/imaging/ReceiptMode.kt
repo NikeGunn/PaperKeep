@@ -42,7 +42,15 @@ object ReceiptMode {
         val totalRegex = Regex("""(?i)total[^\d]*(\$?\d+[.,]\d{2})""")
         val total = totalRegex.find(text)?.groupValues?.get(1)
 
-        return ReceiptData(total = total, merchant = merchant)
+        // Date: ISO (2024-01-15), US (01/15/2024), EU (15.01.2024), written (Jan 15, 2024)
+        val dateRegex = Regex(
+            """(\d{4}-\d{2}-\d{2})|(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})""" +
+            """|((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})""",
+            RegexOption.IGNORE_CASE,
+        )
+        val date = dateRegex.find(text)?.value?.trim()
+
+        return ReceiptData(total = total, merchant = merchant, date = date)
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
@@ -103,4 +111,5 @@ object ReceiptMode {
 data class ReceiptData(
     val total: String?,
     val merchant: String?,
+    val date: String? = null,
 )

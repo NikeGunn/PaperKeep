@@ -66,6 +66,58 @@ class WhiteboardProcessorTest {
         assertEquals("original bitmap must not be modified", pixelBefore, input.getPixel(5, 5))
     }
 
+    // ── removeHandShadow ──────────────────────────────────────────────────────
+
+    @Test
+    fun `removeHandShadow brightens mid-tone grey pixels`() {
+        // Mid-tone grey (lum ≈ 0.33) with near-zero saturation → shadow region
+        val grey = Color.rgb(85, 85, 85)
+        val input = solidBitmap(grey)
+        val output = WhiteboardProcessor.removeHandShadow(input)
+        val inLum  = luminance(input.getPixel(5, 5))
+        val outLum = luminance(output.getPixel(5, 5))
+        assertTrue("shadow pixel should be brightened: $inLum → $outLum", outLum > inLum)
+    }
+
+    @Test
+    fun `removeHandShadow does not modify vivid marker colour`() {
+        // Saturated red — marker stroke should be left intact
+        val red = Color.rgb(220, 20, 20)
+        val input = solidBitmap(red)
+        val inPx  = input.getPixel(5, 5)
+        val output = WhiteboardProcessor.removeHandShadow(input)
+        val outPx  = output.getPixel(5, 5)
+        assertEquals("vivid marker pixel must not be altered", inPx, outPx)
+    }
+
+    @Test
+    fun `removeHandShadow does not modify pure white`() {
+        val input = solidBitmap(Color.WHITE)
+        val inPx  = input.getPixel(5, 5)
+        val output = WhiteboardProcessor.removeHandShadow(input)
+        assertEquals("white pixel must not be altered", inPx, output.getPixel(5, 5))
+    }
+
+    @Test
+    fun `removeHandShadow does not modify original bitmap`() {
+        val input = solidBitmap(Color.rgb(85, 85, 85))
+        val before = input.getPixel(5, 5)
+        WhiteboardProcessor.removeHandShadow(input)
+        assertEquals("original must not be modified", before, input.getPixel(5, 5))
+    }
+
+    @Test
+    fun `process pipeline produces valid bitmap`() {
+        val input = solidBitmap(Color.rgb(150, 150, 150), w = 50, h = 50)
+        val output = WhiteboardProcessor.process(input)
+        assertTrue(output.width > 0 && output.height > 0)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun luminance(color: Int): Float =
+        (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114) / 255000f
+
     // Convenience re-export so tests compile without importing junit directly
     private fun assertEquals(msg: String, expected: Int, actual: Int) {
         org.junit.Assert.assertEquals(msg, expected, actual)

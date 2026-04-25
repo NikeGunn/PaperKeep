@@ -80,4 +80,43 @@ class ReceiptModeTest {
         assertNotNull(data.total)
         assertEquals("15.99", data.total)
     }
+
+    // ── Date extraction ──────────────────────────────────────────────────────��─
+
+    @Test
+    fun `extractFields finds ISO date`() {
+        val text = "Cafe\n2024-03-15\ntotal ${'$'}5.00"
+        val data = ReceiptMode.extractFields(text)
+        assertEquals("2024-03-15", data.date)
+    }
+
+    @Test
+    fun `extractFields finds US slash date`() {
+        val text = "Shop\n03/15/2024\ntotal ${'$'}10.00"
+        val data = ReceiptMode.extractFields(text)
+        assertNotNull(data.date)
+    }
+
+    @Test
+    fun `extractFields finds written month date`() {
+        val text = "Market\nMarch 15, 2024\ntotal ${'$'}8.50"
+        val data = ReceiptMode.extractFields(text)
+        assertNotNull("Written date should be found", data.date)
+    }
+
+    @Test
+    fun `extractFields returns null date when no date present`() {
+        val text = "Store\nNo date here\ntotal ${'$'}5.00"
+        val data = ReceiptMode.extractFields(text)
+        assertNull(data.date)
+    }
+
+    @Test
+    fun `ReceiptData has all three fields populated`() {
+        val text = "Starbucks\n2024-01-20\nCoffee ${'$'}4.50\ntotal ${'$'}4.50"
+        val data = ReceiptMode.extractFields(text)
+        assertNotNull(data.merchant)
+        assertNotNull(data.total)
+        assertNotNull(data.date)
+    }
 }
