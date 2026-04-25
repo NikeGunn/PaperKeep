@@ -33,6 +33,7 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
 }
 
 dependencies {
@@ -64,4 +65,6 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

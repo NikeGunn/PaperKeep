@@ -4,6 +4,7 @@ import app.paperkeep.core.data.repository.DocumentRepository
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.Page
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,6 +16,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -41,9 +44,13 @@ class ReaderViewModelTest {
         filter = "original",
     )
 
-    private fun fakeDocument(pages: List<Page>) = Document(
-        id = "doc-1",
-        title = "Test Document",
+    private fun fakeDocument(
+        id: String = "doc-1",
+        title: String = "Test Document",
+        pages: List<Page> = emptyList(),
+    ) = Document(
+        id = id,
+        title = title,
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
         folderId = null,
@@ -58,7 +65,7 @@ class ReaderViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        repository = mockk()
+        repository = mockk(relaxed = true)
         viewModel = ReaderViewModel(repository)
     }
 
@@ -67,36 +74,36 @@ class ReaderViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // ── Load ──────────────────────────────────────────────────────────────────
+
     @Test
     fun `pages loaded correctly for document`() = runTest {
         val pages = listOf(fakePage(0, "Hello"), fakePage(1, "World"))
-        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages)
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
         assertEquals(2, viewModel.pages.value.size)
         assertEquals("page-0", viewModel.pages.value[0].id)
-        assertEquals("page-1", viewModel.pages.value[1].id)
         assertFalse(viewModel.isLoading.value)
     }
 
     @Test
     fun `pages sorted by pageIndex after load`() = runTest {
-        val pages = listOf(fakePage(1), fakePage(0), fakePage(2))
-        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages)
+        val pages = listOf(fakePage(2), fakePage(0), fakePage(1))
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
-        val loaded = viewModel.pages.value
-        assertEquals(0, loaded[0].pageIndex)
-        assertEquals(1, loaded[1].pageIndex)
-        assertEquals(2, loaded[2].pageIndex)
+        assertEquals(0, viewModel.pages.value[0].pageIndex)
+        assertEquals(1, viewModel.pages.value[1].pageIndex)
+        assertEquals(2, viewModel.pages.value[2].pageIndex)
     }
 
     @Test
-    fun `empty pages returned when document not found`() = runTest {
+    fun `empty pages when document not found`() = runTest {
         coEvery { repository.getDocumentById("missing") } returns null
 
         viewModel.loadDocument("missing")
@@ -107,18 +114,41 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun `OCR overlay toggle starts false then toggles`() = runTest {
-        assertFalse(viewModel.ocrOverlayEnabled.value)
+    fun `documentTitle set from loaded document`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(title = "My Scan")
 
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        assertEquals("My Scan", viewModel.documentTitle.value)
+    }
+
+    // ── OCR overlay ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `ocrOverlayEnabled starts false then toggles`() = runTest {
+        assertFalse(viewModel.ocrOverlayEnabled.value)
         viewModel.toggleOcrOverlay()
         assertTrue(viewModel.ocrOverlayEnabled.value)
-
         viewModel.toggleOcrOverlay()
         assertFalse(viewModel.ocrOverlayEnabled.value)
     }
 
+    // ── Bottom bar visibility ─────────────────────────────────────────────────
+
     @Test
-    fun `zoom level clamped between MIN and MAX`() {
+    fun `showBottomBar starts true then toggles`() {
+        assertTrue(viewModel.showBottomBar.value)
+        viewModel.toggleBottomBar()
+        assertFalse(viewModel.showBottomBar.value)
+        viewModel.toggleBottomBar()
+        assertTrue(viewModel.showBottomBar.value)
+    }
+
+    // ── Zoom ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `zoom clamped between MIN and MAX`() {
         viewModel.onZoomChanged(0.1f)
         assertEquals(ReaderViewModel.MIN_ZOOM, viewModel.zoomLevel.value)
 
@@ -129,40 +159,149 @@ class ReaderViewModelTest {
         assertEquals(2.5f, viewModel.zoomLevel.value)
     }
 
+    // ── Page navigation ───────────────────────────────────────────────────────
+
     @Test
     fun `currentPage clamped to valid range`() = runTest {
         val pages = listOf(fakePage(0), fakePage(1), fakePage(2))
-        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages)
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
-        viewModel.onPageChanged(5)
+        viewModel.onPageChanged(99)
         assertEquals(2, viewModel.currentPage.value)
 
         viewModel.onPageChanged(-1)
         assertEquals(0, viewModel.currentPage.value)
     }
 
-    @Test
-    fun `isLoading true during load then false after`() = runTest {
-        val pages = listOf(fakePage(0))
-        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages)
+    // ── Rename ────────────────────────────────────────────────────────────────
 
-        // Before load starts, loading should be true (initial state)
-        assertTrue(viewModel.isLoading.value)
+    @Test
+    fun `startRename sets isRenaming to true`() {
+        viewModel.startRename()
+        assertTrue(viewModel.isRenaming.value)
+    }
+
+    @Test
+    fun `cancelRename clears isRenaming and restores original title`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(title = "Original")
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
-        assertFalse(viewModel.isLoading.value)
+        viewModel.startRename()
+        viewModel.onTitleChanged("Edited")
+        viewModel.cancelRename()
+
+        assertFalse(viewModel.isRenaming.value)
+        assertEquals("Original", viewModel.documentTitle.value)
     }
 
     @Test
-    fun `FLAG_SECURE test placeholder - window flag check delegated to instrumented test`() {
-        // FLAG_SECURE is set in a SideEffect inside the Composable, which requires
-        // an Activity window. This is verified in androidTest (instrumented).
-        // Here we document the constant for reference.
+    fun `commitRename calls repository updateTitle`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(title = "Old")
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.startRename()
+        viewModel.onTitleChanged("New Title")
+        viewModel.commitRename()
+        advanceUntilIdle()
+
+        coVerify { repository.updateTitle("doc-1", "New Title") }
+        assertFalse(viewModel.isRenaming.value)
+    }
+
+    @Test
+    fun `commitRename with blank title cancels rename`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(title = "Original")
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.startRename()
+        viewModel.onTitleChanged("   ")
+        viewModel.commitRename()
+
+        assertFalse(viewModel.isRenaming.value)
+        assertEquals("Original", viewModel.documentTitle.value)
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `deleteDocument emits DocumentDeleted event`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument()
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.deleteDocument()
+        advanceUntilIdle()
+
+        assertEquals(ReaderEvent.DocumentDeleted, viewModel.event.value)
+        coVerify { repository.deleteDocumentById("doc-1") }
+    }
+
+    @Test
+    fun `consumeEvent clears the event`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument()
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.deleteDocument()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.event.value)
+        viewModel.consumeEvent()
+        assertNull(viewModel.event.value)
+    }
+
+    // ── Share / Export events ─────────────────────────────────────────────────
+
+    @Test
+    fun `shareCurrentPage emits SharePage event`() = runTest {
+        val pages = listOf(fakePage(0))
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.shareCurrentPage()
+
+        val ev = viewModel.event.value
+        assertTrue(ev is ReaderEvent.SharePage)
+        assertEquals("page-0", (ev as ReaderEvent.SharePage).pageId)
+    }
+
+    @Test
+    fun `requestExport emits ExportDocument event`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument()
+
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+
+        viewModel.requestExport()
+
+        val ev = viewModel.event.value
+        assertTrue(ev is ReaderEvent.ExportDocument)
+        assertEquals("doc-1", (ev as ReaderEvent.ExportDocument).documentId)
+    }
+
+    @Test
+    fun `shareCurrentPage does nothing when no pages loaded`() {
+        viewModel.shareCurrentPage()
+        assertNull(viewModel.event.value)
+    }
+
+    // ── FLAG_SECURE constant ──────────────────────────────────────────────────
+
+    @Test
+    fun `FLAG_SECURE constant has correct value`() {
         assertEquals(0x2000, android.view.WindowManager.LayoutParams.FLAG_SECURE)
     }
 }

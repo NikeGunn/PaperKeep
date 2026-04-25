@@ -99,6 +99,7 @@ fun LibraryScreen(
     onDocumentClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     isTablet: Boolean = false,
+    onOpenSettings: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
