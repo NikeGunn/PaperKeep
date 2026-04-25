@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-24)
 
-**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.10 done.
-**Last session:** 2026-04-25 — P3.6–P3.10 complete. Multi-slot signatures, annotation eraser, extra redaction tests, image cleanup coverage, domain allowlist interceptor, UMP tests — all green (full suite BUILD SUCCESSFUL).
-**Next task:** `P3.11` — Play Billing shelf. BillingClient wired, one product queried, purchase flow stubbed.
+**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.14 done.
+**Last session:** 2026-04-25 — P3.11–P3.14 complete. BillingManager stub, InAppReviewManager verified, ApkSignatureVerifier, DeviceIntegrityChecker, IntegrityGate — full suite BUILD SUCCESSFUL.
+**Next task:** `P3.15` — Play Store assets in :store module.
 
 ### What exists from v1 that survives the pivot
 
@@ -124,10 +124,10 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [x] **P3.8** — True destructive redaction. User rectangle destroys underlying pixels AND overwrites corresponding OCR bboxes in DB. Verify destructive via raw-pixel inspection test. ✅ 2026-04-25 — raw-pixel tests added: full-bitmap redaction, RectF overload, immutable bitmap throws, empty inputs; total 9 RedactionProcessorTests.
 - [x] **P3.9** — Image cleanup actions: "Remove background noise" (bilateral + morph opening), "Sharpen text" (unsharp mask), "Fix lighting" (CLAHE). Non-destructive. ✅ 2026-04-25 — applyFilters pipeline with per-filter tests and all-filters-iterate test; 15 total ImageCleanupProcessorTests.
 - [x] **P3.10** — `:core:ads` AdMob integration. Lazy init (NOT in `Application.onCreate`). UMP consent. Interstitial after every 5th export, hard cap 1-per-3-min. No banners anywhere. No ads on camera or reader. Domain-allowlist `OkHttp` interceptor (see §6.7). ✅ 2026-04-25 — DomainAllowlistInterceptor (5-domain allowlist, isAllowed/checkOrThrow), BlockedHostException, UmpConsentHelperTest, 25 new tests.
-- [ ] **P3.11** — Play Billing shelf. `BillingClient` wired, one product queried (`paperkeep_pro_lifetime`), purchase flow stubbed. Unlock logic disabled until Phase 5.
-- [ ] **P3.12** — In-app rating prompt via `ReviewManager`. Trigger: ≥3 exports AND ≥3 distinct days AND no prompt in last 90 days.
-- [ ] **P3.13** — APK signature pin. Bake signing-cert SHA-256 into release builds. On launch, compare `PackageInfo.signingInfo.apkContentsSigners[0]` to baked constant. Mismatch → silently disable AdMob + Pro IAP + backup creation.
-- [ ] **P3.14** — Root/Magisk/Frida/emulator detection per §6.6. Best-effort; does NOT block app; disables Pro IAP unlock and backup creation on rooted devices with a polite info card.
+- [x] **P3.11** — Play Billing shelf. `BillingClient` wired, one product queried (`paperkeep_pro_lifetime`), purchase flow stubbed. Unlock logic disabled until Phase 5. ✅ 2026-04-25 — BillingManager (Idle→Connecting→ProductAvailable→PurchasePending), BillingState sealed interface, ProProductDetails, isPro=false stub, 12 tests.
+- [x] **P3.12** — In-app rating prompt via `ReviewManager`. Trigger: ≥3 exports AND ≥3 distinct days AND no prompt in last 90 days. ✅ 2026-04-25 — InAppReviewManager already existed with 5 tests covering all conditions; verified complete.
+- [x] **P3.13** — APK signature pin. Bake signing-cert SHA-256 into release builds. On launch, compare `PackageInfo.signingInfo.apkContentsSigners[0]` to baked constant. Mismatch → silently disable AdMob + Pro IAP + backup creation. ✅ 2026-04-25 — ApkSignatureVerifier (sentinel all-zeroes = not configured, sha256Hex, verify/isTrusted), VerificationResult sealed class, IntegrityGate aggregator, 14 tests.
+- [x] **P3.14** — Root/Magisk/Frida/emulator detection per §6.6. Best-effort; does NOT block app; disables Pro IAP unlock and backup creation on rooted devices with a polite info card. ✅ 2026-04-25 — DeviceIntegrityChecker (injectable RootProbe/FridaProbe/EmulatorProbe), DefaultRootProbe (su paths + Magisk dirs + build.tags), DefaultFridaProbe (/proc/self/maps + port 27042), DefaultEmulatorProbe (Build fields), RootCheckResult, 22 tests.
 - [ ] **P3.15** — Play Store assets in `:store`. EN listing copy (Paperkeep title + keyword-loaded short description), 8 feature-narrative screenshots, 1024×500 feature graphic, hosted privacy policy link (copy served from `docs/PRIVACY_POLICY.md`), Data Safety form draft answers ("no data collected").
 - [ ] **P3.16** — Closed testing track on Play Console with ≥ 12 opted-in testers. Starts the 14-day clock — do this the moment the Phase 3 build is stable, not at the end.
 
