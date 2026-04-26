@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -96,6 +97,16 @@ const val TAG_READER_ADD_PAGE = "reader_add_page"
 const val TAG_READER_BOTTOM_BAR = "reader_bottom_bar"
 const val TAG_READER_TITLE = "reader_title"
 const val TAG_READER_OCR_OVERLAY = "reader_ocr_overlay"
+
+private const val ZOOM_PAGER_LOCK_EPSILON = 0.01f
+
+internal fun isPagerSwipeEnabled(zoomScale: Float): Boolean {
+    return zoomScale <= ReaderViewModel.MIN_ZOOM + ZOOM_PAGER_LOCK_EPSILON
+}
+
+internal fun shouldAllowPan(zoomScale: Float): Boolean {
+    return !isPagerSwipeEnabled(zoomScale)
+}
 
 /**
  * Full-screen document reader.
@@ -265,6 +276,8 @@ fun ReaderScreen(
             return@Scaffold
         }
 
+        var currentPageScale by remember { mutableStateOf(ReaderViewModel.MIN_ZOOM) }
+
         val pagerState = rememberPagerState(
             initialPage = currentPage.coerceIn(0, pages.size - 1),
             pageCount = { pages.size },
@@ -272,6 +285,7 @@ fun ReaderScreen(
 
         LaunchedEffect(pagerState.currentPage) {
             viewModel.onPageChanged(pagerState.currentPage)
+            currentPageScale = ReaderViewModel.MIN_ZOOM
         }
 
         Box(
@@ -281,6 +295,7 @@ fun ReaderScreen(
         ) {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = isPagerSwipeEnabled(currentPageScale),
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(TAG_PAGE_PAGER),
@@ -290,6 +305,11 @@ fun ReaderScreen(
                     imageFile = java.io.File(page.encryptedImagePath),
                     ocrText = if (ocrOverlayEnabled) page.ocrText else null,
                     onTap = viewModel::toggleBottomBar,
+                    onScaleChanged = { scale ->
+                        if (pagerState.currentPage == pageIndex) {
+                            currentPageScale = scale
+                        }
+                    },
                 )
             }
 
@@ -630,11 +650,13 @@ private fun ReaderBottomBar(
 
 // ── Zoomable page ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ZoomablePage(
     imageFile: java.io.File,
     ocrText: String?,
     onTap: () -> Unit,
+    onScaleChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var scale by remember { mutableStateOf(1f) }
@@ -642,9 +664,16 @@ private fun ZoomablePage(
 
     val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(ReaderViewModel.MIN_ZOOM, ReaderViewModel.MAX_ZOOM)
-        offset += panChange * scale
-        // Reset pan when at minimum zoom
-        if (scale == ReaderViewModel.MIN_ZOOM) offset = Offset.Zero
+        if (shouldAllowPan(scale)) {
+            offset += panChange * scale
+        } else {
+            // Reset pan when at minimum zoom.
+            offset = Offset.Zero
+        }
+    }
+
+    LaunchedEffect(scale) {
+        onScaleChanged(scale)
     }
 
     Box(
@@ -659,7 +688,10 @@ private fun ZoomablePage(
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
-                .transformable(state = transformableState)
+                .transformable(
+                    state = transformableState,
+                    canPan = { shouldAllowPan(scale) },
+                )
                 .graphicsLayer(
                     scaleX = scale,
                     scaleY = scale,
