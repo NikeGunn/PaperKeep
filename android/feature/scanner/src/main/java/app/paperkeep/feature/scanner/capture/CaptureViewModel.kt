@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.paperkeep.core.common.AppDispatchers
+import app.paperkeep.core.common.DebugLog
 import app.paperkeep.core.data.crypto.EncryptedImageStore
 import app.paperkeep.core.data.db.OcrStatus
 import app.paperkeep.core.data.db.ScanDao
@@ -16,6 +17,7 @@ import app.paperkeep.core.domain.model.Page
 import app.paperkeep.core.imaging.DetectionResult
 import app.paperkeep.core.imaging.EdgeDetector
 import app.paperkeep.core.imaging.ImageFilter
+import app.paperkeep.core.imaging.ImageFilterProcessor
 import app.paperkeep.core.imaging.PerspectiveTransform
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
@@ -70,16 +72,28 @@ class CaptureViewModel @Inject constructor(
         viewModelScope.launch(dispatchers.default) {
             try {
                 val result = edgeDetector.detect(bitmap)
-                val quad = when (result) {
-                    is DetectionResult.Found -> result.corners
-                    DetectionResult.NotFound -> fullImageQuad(bitmap)
-                }
-                val warped = PerspectiveTransform.warp(bitmap, quad)
+                val detected = (result as? DetectionResult.Found)?.corners
+                val confident = detected?.let {
+                    isDetectionConfident(it, bitmap.width, bitmap.height)
+                } ?: false
+                DebugLog.d(
+                    "Paperkeep.Capture",
+                    "edge detect: result=${if (detected == null) "NotFound" else "Found"} " +
+                        "confident=$confident bitmap=${bitmap.width}x${bitmap.height}",
+                )
+                val trusted = detected?.takeIf { confident }
+                val quad = sanitizeQuad(
+                    quad = trusted ?: defaultInsetQuad(bitmap),
+                    imageWidth = bitmap.width,
+                    imageHeight = bitmap.height,
+                )
+
+                val previewForClassification = PerspectiveTransform.warp(bitmap, quad)
 
                 withContext(dispatchers.main) {
                     persistQuad(quad)
                     _state.value = CaptureState.ReadyToCrop(
-                        image = warped,
+                        image = bitmap,
                         quad = quad,
                         classification = null,
                         selectedFilter = ImageFilter.AUTO,
@@ -87,7 +101,7 @@ class CaptureViewModel @Inject constructor(
                 }
 
                 // Classification runs concurrently — does not block the crop screen
-                val classResult = classifier.classify(warped)
+                val classResult = classifier.classify(previewForClassification)
                 val policy = DocTypePolicies.forType(classResult.type)
 
                 withContext(dispatchers.main) {
@@ -112,21 +126,23 @@ class CaptureViewModel @Inject constructor(
 
     fun onQuadUpdated(newQuad: Quad) {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
-        viewModelScope.launch(dispatchers.default) {
-            val rewarped = PerspectiveTransform.warp(current.image, newQuad)
-            withContext(dispatchers.main) {
-                persistQuad(newQuad)
-                _state.value = current.copy(image = rewarped, quad = newQuad)
-            }
-        }
+        val sanitized = sanitizeQuad(newQuad, current.image.width, current.image.height)
+        persistQuad(sanitized)
+        _state.value = current.copy(quad = sanitized)
     }
 
     fun rotateImage() {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
         viewModelScope.launch(dispatchers.default) {
             val rotated = PerspectiveTransform.rotate(current.image, 90)
+            val rotatedQuad = rotateQuadClockwise(
+                quad = current.quad,
+                sourceWidth = current.image.width,
+                sourceHeight = current.image.height,
+            )
             withContext(dispatchers.main) {
-                _state.value = current.copy(image = rotated)
+                persistQuad(rotatedQuad)
+                _state.value = current.copy(image = rotated, quad = rotatedQuad)
             }
         }
     }
@@ -140,12 +156,12 @@ class CaptureViewModel @Inject constructor(
 
     /**
      * Called when the user explicitly selects a filter from the preview strip.
-     * Sets [CaptureState.ReadyToCrop.userOverrodeType] = false because this only
-     * changes the filter, not the document type.
+     * Marks the current suggestion as user-overridden so async classifier updates
+     * do not overwrite the selected filter.
      */
     fun onFilterSelected(filter: ImageFilter) {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
-        _state.value = current.copy(selectedFilter = filter)
+        _state.value = current.copy(selectedFilter = filter, userOverrodeType = true)
     }
 
     // ── Document type override (user taps DocTypeChip and picks a type) ───────
@@ -173,11 +189,17 @@ class CaptureViewModel @Inject constructor(
      */
     fun saveCurrentCapture(onSaved: (String) -> Unit = {}) {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
+        DebugLog.d("Paperkeep.Capture", "saveCurrentCapture: start")
         _state.value = CaptureState.Processing(current.image)
 
         viewModelScope.launch(dispatchers.io) {
             try {
                 val saveResult = persistCurrentCapture(current)
+                DebugLog.d(
+                    "Paperkeep.Capture",
+                    "saveCurrentCapture: persisted doc=${saveResult.documentId} " +
+                        "imageBytes=${saveResult.imageBytes.size}",
+                )
 
                 // OCR runs in the background so library navigation stays snappy.
                 launch(dispatchers.default) {
@@ -190,6 +212,7 @@ class CaptureViewModel @Inject constructor(
                     onSaved(saveResult.documentId)
                 }
             } catch (e: Exception) {
+                DebugLog.e("Paperkeep.Capture", "saveCurrentCapture: failed", e)
                 withContext(dispatchers.main) {
                     _state.value = CaptureState.Error(e.message ?: "Failed to save capture")
                 }
@@ -221,15 +244,82 @@ class CaptureViewModel @Inject constructor(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun fullImageQuad(bitmap: Bitmap): Quad {
+    /**
+     * Default fallback when edge detection fails or low-confidence: a quad
+     * inset by [insetFraction] on every side. Default 0.10 → quad covers 80%
+     * of each dimension (≈64% of total area). Visible to the user as a
+     * generous default rectangle they can drag.
+     */
+    private fun defaultInsetQuad(bitmap: Bitmap, insetFraction: Float = 0.10f): Quad {
         val w = bitmap.width.toFloat()
         val h = bitmap.height.toFloat()
+        val insetX = (w * insetFraction).coerceAtMost(w * 0.25f)
+        val insetY = (h * insetFraction).coerceAtMost(h * 0.25f)
         return Quad(
-            topLeft = Point2f(0f, 0f),
-            topRight = Point2f(w, 0f),
-            bottomRight = Point2f(w, h),
-            bottomLeft = Point2f(0f, h),
+            topLeft = Point2f(insetX, insetY),
+            topRight = Point2f(w - insetX, insetY),
+            bottomRight = Point2f(w - insetX, h - insetY),
+            bottomLeft = Point2f(insetX, h - insetY),
         )
+    }
+
+    private fun sanitizeQuad(quad: Quad, imageWidth: Int, imageHeight: Int): Quad {
+        val maxX = (imageWidth - 1).coerceAtLeast(0).toFloat()
+        val maxY = (imageHeight - 1).coerceAtLeast(0).toFloat()
+        return Quad(
+            topLeft = Point2f(quad.topLeft.x.coerceIn(0f, maxX), quad.topLeft.y.coerceIn(0f, maxY)),
+            topRight = Point2f(quad.topRight.x.coerceIn(0f, maxX), quad.topRight.y.coerceIn(0f, maxY)),
+            bottomRight = Point2f(quad.bottomRight.x.coerceIn(0f, maxX), quad.bottomRight.y.coerceIn(0f, maxY)),
+            bottomLeft = Point2f(quad.bottomLeft.x.coerceIn(0f, maxX), quad.bottomLeft.y.coerceIn(0f, maxY)),
+        )
+    }
+
+    private fun rotateQuadClockwise(quad: Quad, sourceWidth: Int, sourceHeight: Int): Quad {
+        val newWidth = sourceHeight.toFloat()
+        val newHeight = sourceWidth.toFloat()
+
+        fun rotatePoint(point: Point2f): Point2f {
+            val x = (sourceHeight.toFloat() - point.y).coerceIn(0f, newWidth)
+            val y = point.x.coerceIn(0f, newHeight)
+            return Point2f(x, y)
+        }
+
+        return sanitizeQuad(
+            quad = Quad(
+                topLeft = rotatePoint(quad.topLeft),
+                topRight = rotatePoint(quad.topRight),
+                bottomRight = rotatePoint(quad.bottomRight),
+                bottomLeft = rotatePoint(quad.bottomLeft),
+            ),
+            imageWidth = sourceHeight,
+            imageHeight = sourceWidth,
+        )
+    }
+
+    private fun isDetectionConfident(quad: Quad, imageWidth: Int, imageHeight: Int): Boolean {
+        if (imageWidth <= 0 || imageHeight <= 0) return false
+
+        val imageArea = imageWidth.toFloat() * imageHeight.toFloat()
+        val areaFraction = quad.area() / imageArea
+        if (areaFraction < MIN_CONFIDENT_QUAD_AREA || areaFraction > MAX_CONFIDENT_QUAD_AREA) {
+            return false
+        }
+
+        val topWidth = distance(quad.topLeft, quad.topRight)
+        val bottomWidth = distance(quad.bottomLeft, quad.bottomRight)
+        val leftHeight = distance(quad.topLeft, quad.bottomLeft)
+        val rightHeight = distance(quad.topRight, quad.bottomRight)
+
+        if (minOf(topWidth, bottomWidth) < imageWidth * MIN_EDGE_SPAN_FRACTION) return false
+        if (minOf(leftHeight, rightHeight) < imageHeight * MIN_EDGE_SPAN_FRACTION) return false
+
+        return true
+    }
+
+    private fun distance(a: Point2f, b: Point2f): Float {
+        val dx = a.x - b.x
+        val dy = a.y - b.y
+        return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
     private suspend fun persistCurrentCapture(state: CaptureState.ReadyToCrop): PersistResult {
@@ -246,18 +336,29 @@ class CaptureViewModel @Inject constructor(
         val imageFile = File(context.filesDir, "scans/$documentId/page_0.enc")
         val thumbFile = File(context.filesDir, "scans/$documentId/thumb_0.enc")
 
-        val imageBytes = state.image.toJpegBytes(FULL_IMAGE_QUALITY)
-        val thumbnailBytes = state.image
-            .toThumbnailBitmap(THUMB_MAX_EDGE_PX)
+        val warped = PerspectiveTransform.warp(state.image, state.quad)
+        val finalImage = ImageFilterProcessor.apply(warped, state.selectedFilter)
+
+        val imageBytes = finalImage.toJpegBytes(FULL_IMAGE_QUALITY)
+        val thumbnailBytes = finalImage
+            .toThumbnailBitmap(THUMB_MAX_WIDTH_PX, THUMB_MAX_HEIGHT_PX)
             .toJpegBytes(THUMB_IMAGE_QUALITY)
 
         val createdFiles = mutableListOf<File>()
         try {
             cryptoStore.write(imageFile, imageBytes)
             createdFiles += imageFile
+            DebugLog.d(
+                "Paperkeep.Capture",
+                "wrote image=${imageFile.absolutePath} size=${imageFile.length()}",
+            )
 
             cryptoStore.write(thumbFile, thumbnailBytes)
             createdFiles += thumbFile
+            DebugLog.d(
+                "Paperkeep.Capture",
+                "wrote thumb=${thumbFile.absolutePath} size=${thumbFile.length()}",
+            )
 
             val docType = state.classification
                 ?.type
@@ -288,8 +389,8 @@ class CaptureViewModel @Inject constructor(
                 ocrStatus = OcrStatus.PENDING,
                 ocrLanguage = null,
                 ocrText = null,
-                width = state.image.width,
-                height = state.image.height,
+                width = finalImage.width,
+                height = finalImage.height,
                 filter = state.selectedFilter.key,
             )
             repo.savePage(page)
@@ -307,8 +408,8 @@ class CaptureViewModel @Inject constructor(
                     updatedAt = nowMillis,
                     originalPath = imageFile.absolutePath,
                     thumbnailPath = thumbFile.absolutePath,
-                    widthPx = state.image.width,
-                    heightPx = state.image.height,
+                    widthPx = finalImage.width,
+                    heightPx = finalImage.height,
                 )
             )
 
@@ -325,11 +426,15 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    private fun Bitmap.toThumbnailBitmap(maxEdgePx: Int): Bitmap {
-        val maxDimension = maxOf(width, height).coerceAtLeast(1)
-        if (maxDimension <= maxEdgePx) return this
+    private fun Bitmap.toThumbnailBitmap(maxWidthPx: Int, maxHeightPx: Int): Bitmap {
+        val srcWidth = width.coerceAtLeast(1)
+        val srcHeight = height.coerceAtLeast(1)
+        if (srcWidth <= maxWidthPx && srcHeight <= maxHeightPx) return this
 
-        val scale = maxEdgePx / maxDimension.toFloat()
+        val scale = minOf(
+            maxWidthPx / srcWidth.toFloat(),
+            maxHeightPx / srcHeight.toFloat(),
+        )
         val targetWidth = (width * scale).toInt().coerceAtLeast(1)
         val targetHeight = (height * scale).toInt().coerceAtLeast(1)
         return Bitmap.createScaledBitmap(this, targetWidth, targetHeight, true)
@@ -351,6 +456,10 @@ class CaptureViewModel @Inject constructor(
         private const val KEY_QUAD = "capture_quad"
         private const val FULL_IMAGE_QUALITY = 92
         private const val THUMB_IMAGE_QUALITY = 85
-        private const val THUMB_MAX_EDGE_PX = 256
+        private const val THUMB_MAX_WIDTH_PX = 200
+        private const val THUMB_MAX_HEIGHT_PX = 280
+        private const val MIN_CONFIDENT_QUAD_AREA = 0.12f
+        private const val MAX_CONFIDENT_QUAD_AREA = 0.98f
+        private const val MIN_EDGE_SPAN_FRACTION = 0.30f
     }
 }

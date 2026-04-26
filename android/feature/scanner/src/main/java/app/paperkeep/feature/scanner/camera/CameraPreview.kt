@@ -47,7 +47,8 @@ fun CameraPreviewView(
     val imageCapture = remember {
         ImageCapture.Builder()
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            // Better still quality improves downstream edge/quad detection fidelity.
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .build()
     }
 

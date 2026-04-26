@@ -1,6 +1,7 @@
 package app.paperkeep
 
 import android.app.Application
+import app.paperkeep.core.common.DebugLog
 import app.paperkeep.crash.PaperkeepCrashHandler
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -16,6 +17,8 @@ class PaperkeepApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.init(this)
+        SingletonImageLoader.setSafe(this)
         PaperkeepCrashHandler.install(this)
     }
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -18,34 +19,38 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.paperkeep.core.imaging.FilterPreviewStrip
 import app.paperkeep.core.imaging.ImageFilter
 import app.paperkeep.core.imaging.ImageFilterProcessor
-import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import kotlin.math.roundToInt
 
 // Test tags
 const val TAG_CROP_SCREEN = "crop_screen"
@@ -118,21 +123,34 @@ private fun CropContent(
     onFilterSelected: (ImageFilter) -> Unit,
     onDocTypeOverride: (app.paperkeep.core.ml.DocumentType) -> Unit,
 ) {
-    var tlX by rememberSaveable { mutableStateOf(state.quad.topLeft.x) }
-    var tlY by rememberSaveable { mutableStateOf(state.quad.topLeft.y) }
-    var trX by rememberSaveable { mutableStateOf(state.quad.topRight.x) }
-    var trY by rememberSaveable { mutableStateOf(state.quad.topRight.y) }
-    var brX by rememberSaveable { mutableStateOf(state.quad.bottomRight.x) }
-    var brY by rememberSaveable { mutableStateOf(state.quad.bottomRight.y) }
-    var blX by rememberSaveable { mutableStateOf(state.quad.bottomLeft.x) }
-    var blY by rememberSaveable { mutableStateOf(state.quad.bottomLeft.y) }
+    // Apply selected filter on preview so crop and filter feedback stay in sync.
+    val displayBitmap = remember(state.image, state.selectedFilter) {
+        ImageFilterProcessor.apply(state.image, state.selectedFilter)
+    }
 
-    fun currentQuad() = Quad(
-        topLeft = Point2f(tlX, tlY),
-        topRight = Point2f(trX, trY),
-        bottomRight = Point2f(brX, brY),
-        bottomLeft = Point2f(blX, blY),
-    )
+    var localQuad by remember(state.image) { mutableStateOf(state.quad) }
+    LaunchedEffect(state.image, state.quad) {
+        localQuad = state.quad
+    }
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    val mapper = remember(displayBitmap.width, displayBitmap.height, viewportSize) {
+        buildCropCoordinateMapper(
+            imageWidth = displayBitmap.width,
+            imageHeight = displayBitmap.height,
+            viewportWidth = viewportSize.width,
+            viewportHeight = viewportSize.height,
+        )
+    }
+
+    val maxX = (displayBitmap.width - 1).coerceAtLeast(0).toFloat()
+    val maxY = (displayBitmap.height - 1).coerceAtLeast(0).toFloat()
+
+    fun updateQuad(update: (Quad) -> Quad) {
+        val updated = update(localQuad)
+        localQuad = updated
+        onQuadUpdated(updated)
+    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -156,42 +174,120 @@ private fun CropContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .clipToBounds(),
+                .clipToBounds()
+                .onSizeChanged { viewportSize = it },
         ) {
-            // Apply the selected filter to the displayed bitmap so the user
-            // sees a live preview of the filter on the full crop canvas.
-            val displayBitmap = remember(state.image, state.selectedFilter) {
-                ImageFilterProcessor.apply(state.image, state.selectedFilter)
-            }
-
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val bmp = displayBitmap.asImageBitmap()
-                val scaleX = size.width / displayBitmap.width
-                val scaleY = size.height / displayBitmap.height
-                val scale = minOf(scaleX, scaleY)
-                val offsetX = (size.width - displayBitmap.width * scale) / 2f
-                val offsetY = (size.height - displayBitmap.height * scale) / 2f
-                drawImage(image = bmp, topLeft = Offset(offsetX, offsetY))
-            }
+                val drawWidth = (displayBitmap.width * mapper.scale).roundToInt().coerceAtLeast(1)
+                val drawHeight = (displayBitmap.height * mapper.scale).roundToInt().coerceAtLeast(1)
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(tlX, tlY); lineTo(trX, trY); lineTo(brX, brY); lineTo(blX, blY); close()
+                drawImage(
+                    image = bmp,
+                    dstOffset = IntOffset(
+                        x = mapper.offsetX.roundToInt(),
+                        y = mapper.offsetY.roundToInt(),
+                    ),
+                    dstSize = IntSize(drawWidth, drawHeight),
+                )
+
+                val tl = mapper.imageToScreen(localQuad.topLeft)
+                val tr = mapper.imageToScreen(localQuad.topRight)
+                val br = mapper.imageToScreen(localQuad.bottomRight)
+                val bl = mapper.imageToScreen(localQuad.bottomLeft)
+                val path = Path().apply {
+                    moveTo(tl.x, tl.y)
+                    lineTo(tr.x, tr.y)
+                    lineTo(br.x, br.y)
+                    lineTo(bl.x, bl.y)
+                    close()
                 }
                 drawPath(path, color = HandleColor.copy(alpha = 0.7f), style = Stroke(width = 2.dp.toPx()))
             }
 
-            CornerHandle(x = tlX, y = tlY, tag = TAG_CORNER_TL, contentDescription = "Top-left corner handle",
-                onDrag = { dx, dy -> tlX += dx; tlY += dy; onQuadUpdated(currentQuad()) })
+            val tl = mapper.imageToScreen(localQuad.topLeft)
+            val tr = mapper.imageToScreen(localQuad.topRight)
+            val br = mapper.imageToScreen(localQuad.bottomRight)
+            val bl = mapper.imageToScreen(localQuad.bottomLeft)
 
-            CornerHandle(x = trX, y = trY, tag = TAG_CORNER_TR, contentDescription = "Top-right corner handle",
-                onDrag = { dx, dy -> trX += dx; trY += dy; onQuadUpdated(currentQuad()) })
+            // Drag uses screen-space delta → image-space delta → applied to
+            // the current corner. Avoids the recomposition feedback loop that
+            // happens when each event recomputes from absolute position.
+            CornerHandle(
+                x = tl.x,
+                y = tl.y,
+                tag = TAG_CORNER_TL,
+                contentDescription = "Top-left corner handle",
+                onDragDelta = { dxScreen, dyScreen ->
+                    val delta = mapper.screenDeltaToImageDelta(dxScreen, dyScreen)
+                    updateQuad { quad ->
+                        quad.copy(
+                            topLeft = clampPoint(
+                                x = quad.topLeft.x + delta.x,
+                                y = quad.topLeft.y + delta.y,
+                                maxX = maxX, maxY = maxY,
+                            ),
+                        )
+                    }
+                },
+            )
 
-            CornerHandle(x = brX, y = brY, tag = TAG_CORNER_BR, contentDescription = "Bottom-right corner handle",
-                onDrag = { dx, dy -> brX += dx; brY += dy; onQuadUpdated(currentQuad()) })
+            CornerHandle(
+                x = tr.x,
+                y = tr.y,
+                tag = TAG_CORNER_TR,
+                contentDescription = "Top-right corner handle",
+                onDragDelta = { dxScreen, dyScreen ->
+                    val delta = mapper.screenDeltaToImageDelta(dxScreen, dyScreen)
+                    updateQuad { quad ->
+                        quad.copy(
+                            topRight = clampPoint(
+                                x = quad.topRight.x + delta.x,
+                                y = quad.topRight.y + delta.y,
+                                maxX = maxX, maxY = maxY,
+                            ),
+                        )
+                    }
+                },
+            )
 
-            CornerHandle(x = blX, y = blY, tag = TAG_CORNER_BL, contentDescription = "Bottom-left corner handle",
-                onDrag = { dx, dy -> blX += dx; blY += dy; onQuadUpdated(currentQuad()) })
+            CornerHandle(
+                x = br.x,
+                y = br.y,
+                tag = TAG_CORNER_BR,
+                contentDescription = "Bottom-right corner handle",
+                onDragDelta = { dxScreen, dyScreen ->
+                    val delta = mapper.screenDeltaToImageDelta(dxScreen, dyScreen)
+                    updateQuad { quad ->
+                        quad.copy(
+                            bottomRight = clampPoint(
+                                x = quad.bottomRight.x + delta.x,
+                                y = quad.bottomRight.y + delta.y,
+                                maxX = maxX, maxY = maxY,
+                            ),
+                        )
+                    }
+                },
+            )
+
+            CornerHandle(
+                x = bl.x,
+                y = bl.y,
+                tag = TAG_CORNER_BL,
+                contentDescription = "Bottom-left corner handle",
+                onDragDelta = { dxScreen, dyScreen ->
+                    val delta = mapper.screenDeltaToImageDelta(dxScreen, dyScreen)
+                    updateQuad { quad ->
+                        quad.copy(
+                            bottomLeft = clampPoint(
+                                x = quad.bottomLeft.x + delta.x,
+                                y = quad.bottomLeft.y + delta.y,
+                                maxX = maxX, maxY = maxY,
+                            ),
+                        )
+                    }
+                },
+            )
         }
 
         // ── Filter preview strip (P2.7 + P3.1 wire-up) ────────────────────────
@@ -246,28 +342,60 @@ private fun CropContent(
     }
 }
 
+/**
+ * A draggable corner handle. Reports drag deltas (in screen px) per pointer
+ * event — the parent converts to image-space and applies to the current
+ * quad. This avoids the absolute-position closure-capture bug that caused
+ * the handle to drift relative to the finger.
+ *
+ * The pointer-input block is keyed on a constant [Unit], so the listener is
+ * installed exactly once. We capture nothing from the parent's recomposing
+ * state inside the listener — only [onDragDelta], which is recreated each
+ * recomposition but referenced via a stable lambda by Compose's input
+ * dispatch.
+ */
 @Composable
 private fun CornerHandle(
     x: Float,
     y: Float,
     tag: String,
     contentDescription: String,
-    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragDelta: (dxScreen: Float, dyScreen: Float) -> Unit,
 ) {
     val handleSize = 48.dp
+    val density = LocalDensity.current
+    val halfHandlePx = with(density) { handleSize.toPx() / 2f }
+
+    // Snapshot the latest callback so the pointerInput block can see updates
+    // without re-installing the listener (which would lose drag continuity).
+    val latestDragDelta = androidx.compose.runtime.rememberUpdatedState(onDragDelta)
+
     Canvas(
         modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (x - halfHandlePx).roundToInt(),
+                    y = (y - halfHandlePx).roundToInt(),
+                )
+            }
             .size(handleSize)
             .testTag(tag)
             .semantics { this.contentDescription = contentDescription }
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
+                    latestDragDelta.value(dragAmount.x, dragAmount.y)
                 }
             },
     ) {
         drawCircle(color = HandleColor, radius = HandleRadius.toPx(), center = Offset(size.width / 2f, size.height / 2f))
         drawCircle(color = Color.White, radius = HandleRadius.toPx() * 0.4f, center = Offset(size.width / 2f, size.height / 2f))
     }
+}
+
+private fun clampPoint(x: Float, y: Float, maxX: Float, maxY: Float): app.paperkeep.core.imaging.Point2f {
+    return app.paperkeep.core.imaging.Point2f(
+        x = x.coerceIn(0f, maxX),
+        y = y.coerceIn(0f, maxY),
+    )
 }

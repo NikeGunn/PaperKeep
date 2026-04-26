@@ -2,6 +2,7 @@ package app.paperkeep.feature.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.paperkeep.core.common.DebugLog
 import app.paperkeep.core.data.repository.DocumentRepository
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.DocumentSort
@@ -67,6 +68,14 @@ class LibraryViewModel @Inject constructor(
                 FOLDER_ARCHIVE -> repo.observeArchived()
                 else -> repo.observeByFolder(folderId)
             }
+        }
+        .onEach { docs ->
+            DebugLog.d(
+                "Paperkeep.Library",
+                "observed ${docs.size} docs; " +
+                    "first=${docs.firstOrNull()?.let { "${it.id} pages=${it.pages.size} " +
+                        "thumb=${it.pages.firstOrNull()?.encryptedThumbPath}" }}",
+            )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

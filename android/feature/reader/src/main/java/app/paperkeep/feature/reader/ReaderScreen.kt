@@ -70,7 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
+import app.paperkeep.core.data.compose.EncryptedImage
 
 /** Test tags */
 const val TAG_READER_SCREEN = "reader_screen"
@@ -444,8 +444,8 @@ private fun ZoomablePage(
             .clickable(onClick = onTap),
         contentAlignment = Alignment.Center,
     ) {
-        AsyncImage(
-            model = imageFile.takeIf { it.exists() },
+        EncryptedImage(
+            file = imageFile.takeIf { it.exists() },
             contentDescription = "Document page",
             contentScale = ContentScale.Fit,
             modifier = Modifier

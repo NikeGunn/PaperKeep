@@ -98,6 +98,29 @@ class CaptureViewModelTest {
     }
 
     @Test
+    fun `low confidence detected quad falls back to default inset quad`() = runTest {
+        val tinyQuadDetector = mockk<EdgeDetector>()
+        every { tinyQuadDetector.detect(any()) } returns DetectionResult.Found(
+            Quad(
+                topLeft = Point2f(1f, 1f),
+                topRight = Point2f(8f, 1f),
+                bottomRight = Point2f(8f, 8f),
+                bottomLeft = Point2f(1f, 8f),
+            )
+        )
+
+        viewModel = buildViewModel(detector = tinyQuadDetector)
+        viewModel.onImageCaptured(nonUniformBitmap(1000, 500))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as CaptureState.ReadyToCrop
+        assertEquals(100f, state.quad.topLeft.x, 0.5f)
+        assertEquals(50f, state.quad.topLeft.y, 0.5f)
+        assertEquals(900f, state.quad.topRight.x, 0.5f)
+        assertEquals(450f, state.quad.bottomLeft.y, 0.5f)
+    }
+
+    @Test
     fun `large image 4000x3000 processed without crash`() = runTest {
         viewModel = buildViewModel()
         viewModel.onImageCaptured(nonUniformBitmap(4000, 3000))

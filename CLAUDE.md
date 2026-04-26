@@ -175,17 +175,18 @@ Phases are sequential. Do not start phase N+1 until phase N's acceptance criteri
 
 ---
 
-## Current State (post-pivot, as of 2026-04-23)
+## Current State (post-pivot, as of 2026-04-26)
 
 ### Product state
 - **Pivot decision:** v1 (Go backend + Python intelligence + AWS infra) abandoned for cost. Paperkeep v2 is Android-only, backend-free.
-- **v1 Android work partially reusable:** existing modules `:core:{ui,common,crypto,data,domain,imaging,ml,pdf,security,ads}` and `:feature:{scanner,library,reader,settings,onboarding}` carry over. Phase 1 and 2 of the old FRONTEND_MVP were substantially built — most of that code is still valuable after the rename.
-- **v1 Android modules to DELETE:** `:core:network`, `:feature:account`, `:feature:sync`. Their code is coupled to the dead backend.
+- **Phase progress:** Phase 2 complete. Phase 3 complete through `P3.15`; `P3.16` (closed testing track) is the next unchecked task.
+- **Recent scanner/gallery stability pass (2026-04-26):** improved low-confidence edge fallback to default 80% quad, fixed crop touch-to-image mapping (absolute coordinate conversion), enforced app singleton Coil loader for encrypted `.enc` thumbnails/pages in gallery+reader, strengthened encrypted-file write failure handling, and tuned capture quality for better edge detection input.
+- **v1 Android modules deletion status:** `:core:network`, `:feature:account`, `:feature:sync` already deleted in P1.2.
 - **v1 non-Android directories:** fully deleted on 2026-04-23 (backend, intelligence, infra, ota, deploy, 12 old scripts, 7 backend-focused workflows, Makefile, nuke-config.yml, costs.csv). Recoverable via `git log`.
 - **AWS infra:** fully torn down on 2026-04-23. All resources manually removed. $0 ongoing cost.
 
 ### What Claude Code should do on the very next session
-Open `PROGRESS.md`. The first unchecked task is `P1.1 — Rename codebase (ScanVault → Paperkeep)` across `android/`. Do it.
+Open `PROGRESS.md`. The first unchecked task is `P3.16 — Closed testing track on Play Console (>=12 testers, start 14-day window)`. Do it.
 
 ---
 
@@ -205,10 +206,10 @@ Already done (2026-04-23, continued):
 - ✅ `P1.5` — Privacy Policy & ToS rewritten for Paperkeep v2 (full rewrite, not just rename — reflects no-server / no-account / on-device-only reality)
 - ✅ `P1.3` — `scrape/` directory deleted and committed. All v1 legacy code lives in git history only.
 
-Pending (these are the first tasks in `PROGRESS.md`):
-- ⏳ `P1.1` — Rename codebase (ScanVault → Paperkeep, `com.scanvault.app` → `app.paperkeep`), reset `VERSION` to `2.0.0-alpha.1`
-- ⏳ `P1.2` — Delete dead Android modules (`:core:network`, `:feature:account`, `:feature:sync`) and all their references
-- ⏳ `P1.4` — Update `android-ci.yml` to reflect Android-only flow (unit → instrumented → assembleRelease → Firebase App Distribution)
+Pending (see `PROGRESS.md` for exact unchecked items):
+- ⏳ `P3.16` — Closed testing track on Play Console (>= 12 opted-in testers)
+- ⏳ Phase 3 acceptance device checks (AdMob/UMP/smart-mode quality/APK size/regression run)
+- ⏳ Phase 4 tasks begin after Phase 3 acceptance gates are met
 
 ---
 

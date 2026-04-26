@@ -33,7 +33,10 @@ class AesGcmImageStore @Inject constructor(
         val cipher = cipher(Cipher.ENCRYPT_MODE, iv)
         val ciphertext = cipher.doFinal(data)
 
-        destFile.parentFile?.mkdirs()
+        val parent = destFile.parentFile
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            error("Unable to create encrypted image directory: ${parent.absolutePath}")
+        }
         destFile.outputStream().use { out ->
             out.write(iv)
             out.write(ciphertext)

@@ -399,9 +399,23 @@ if $DO_BUILD; then
   if $DO_VERBOSE; then
     "${GRADLE_CMD[@]}" assembleDebug "${GRADLE_ARGS[@]}"
   else
-    "${GRADLE_CMD[@]}" assembleDebug "${GRADLE_ARGS[@]}" 2>&1 \
-      | grep -E "^(BUILD|FAILURE|error:|> Task :app:|Caused by)" \
+    BUILD_LOG="$(mktemp)"
+    set +e
+    "${GRADLE_CMD[@]}" assembleDebug "${GRADLE_ARGS[@]}" >"$BUILD_LOG" 2>&1
+    BUILD_STATUS=$?
+    set -e
+
+    grep -E "^(BUILD|FAILURE|error:|> Task :app:|Caused by)" "$BUILD_LOG" \
       | sed 's/^/  /' || true
+
+    if [[ $BUILD_STATUS -ne 0 ]]; then
+      printf "  %s\n" "Build failed. Showing last 40 lines:"
+      tail -n 40 "$BUILD_LOG" | sed 's/^/  /'
+      rm -f "$BUILD_LOG"
+      die "Gradle assembleDebug failed"
+    fi
+
+    rm -f "$BUILD_LOG"
   fi
 
   BUILD_END=$(date +%s)

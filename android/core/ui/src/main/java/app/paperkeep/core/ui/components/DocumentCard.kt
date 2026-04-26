@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import app.paperkeep.core.data.compose.EncryptedImage
 import app.paperkeep.core.domain.model.Document
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -102,8 +103,14 @@ fun DocumentCard(
                     ?.encryptedThumbPath
                     ?.let { java.io.File(it) }
                     ?.takeIf { it.exists() }
-                AsyncImage(
-                    model = thumbFile,
+
+                val imageFileFallback = document.pages.firstOrNull()
+                    ?.encryptedImagePath
+                    ?.let { java.io.File(it) }
+                    ?.takeIf { it.exists() }
+
+                EncryptedImage(
+                    file = thumbFile ?: imageFileFallback,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize(),

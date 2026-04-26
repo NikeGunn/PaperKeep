@@ -164,11 +164,12 @@ class P110CropVerificationTest {
         vm.onImageCaptured(makeBitmap())
         advanceUntilIdle()
 
+        // Default makeBitmap() is 300x400 → max coord is (299, 399) post-sanitize.
         val newQuad = Quad(
             topLeft = Point2f(10f, 10f),
             topRight = Point2f(290f, 10f),
-            bottomRight = Point2f(290f, 490f),
-            bottomLeft = Point2f(10f, 490f),
+            bottomRight = Point2f(290f, 390f),
+            bottomLeft = Point2f(10f, 390f),
         )
         vm.onQuadUpdated(newQuad)
         advanceUntilIdle()

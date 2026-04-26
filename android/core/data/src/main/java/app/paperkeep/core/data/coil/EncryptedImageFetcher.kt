@@ -1,6 +1,7 @@
 package app.paperkeep.core.data.coil
 
 import android.graphics.BitmapFactory
+import app.paperkeep.core.common.DebugLog
 import app.paperkeep.core.data.crypto.EncryptedImageStore
 import coil3.ImageLoader
 import coil3.asImage
@@ -26,20 +27,41 @@ class EncryptedImageFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult {
-        val plainBytes = store.read(file)  // AES-256-GCM decryption
-        val bitmap = BitmapFactory.decodeByteArray(plainBytes, 0, plainBytes.size)
-            ?: error("Failed to decode bitmap from ${file.name}")
-        return ImageFetchResult(
-            image       = bitmap.asImage(),
-            isSampled   = false,
-            dataSource  = DataSource.DISK,
-        )
+        return try {
+            val plainBytes = store.read(file)  // AES-256-GCM decryption
+            val bitmap = BitmapFactory.decodeByteArray(plainBytes, 0, plainBytes.size)
+                ?: error("Failed to decode bitmap from ${file.name}")
+            DebugLog.d(
+                "Paperkeep.Coil",
+                "decoded ${file.name} cipher=${file.length()}B plain=${plainBytes.size}B " +
+                    "${bitmap.width}x${bitmap.height}",
+            )
+            ImageFetchResult(
+                image       = bitmap.asImage(),
+                isSampled   = false,
+                dataSource  = DataSource.DISK,
+            )
+        } catch (e: Exception) {
+            DebugLog.e(
+                "Paperkeep.Coil",
+                "FAILED to decode ${file.absolutePath} (exists=${file.exists()} " +
+                    "size=${file.length()})",
+                e,
+            )
+            throw e
+        }
     }
 
     class Factory(private val store: EncryptedImageStore) : Fetcher.Factory<File> {
         override fun create(data: File, options: Options, imageLoader: ImageLoader): Fetcher? {
             // Only handle files with the .enc extension produced by AesGcmImageStore
-            if (!data.name.endsWith(".enc")) return null
+            if (!data.name.endsWith(".enc")) {
+                DebugLog.w(
+                    "Paperkeep.Coil",
+                    "skipping non-.enc file passed to encrypted fetcher: ${data.name}",
+                )
+                return null
+            }
             return EncryptedImageFetcher(data, store)
         }
     }

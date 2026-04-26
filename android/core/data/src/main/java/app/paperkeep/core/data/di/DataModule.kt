@@ -53,15 +53,10 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_5_6,
                     PaperkeepDatabase.MIGRATION_6_7,
                 )
-                // Debug builds: wipe and recreate DB rather than crash on a bad migration.
-                // This is safe in development — all data is re-created by re-scanning.
-                // NEVER enable in release builds.
-                .apply {
-                    if (context.applicationInfo.flags and
-                        android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                        fallbackToDestructiveMigration(dropAllTables = true)
-                    }
-                }
+                // No destructive fallback. Wiping the DB on every debug reinstall
+                // makes "library is empty" bugs indistinguishable from data loss.
+                // If a migration ever genuinely breaks, fix the migration —
+                // do not paper over it by dropping user data.
                 // FTS virtual tables are not in @Database(entities=[]) so Room does not
                 // create them on a fresh install (only migrations run for existing DBs).
                 // This callback ensures the FTS tables always exist after onCreate.

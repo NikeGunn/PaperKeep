@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.room)
@@ -22,6 +23,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     testOptions {
@@ -57,8 +62,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Coil 3 — needed for EncryptedImageFetcher
+    // Coil 3 — used for the legacy EncryptedImageFetcher path; EncryptedImage
+    // composable bypasses Coil entirely with direct AES-GCM decode + Image().
     implementation(libs.coil.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.bundles.compose)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

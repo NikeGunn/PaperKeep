@@ -14,19 +14,19 @@ sealed interface CaptureState {
     /** Capture triggered, waiting for full-res image from CameraX. */
     data object Capturing : CaptureState
 
-    /** Image captured, edge detection + perspective warp running. */
+    /** Image captured, edge detection + initial analysis running. */
     data class Processing(val raw: Bitmap) : CaptureState
 
     /**
      * Processing complete — crop screen is shown.
      *
-     * [image]              Warped (perspective-corrected) bitmap.
+    * [image]              Captured source bitmap (full resolution).
      * [quad]               Detected / user-adjusted crop corners.
      * [classification]     Result from [DocumentClassifier] — null while still running.
      * [selectedFilter]     Currently selected [ImageFilter] (auto-set from classification,
      *                      can be overridden by the user via the filter strip).
-     * [userOverrodeType]   True when the user manually picked a different [DocumentType]
-     *                      from the chip picker — prevents auto-overwrite on re-classify.
+    * [userOverrodeType]   True when the user manually picked a [DocumentType] or filter,
+    *                      preventing async classifier updates from overriding choices.
      */
     data class ReadyToCrop(
         val image: Bitmap,

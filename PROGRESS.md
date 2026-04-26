@@ -6,11 +6,41 @@
 
 ---
 
-## Current state (2026-04-24)
+## Current state (2026-04-26)
 
 **Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.15 done. Nav + Hilt DI fully wired.
-**Last session:** 2026-04-26 — Fixed Hilt MissingBinding (OcrOrchestrator/CaptureViewModel), wired real ImageCapture → Bitmap → save pipeline, full Scanner→Crop→Library nav, P3.15 store assets.
+**Last session:** 2026-04-26 — Scanner/gallery/viewer stability hotfix pass: improved low-confidence edge fallback to default 80% crop quad, switched capture to MAXIMIZE_QUALITY, fixed crop-handle touch mapping using absolute screen→image conversion, enforced singleton Coil loader for encrypted `.enc` thumbnails/pages in library and reader, added thumbnail/full-image fallback behavior, and added regression tests for mapper + capture fallback.
 **Next task:** `P3.16` — Closed testing track on Play Console.
+
+### Post-P3.15 stability fixes (2026-04-26)
+
+- [x] **Scanner edge robustness:** tuned `OpenCvEdgeDetector` thresholds, added low-confidence gate in `CaptureViewModel` so weak detections fall back to default ~80% inset quad.
+- [x] **Crop handle alignment:** `CropCoordinateMapper` now includes explicit `screenToImage()` conversion and CropScreen handle drags update corner points via absolute touch coordinates.
+- [x] **Gallery thumbnail reliability:** `DocumentCard` now uses app singleton Coil loader (encrypted fetcher guaranteed) and falls back to full encrypted page file if thumbnail is missing.
+- [x] **Reader blank-page fix path:** `ReaderScreen.ZoomablePage` now uses the same singleton Coil loader for encrypted page decode parity with library.
+- [x] **Encrypted storage guard:** `AesGcmImageStore.write()` now fails fast when parent directories cannot be created.
+- [x] **Tests:** added `CropCoordinateMapperTest` and low-confidence fallback test in `CaptureViewModelTest`; full `testDebugUnitTest` and `assembleDebug` pass locally.
+
+### Phone-validated stability hotfix (2026-04-26 evening)
+
+The "post-P3.15 stability" fixes above were green on JVM tests but failed on the user's physical phone (Android 15, OPPO CPH2423). On-device logcat with new `DebugLog` checkpoints provided ground truth:
+
+- Save pipeline worked correctly (`Paperkeep.Capture` showed encrypted writes ~520KB image + 18KB thumb).
+- `Paperkeep.Library` observed all 8 docs with correct thumb paths.
+- **No `Paperkeep.Coil` decode lines ever fired** → Coil's default File fetcher was matching `.enc` files before our `EncryptedImageFetcher.Factory`, silently failing to decode AES-GCM ciphertext as JPEG. Every thumbnail blank.
+- Edge detector returned `result=NotFound` on a real photo (2448×3264) → fallback inset quad fired every time, hence "auto-detect doesn't work".
+- Handle drag was reading absolute `change.position` against a `(x - halfHandlePx)` value captured in a stale lambda closure, so handles drifted relative to the finger and shook on each recompose.
+
+Fixes shipped:
+
+- [x] **Bypass Coil for encrypted images:** new `EncryptedImage` composable in `:core:data` does AES-GCM decrypt + `Image(bitmap)` directly on `Dispatchers.IO`. Hilt entry-point retrieval guarded so Robolectric tests still render placeholder. Replaces `AsyncImage` in `DocumentCard` and `ReaderScreen.ZoomablePage`. Adds `:core:ui → :core:data` dep (pragmatic; documented).
+- [x] **Drag uses image-space deltas:** `CornerHandle` now reports `dragAmount` per pointer event (no absolute-position closure capture); parent maps screen→image via `screenDeltaToImageDelta` and applies to current corner. `rememberUpdatedState` ensures latest callback without re-installing `pointerInput` mid-gesture.
+- [x] **Disable destructive Room migration in debug:** removed `fallbackToDestructiveMigration(dropAllTables = true)` from `DataModule`. Older docs no longer wiped on every reinstall.
+- [x] **DebugLog scaffolding:** new `DebugLog` in `:core:common`, gated on `FLAG_DEBUGGABLE`, no-op in release. Wired at `PaperkeepApplication.onCreate`. Three pipeline tags emit: `Paperkeep.Capture`, `Paperkeep.Library`, `Paperkeep.EncryptedImage`.
+- [x] **Pre-existing test fix:** `P110CropVerificationTest.onQuadUpdated_persistsNewQuad` had off-by-one bounds (used 490 against a 400-tall bitmap); updated to 390. Was failing before this session's changes.
+- [x] **Tests:** full `./gradlew testDebugUnitTest` BUILD SUCCESSFUL across 566 tasks; `:app:assembleDebug` BUILD SUCCESSFUL.
+
+**Known remaining gap (not fixed this session):** `OpenCvEdgeDetector` is a luminance heuristic, not real OpenCV — fails on real-world photos with cluttered backgrounds. Auto-edge-snap will require either (a) actual OpenCV `findContours` integration or (b) accepting that the inset-quad fallback IS the auto-detect for v2. Tracked but out of scope for this hotfix.
 
 ### What exists from v1 that survives the pivot
 
