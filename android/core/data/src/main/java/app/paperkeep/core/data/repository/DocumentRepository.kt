@@ -190,7 +190,7 @@ class DocumentRepository @Inject constructor(
         val sql = SimpleSQLiteQuery(
             """
             SELECT d.* FROM documents d
-            INNER JOIN documents_fts ON documents_fts.docId = d.id
+            INNER JOIN documents_fts ON documents_fts.doc_id = d.id
             WHERE documents_fts MATCH ?
             ORDER BY d.createdAt DESC
             """.trimIndent(),
@@ -206,7 +206,7 @@ class DocumentRepository @Inject constructor(
     suspend fun refreshFtsRow(documentId: String) {
         val sql = SimpleSQLiteQuery(
             """
-            INSERT OR REPLACE INTO documents_fts(docId, title, ocrText)
+            INSERT OR REPLACE INTO documents_fts(doc_id, title, ocrText)
             SELECT d.id,
                    d.title,
                    COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')

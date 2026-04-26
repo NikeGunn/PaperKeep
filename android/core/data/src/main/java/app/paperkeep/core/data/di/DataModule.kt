@@ -53,6 +53,15 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_5_6,
                     PaperkeepDatabase.MIGRATION_6_7,
                 )
+                // Debug builds: wipe and recreate DB rather than crash on a bad migration.
+                // This is safe in development — all data is re-created by re-scanning.
+                // NEVER enable in release builds.
+                .apply {
+                    if (context.applicationInfo.flags and
+                        android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                        fallbackToDestructiveMigration(dropAllTables = true)
+                    }
+                }
                 // FTS virtual tables are not in @Database(entities=[]) so Room does not
                 // create them on a fresh install (only migrations run for existing DBs).
                 // This callback ensures the FTS tables always exist after onCreate.
@@ -62,7 +71,7 @@ abstract class DataModule {
                         // FTS4 reserves 'docid' — use explicit CREATE (no IF NOT EXISTS)
                         // since onCreate only fires for brand-new databases.
                         db.execSQL(
-                            "CREATE VIRTUAL TABLE documents_fts USING fts4(docId, title, ocrText)"
+                            "CREATE VIRTUAL TABLE documents_fts USING fts4(doc_id, title, ocrText)"
                         )
                         db.execSQL(
                             "CREATE VIRTUAL TABLE page_ocr_fts USING fts4(pageId, tokens)"

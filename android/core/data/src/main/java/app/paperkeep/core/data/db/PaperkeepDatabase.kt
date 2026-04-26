@@ -166,7 +166,7 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                 db.execSQL("DELETE FROM documents_fts")
                 db.execSQL(
                     """
-                    INSERT INTO documents_fts(docId, title, ocrText)
+                    INSERT INTO documents_fts(doc_id, title, ocrText)
                     SELECT d.id,
                            d.title,
                            COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')
@@ -190,41 +190,33 @@ abstract class PaperkeepDatabase : RoomDatabase() {
          * populates it on the next OCR run for existing pages.
          */
         /**
-         * Migration 6 → 7: Ensure both FTS virtual tables exist.
+         * Migration 6 → 7: Rebuild FTS tables with safe column names.
          *
-         * These tables were created in MIGRATION_2_3 and MIGRATION_5_6 respectively,
-         * but a bug in the original DataModule meant they were never created on fresh
-         * installs (Room's onCreate creates schema from entities only; virtual tables
-         * are not in @Database(entities=[])). This migration is a no-op for DBs that
-         * already have the tables; for others it creates them now.
-         */
-        /**
-         * Migration 6 → 7: Ensure both FTS virtual tables exist.
+         * SQLite FTS4 on Android 14+ reserves 'docid' (case-insensitive) as an
+         * internal rowid alias — columns named 'docId' cause a vtable constructor
+         * failure even on a fresh CREATE. We drop the old tables (if they exist from
+         * prior migrations) and recreate them with renamed columns:
+         *   documents_fts: docId → doc_id
+         *   page_ocr_fts:  tokens (was correct already, but recreate for consistency)
          *
-         * FTS4 reserves 'docid' as an internal rowid alias; creating a column
-         * named 'docId' (case-insensitive match) causes a SQLite error on some
-         * API levels. We check existence via sqlite_master before attempting
-         * creation so this migration is safe to run on DBs that already have
-         * the tables (avoids the IF NOT EXISTS + FTS4 conflict).
+         * Content is discarded — FTS rows are rebuilt incrementally by OcrOrchestrator
+         * on the next OCR run, and by DocumentRepository.refreshFtsRow on next save.
+         * The data loss is search-index only; the underlying documents/pages are intact.
          */
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                val hasFts = db.query(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='documents_fts'"
-                ).use { it.count > 0 }
-                if (!hasFts) {
-                    db.execSQL(
-                        "CREATE VIRTUAL TABLE documents_fts USING fts4(docId, title, ocrText)"
-                    )
-                }
-                val hasOcrFts = db.query(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='page_ocr_fts'"
-                ).use { it.count > 0 }
-                if (!hasOcrFts) {
-                    db.execSQL(
-                        "CREATE VIRTUAL TABLE page_ocr_fts USING fts4(pageId, tokens)"
-                    )
-                }
+                // Drop old FTS tables unconditionally — recreate with safe column names.
+                // FTS shadow tables (e.g. documents_fts_content) are dropped automatically.
+                db.execSQL("DROP TABLE IF EXISTS documents_fts")
+                db.execSQL("DROP TABLE IF EXISTS page_ocr_fts")
+
+                // 'doc_id' is safe; FTS4 only reserves the exact string 'docid' (lower-case alias)
+                db.execSQL(
+                    "CREATE VIRTUAL TABLE documents_fts USING fts4(doc_id, title, ocrText)"
+                )
+                db.execSQL(
+                    "CREATE VIRTUAL TABLE page_ocr_fts USING fts4(pageId, tokens)"
+                )
             }
         }
 
@@ -255,12 +247,12 @@ abstract class PaperkeepDatabase : RoomDatabase() {
                 db.execSQL(
                     """
                     CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
-                    USING fts4(docId, title, ocrText)
+                    USING fts4(doc_id, title, ocrText)
                     """.trimIndent()
                 )
                 db.execSQL(
                     """
-                    INSERT INTO documents_fts(docId, title, ocrText)
+                    INSERT INTO documents_fts(doc_id, title, ocrText)
                     SELECT d.id, d.title,
                            COALESCE((SELECT GROUP_CONCAT(p.ocrText, ' ')
                                      FROM pages p
