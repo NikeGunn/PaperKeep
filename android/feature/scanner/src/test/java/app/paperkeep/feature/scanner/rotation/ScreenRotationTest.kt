@@ -4,12 +4,18 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import app.paperkeep.core.common.AppDispatchers
+import app.paperkeep.core.data.crypto.EncryptedImageStore
+import app.paperkeep.core.data.db.ScanDao
+import app.paperkeep.core.data.repository.DocumentRepository
 import app.paperkeep.core.imaging.FakeEdgeDetector
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.ml.DocumentClassifier
+import app.paperkeep.core.ml.OcrOrchestrator
 import app.paperkeep.feature.scanner.capture.CaptureState
 import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.camera.CameraControlsViewModel
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -25,6 +31,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -64,7 +71,7 @@ class ScreenRotationTest {
     @Test
     fun captureViewModel_quadSurvivesRecreation_viaSavedState() = runTest {
         val savedState = SavedStateHandle()
-        val vm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        val vm = buildCaptureVm(savedState)
 
         // Capture an image so state is ReadyToCrop
         val bitmap = makeBitmap()
@@ -82,7 +89,7 @@ class ScreenRotationTest {
         advanceUntilIdle()
 
         // Simulate rotation: VM is recreated with the SAME SavedStateHandle
-        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        val recreatedVm = buildCaptureVm(savedState)
         val restoredQuad = recreatedVm.restoreQuadFromSavedState()
 
         assertNotNull("Quad must survive rotation via SavedStateHandle", restoredQuad)
@@ -105,20 +112,33 @@ class ScreenRotationTest {
     @Test
     fun captureViewModel_retakeResetsToIdle_afterRotation() = runTest {
         val savedState = SavedStateHandle()
-        val vm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        val vm = buildCaptureVm(savedState)
         vm.onImageCaptured(makeBitmap())
         advanceUntilIdle()
 
         vm.retake()
 
         // After retake + rotation the new VM instance has no saved quad
-        val recreatedVm = CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        val recreatedVm = buildCaptureVm(savedState)
         assertEquals(CaptureState.Idle, recreatedVm.state.value)
         // Quad was cleared from SavedStateHandle
         assertNull(recreatedVm.restoreQuadFromSavedState(), "Quad must be null after retake")
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun buildCaptureVm(savedState: SavedStateHandle = SavedStateHandle()) =
+        CaptureViewModel(
+            edgeDetector = FakeEdgeDetector(),
+            classifier = DocumentClassifier(),
+            dispatchers = testDispatchers,
+            savedState = savedState,
+            documentRepository = mockk(relaxed = true),
+            imageStore = mockk(relaxed = true),
+            scanDao = mockk(relaxed = true),
+            ocrOrchestrator = mockk(relaxed = true),
+            appContext = RuntimeEnvironment.getApplication(),
+        )
 
     private fun makeBitmap(): Bitmap =
         Bitmap.createBitmap(320, 480, Bitmap.Config.ARGB_8888).also { bmp ->

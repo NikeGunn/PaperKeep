@@ -1,9 +1,13 @@
 package app.paperkeep.feature.scanner.capture
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import app.paperkeep.core.common.AppDispatchers
+import app.paperkeep.core.data.crypto.EncryptedImageStore
+import app.paperkeep.core.data.db.ScanDao
+import app.paperkeep.core.data.repository.DocumentRepository
 import app.paperkeep.core.imaging.DetectionResult
 import app.paperkeep.core.imaging.EdgeDetector
 import app.paperkeep.core.imaging.FakeEdgeDetector
@@ -14,8 +18,12 @@ import app.paperkeep.core.ml.ClassificationResult
 import app.paperkeep.core.ml.DocTypePolicies
 import app.paperkeep.core.ml.DocumentClassifier
 import app.paperkeep.core.ml.DocumentType
+import app.paperkeep.core.ml.OcrOrchestrator
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -33,6 +41,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -273,13 +282,81 @@ class CaptureViewModelTest {
         assertFalse(state.userOverrodeType)
     }
 
+    // ── Save pipeline wiring ─────────────────────────────────────────────────
+
+    @Test
+    fun `saveCurrentCapture persists encrypted files and room rows then returns to Idle`() = runTest {
+        val repo = mockk<DocumentRepository>(relaxed = true)
+        val imageStore = mockk<EncryptedImageStore>(relaxed = true)
+        val scanDao = mockk<ScanDao>(relaxed = true)
+        val ocr = mockk<OcrOrchestrator>(relaxed = true)
+
+        coEvery { repo.saveDocument(any()) } returns Unit
+        coEvery { repo.savePage(any()) } returns Unit
+        coEvery { repo.refreshFtsRow(any()) } returns Unit
+        coEvery { scanDao.insert(any()) } returns Unit
+        coEvery { ocr.processPage(any(), any()) } returns Unit
+
+        viewModel = buildViewModel(
+            repo = repo,
+            imageStore = imageStore,
+            scanDao = scanDao,
+            ocrOrchestrator = ocr,
+            appContext = RuntimeEnvironment.getApplication(),
+        )
+
+        viewModel.onImageCaptured(nonUniformBitmap(320, 480))
+        advanceUntilIdle()
+
+        var savedId: String? = null
+        viewModel.saveCurrentCapture { id -> savedId = id }
+        advanceUntilIdle()
+
+        assertEquals(CaptureState.Idle, viewModel.state.value)
+        assertNotNull(savedId)
+        verify(exactly = 2) { imageStore.write(any(), any()) }
+        coVerify(exactly = 1) { repo.saveDocument(any()) }
+        coVerify(exactly = 1) { repo.savePage(any()) }
+        coVerify(exactly = 1) { scanDao.insert(any()) }
+    }
+
+    @Test
+    fun `saveCurrentCapture with failing repo transitions to Error`() = runTest {
+        val repo = mockk<DocumentRepository>(relaxed = true)
+        coEvery { repo.saveDocument(any()) } throws RuntimeException("DB write failed")
+
+        viewModel = buildViewModel(repo = repo)
+        viewModel.onImageCaptured(nonUniformBitmap(300, 400))
+        advanceUntilIdle()
+
+        viewModel.saveCurrentCapture()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value is CaptureState.Error)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
         detector: EdgeDetector = FakeEdgeDetector(),
         classifier: DocumentClassifier = DocumentClassifier(),
         savedState: SavedStateHandle = SavedStateHandle(),
-    ) = CaptureViewModel(detector, classifier, testDispatchers, savedState)
+        repo: DocumentRepository = mockk(relaxed = true),
+        imageStore: EncryptedImageStore = mockk(relaxed = true),
+        scanDao: ScanDao = mockk(relaxed = true),
+        ocrOrchestrator: OcrOrchestrator = mockk(relaxed = true),
+        appContext: Context = RuntimeEnvironment.getApplication(),
+    ) = CaptureViewModel(
+        edgeDetector = detector,
+        classifier = classifier,
+        dispatchers = testDispatchers,
+        savedState = savedState,
+        documentRepository = repo,
+        imageStore = imageStore,
+        scanDao = scanDao,
+        ocrOrchestrator = ocrOrchestrator,
+        appContext = appContext,
+    )
 
     private fun uniformBitmap(w: Int, h: Int): Bitmap =
         Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.WHITE) }

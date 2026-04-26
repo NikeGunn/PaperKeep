@@ -4,9 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import app.paperkeep.core.common.AppDispatchers
+import app.paperkeep.core.data.crypto.EncryptedImageStore
+import app.paperkeep.core.data.db.ScanDao
+import app.paperkeep.core.data.repository.DocumentRepository
 import app.paperkeep.core.imaging.FakeEdgeDetector
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.ml.DocumentClassifier
+import app.paperkeep.core.ml.OcrOrchestrator
 import app.paperkeep.feature.scanner.camera.CameraControlsViewModel
 import app.paperkeep.feature.scanner.permission.CameraPermissionState
 import app.paperkeep.feature.scanner.capture.CaptureState
@@ -15,6 +20,7 @@ import app.paperkeep.feature.scanner.edge.EdgeDetectionViewModel
 import app.paperkeep.feature.scanner.edge.EdgeOverlayState
 import app.paperkeep.feature.scanner.permission.CameraPermissionViewModel
 import app.paperkeep.feature.scanner.camera.CameraControlsState
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -31,6 +37,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -250,7 +257,17 @@ class ScanFlowTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildCaptureVm(savedState: SavedStateHandle = SavedStateHandle()) =
-        CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        CaptureViewModel(
+            edgeDetector = FakeEdgeDetector(),
+            classifier = DocumentClassifier(),
+            dispatchers = testDispatchers,
+            savedState = savedState,
+            documentRepository = mockk(relaxed = true),
+            imageStore = mockk(relaxed = true),
+            scanDao = mockk(relaxed = true),
+            ocrOrchestrator = mockk(relaxed = true),
+            appContext = RuntimeEnvironment.getApplication(),
+        )
 
     private fun makeDocumentBitmap(width: Int = 320, height: Int = 480): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bmp ->

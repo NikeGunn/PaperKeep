@@ -32,13 +32,23 @@ import javax.inject.Singleton
 class OcrOrchestrator @Inject constructor(
     private val ocrEngine: OcrEngine,
     private val repo: DocumentRepository,
-    private val bitmapDecoder: suspend (ByteArray) -> Bitmap? = { bytes ->
+) {
+    // Production bitmap decoder — decodes raw JPEG bytes from the encrypted store.
+    private var bitmapDecoder: suspend (ByteArray) -> Bitmap? = { bytes ->
         withContext(Dispatchers.Default) {
             if (bytes.isEmpty()) null
             else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }
-    },
-) {
+    }
+
+    /** Secondary constructor for unit tests that need a custom [bitmapDecoder]. */
+    internal constructor(
+        ocrEngine: OcrEngine,
+        repo: DocumentRepository,
+        bitmapDecoder: suspend (ByteArray) -> Bitmap?,
+    ) : this(ocrEngine, repo) {
+        this.bitmapDecoder = bitmapDecoder
+    }
 
     /**
      * Run OCR on [decodedBytes] for [page] and persist the result.

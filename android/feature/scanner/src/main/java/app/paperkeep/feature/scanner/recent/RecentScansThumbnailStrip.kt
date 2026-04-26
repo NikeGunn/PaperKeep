@@ -1,6 +1,7 @@
 package app.paperkeep.feature.scanner.recent
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -38,17 +39,23 @@ const val TAG_THUMBNAIL_ITEM = "recent_scan_thumbnail_item"
  */
 @Composable
 fun RecentScansThumbnailStrip(
+    onOpenLibrary: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: RecentScansViewModel = hiltViewModel(),
 ) {
     val scans by viewModel.recentScans.collectAsStateWithLifecycle()
-    RecentScansThumbnailStripContent(scans = scans, modifier = modifier)
+    RecentScansThumbnailStripContent(
+        scans = scans,
+        onOpenLibrary = onOpenLibrary,
+        modifier = modifier,
+    )
 }
 
 /** Stateless content — directly testable without DI. */
 @Composable
 fun RecentScansThumbnailStripContent(
     scans: List<ScanEntity>,
+    onOpenLibrary: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -65,8 +72,9 @@ fun RecentScansThumbnailStripContent(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.Center)
+                    .clickable(onClick = onOpenLibrary)
                     .testTag(TAG_THUMBNAIL_EMPTY)
-                    .semantics { contentDescription = "No recent scans" },
+                    .semantics { contentDescription = "No recent scans. Open library" },
             )
         } else {
             LazyRow(
@@ -75,7 +83,7 @@ fun RecentScansThumbnailStripContent(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 items(items = scans, key = { it.id }) { scan ->
-                    ThumbnailItem(scan = scan)
+                    ThumbnailItem(scan = scan, onOpenLibrary = onOpenLibrary)
                 }
             }
         }
@@ -83,14 +91,18 @@ fun RecentScansThumbnailStripContent(
 }
 
 @Composable
-private fun ThumbnailItem(scan: ScanEntity) {
+private fun ThumbnailItem(
+    scan: ScanEntity,
+    onOpenLibrary: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .size(72.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onOpenLibrary)
             .testTag("${TAG_THUMBNAIL_ITEM}_${scan.id}")
-            .semantics { contentDescription = "Scan thumbnail: ${scan.title}" },
+            .semantics { contentDescription = "Scan thumbnail: ${scan.title}. Open library" },
         contentAlignment = Alignment.Center,
     ) {
         // In Phase 2, this will be replaced by an encrypted thumbnail loaded via Coil.

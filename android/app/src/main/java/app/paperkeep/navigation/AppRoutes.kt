@@ -19,10 +19,11 @@ object ScannerRoute
 
 /**
  * Manual crop screen — shown after a capture.
- * [capturedImagePath] is the path to the temporary full-res bitmap written by CameraX.
+ * Crop state is kept in [app.paperkeep.feature.scanner.capture.CaptureViewModel],
+ * so this route does not carry image arguments.
  */
 @Serializable
-data class CropRoute(val capturedImagePath: String)
+object CropRoute
 
 /** Document library screen. */
 @Serializable

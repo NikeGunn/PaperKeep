@@ -1,7 +1,11 @@
 package app.paperkeep.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -16,9 +20,9 @@ import app.paperkeep.feature.library.LibraryScreen
 import app.paperkeep.feature.onboarding.OnboardingScreen
 import app.paperkeep.feature.reader.ReaderScreen
 import app.paperkeep.feature.scanner.ScannerScreen
+import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.capture.CropScreen
 import app.paperkeep.feature.settings.SettingsScreen
-import javax.inject.Inject
 
 /**
  * Root navigation graph for Paperkeep.
@@ -35,8 +39,11 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     lockController: LockController = hiltViewModel<LockNavViewModel>().lockController,
+    onboardingNavViewModel: OnboardingNavViewModel = hiltViewModel(),
+    captureViewModel: CaptureViewModel = hiltViewModel(),
 ) {
     val isLocked by lockController.isLocked.collectAsStateWithLifecycle(initialValue = false)
+    val onboardingCompleted by onboardingNavViewModel.onboardingCompleted.collectAsStateWithLifecycle()
 
     if (isLocked) {
         LockScreen(
@@ -53,9 +60,22 @@ fun AppNavHost(
         return
     }
 
+    val completed = onboardingCompleted
+    if (completed == null) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    val startDestination = if (completed) ScannerRoute else OnboardingRoute
+
     NavHost(
         navController = navController,
-        startDestination = OnboardingRoute,
+        startDestination = startDestination,
         modifier = modifier,
     ) {
         composable<OnboardingRoute> {
@@ -63,6 +83,7 @@ fun AppNavHost(
                 onComplete = {
                     navController.navigate(ScannerRoute) {
                         popUpTo<OnboardingRoute> { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
@@ -70,22 +91,26 @@ fun AppNavHost(
 
         composable<ScannerRoute> {
             ScannerScreen(
-                onCaptureDone = { imagePath ->
-                    navController.navigate(CropRoute(imagePath))
+                onCaptureDone = {
+                    navController.navigate(CropRoute)
                 },
                 onOpenLibrary = {
                     navController.navigate(LibraryRoute)
                 },
+                captureViewModel = captureViewModel,
             )
         }
 
         composable<CropRoute> {
             CropScreen(
                 onNext = {
-                    navController.navigate(LibraryRoute) {
-                        popUpTo<ScannerRoute>()
+                    captureViewModel.saveCurrentCapture { _ ->
+                        navController.navigate(LibraryRoute) {
+                            popUpTo<ScannerRoute>()
+                        }
                     }
                 },
+                viewModel = captureViewModel,
             )
         }
 

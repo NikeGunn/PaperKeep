@@ -7,6 +7,8 @@ import app.paperkeep.core.common.AppDispatchers
 import app.paperkeep.core.imaging.FakeEdgeDetector
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
+import app.paperkeep.core.ml.DocumentClassifier
+import app.paperkeep.core.ml.OcrOrchestrator
 import app.paperkeep.feature.scanner.capture.CaptureState
 import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.capture.TAG_CORNER_BL
@@ -17,6 +19,7 @@ import app.paperkeep.feature.scanner.capture.TAG_CROP_SCREEN
 import app.paperkeep.feature.scanner.capture.TAG_NEXT_BUTTON
 import app.paperkeep.feature.scanner.capture.TAG_RETAKE_BUTTON
 import app.paperkeep.feature.scanner.capture.TAG_ROTATE_BUTTON
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -32,6 +35,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -203,7 +207,17 @@ class P110CropVerificationTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildVm(savedState: SavedStateHandle = SavedStateHandle()) =
-        CaptureViewModel(FakeEdgeDetector(), app.paperkeep.core.ml.DocumentClassifier(), testDispatchers, savedState)
+        CaptureViewModel(
+            edgeDetector = FakeEdgeDetector(),
+            classifier = DocumentClassifier(),
+            dispatchers = testDispatchers,
+            savedState = savedState,
+            documentRepository = mockk(relaxed = true),
+            imageStore = mockk(relaxed = true),
+            scanDao = mockk(relaxed = true),
+            ocrOrchestrator = mockk(relaxed = true),
+            appContext = RuntimeEnvironment.getApplication(),
+        )
 
     private fun makeBitmap(width: Int = 300, height: Int = 400): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.WHITE) }

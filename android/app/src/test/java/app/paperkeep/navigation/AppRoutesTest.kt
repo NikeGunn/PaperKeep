@@ -12,6 +12,7 @@ import org.junit.Test
  * Navigation Compose 2.8+ uses @Serializable routes. We verify:
  *  - Routes serialize/deserialize correctly (the key requirement for type-safe nav)
  *  - Routes with parameters carry their data through serialization
+ *  - Singleton object routes round-trip as the same object instance
  *  - All declared routes are non-null (compile-time check via object instantiation)
  */
 class AppRoutesTest {
@@ -44,12 +45,10 @@ class AppRoutesTest {
 
     @Test
     fun cropRoute_serializesAndDeserializes() {
-        val original = CropRoute(capturedImagePath = "/storage/emulated/0/DCIM/capture.jpg")
-
-        val serialized = json.encodeToString(original)
+        val serialized = json.encodeToString(CropRoute)
         val restored = json.decodeFromString<CropRoute>(serialized)
 
-        assertEquals(original.capturedImagePath, restored.capturedImagePath)
+        assertEquals(CropRoute, restored)
     }
 
     @Test
@@ -60,17 +59,6 @@ class AppRoutesTest {
         val restored = json.decodeFromString<ReaderRoute>(serialized)
 
         assertEquals(original.scanId, restored.scanId)
-    }
-
-    @Test
-    fun cropRoute_preservesSpecialCharsInPath() {
-        val path = "/data/user/0/app.paperkeep.debug/files/scans/scan with spaces & symbols!.jpg"
-        val route = CropRoute(capturedImagePath = path)
-
-        val serialized = json.encodeToString(route)
-        val restored = json.decodeFromString<CropRoute>(serialized)
-
-        assertEquals(path, restored.capturedImagePath)
     }
 
     @Test
