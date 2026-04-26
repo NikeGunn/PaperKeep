@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-24)
 
-**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.14 done.
-**Last session:** 2026-04-25 — P3.11–P3.14 complete. BillingManager stub, InAppReviewManager verified, ApkSignatureVerifier, DeviceIntegrityChecker, IntegrityGate — full suite BUILD SUCCESSFUL.
-**Next task:** `P3.15` — Play Store assets in :store module.
+**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.15 done. Nav + Hilt DI fully wired.
+**Last session:** 2026-04-26 — Fixed Hilt MissingBinding (OcrOrchestrator/CaptureViewModel), wired real ImageCapture → Bitmap → save pipeline, full Scanner→Crop→Library nav, P3.15 store assets.
+**Next task:** `P3.16` — Closed testing track on Play Console.
 
 ### What exists from v1 that survives the pivot
 
@@ -128,7 +128,7 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [x] **P3.12** — In-app rating prompt via `ReviewManager`. Trigger: ≥3 exports AND ≥3 distinct days AND no prompt in last 90 days. ✅ 2026-04-25 — InAppReviewManager already existed with 5 tests covering all conditions; verified complete.
 - [x] **P3.13** — APK signature pin. Bake signing-cert SHA-256 into release builds. On launch, compare `PackageInfo.signingInfo.apkContentsSigners[0]` to baked constant. Mismatch → silently disable AdMob + Pro IAP + backup creation. ✅ 2026-04-25 — ApkSignatureVerifier (sentinel all-zeroes = not configured, sha256Hex, verify/isTrusted), VerificationResult sealed class, IntegrityGate aggregator, 14 tests.
 - [x] **P3.14** — Root/Magisk/Frida/emulator detection per §6.6. Best-effort; does NOT block app; disables Pro IAP unlock and backup creation on rooted devices with a polite info card. ✅ 2026-04-25 — DeviceIntegrityChecker (injectable RootProbe/FridaProbe/EmulatorProbe), DefaultRootProbe (su paths + Magisk dirs + build.tags), DefaultFridaProbe (/proc/self/maps + port 27042), DefaultEmulatorProbe (Build fields), RootCheckResult, 22 tests.
-- [ ] **P3.15** — Play Store assets in `:store`. EN listing copy (Paperkeep title + keyword-loaded short description), 8 feature-narrative screenshots, 1024×500 feature graphic, hosted privacy policy link (copy served from `docs/PRIVACY_POLICY.md`), Data Safety form draft answers ("no data collected").
+- [x] **P3.15** — Play Store assets in `:store`. EN listing copy (Paperkeep title + keyword-loaded short description), 8 feature-narrative screenshots, 1024×500 feature graphic, hosted privacy policy link (copy served from `docs/PRIVACY_POLICY.md`), Data Safety form draft answers ("no data collected"). ✅ 2026-04-26 — listing.txt (keyword-loaded, 4000-char full description), data_safety.txt (all sections, AdMob disclosure, "no data collected" summary), screenshots/README.txt (8 narrative screenshots with capture instructions + feature graphic spec). Physical screenshots pending device capture.
 - [ ] **P3.16** — Closed testing track on Play Console with ≥ 12 opted-in testers. Starts the 14-day clock — do this the moment the Phase 3 build is stable, not at the end.
 
 **Phase 3 acceptance** (`docs/PAPERKEEP_DESIGN.md` §5 Phase 3):

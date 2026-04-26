@@ -1,23 +1,71 @@
 Play Store Screenshots
 ======================
 
-Required sizes (per Play Store policy):
-  Phone:   At least 2 screenshots at 16:9 or 9:16 (max 8)
-           Recommended: 1080 x 1920 px (portrait)
-  7" tab:  At least 1 screenshot at 1200 x 1920 px (optional but recommended)
-  10" tab: At least 1 screenshot at 1920 x 1200 px (optional)
+Required: ≥2 phone screenshots (Play policy). Recommended: 8.
+Dimensions: 1080 × 1920 px portrait (9:16). PNG or JPEG, no alpha, ≤8 MB.
 
-Suggested captures (take on a real Pixel or Galaxy device):
-  01_scanner_camera.png     — Camera viewfinder with edge detection overlay
-  02_library_grid.png       — Document library grid view
-  03_reader_page.png        — Document reader with OCR overlay
-  04_filter_strip.png       — Image filter comparison strip
-  05_pdf_export.png         — Export dialog / PDF preview
-  06_id_card_mode.png       — ID card two-page composite
-  07_receipt_mode.png       — Receipt scan with extracted total
-  08_signature_tool.png     — Signature placement on a document
+CAPTURE SCRIPT
+--------------
+Connect phone with USB debugging and run:
 
-File format: PNG or JPEG, no alpha channel
-Max file size: 8 MB per screenshot
+  adb shell screencap -p /sdcard/ss.png && adb pull /sdcard/ss.png <filename>
 
-All screenshots will be placed in this directory before Play Store submission.
+Or in Android Studio: Device Manager → camera icon → save PNG.
+
+REQUIRED SCREENSHOTS (capture in this order)
+---------------------------------------------
+
+  01_scanner_live.png
+    Screen:   ScannerScreen — camera live, edge detection quad visible
+    Show:     Real document on a table, orange corner handles overlaid
+    Caption:  "Real-time edge detection"
+
+  02_crop_doctype.png
+    Screen:   CropScreen — DocTypeChip showing "Receipt 🧾", filter strip
+    Show:     Receipt in crop view, filter strip visible at bottom
+    Caption:  "Smart document classification"
+
+  03_library_grid.png
+    Screen:   LibraryScreen — 2-col grid with 6–8 scanned documents
+    Show:     Mix of receipts, ID cards, A4 docs with thumbnails
+    Caption:  "Everything organised"
+
+  04_reader_ocr.png
+    Screen:   ReaderScreen — full-page doc, bottom bar visible
+    Show:     A4 document with readable text
+    Caption:  "Search inside every document"
+
+  05_id_card.png
+    Screen:   IdCardScreen — step 2 (AwaitingBack), front side preview
+    Show:     Front side thumbnail displayed, "Now scan the back side" text
+    Caption:  "ID + card front & back on one page"
+
+  06_receipt_data.png
+    Screen:   LibraryScreen — receipt card showing extracted chips
+    Show:     Receipt document card with total/date/merchant chips visible
+    Caption:  "Receipt data extracted automatically"
+
+  07_signature.png
+    Screen:   ReaderScreen — signature placement drag handle visible
+    Show:     Signature overlaid on a document page
+    Caption:  "Sign documents on your phone"
+
+  08_settings_security.png
+    Screen:   SettingsScreen — Security section, biometric lock toggle ON
+    Show:     "100% offline" pill at top, lock settings section
+    Caption:  "AES-256 encrypted. Biometric lock."
+
+FEATURE GRAPHIC (see feature-graphic-spec.txt)
+----------------------------------------------
+
+  feature_graphic.jpg  — 1024 × 500 px, JPEG 90%, ~80 KB target
+  Content: Paperkeep wordmark + "Scan. Organise. Export." tagline
+           on ScanAmber gradient (#F9A825 → #F57F17)
+
+CHECKLIST BEFORE SUBMISSION
+----------------------------
+[ ] All 8 screenshots captured on a real device (Pixel 6a or similar)
+[ ] feature_graphic.jpg present (1024×500, <1MB)
+[ ] No status bar icons showing notifications or low battery
+[ ] No personal data visible in any screenshot
+[ ] Screenshots match current app UI (no outdated placeholders)

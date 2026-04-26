@@ -1,0 +1,75 @@
+===========================================================================
+PAPERKEEP — DATA SAFETY FORM ANSWERS (Google Play Console)
+Last updated: 2026-04-26
+===========================================================================
+
+SECTION 1: Data collection and security
+--------------------------------------------------------------------------
+
+Q: Does your app collect or share any of the required user data types?
+A: NO — Paperkeep does not collect or share any user data.
+
+Q: Is all of the user data collected by your app encrypted in transit?
+A: N/A — no user data is transmitted.
+
+Q: Do you provide a way for users to request that their data is deleted?
+A: N/A — no user data is stored on any server. Users can delete the app
+   and all data is removed with it. We have no copy of any user data.
+
+--------------------------------------------------------------------------
+SECTION 2: Data types (all answers: Not collected)
+--------------------------------------------------------------------------
+
+Location            → Not collected
+Personal info       → Not collected
+Financial info      → Not collected
+Health & fitness    → Not collected
+Messages            → Not collected
+Photos & videos     → Not collected  [app creates files, never uploads]
+Audio files         → Not collected
+Files & docs        → Not collected  [files stay on device, never uploaded]
+Calendar            → Not collected
+Contacts            → Not collected
+App activity        → Not collected
+Web browsing        → Not collected
+App info & performance → Not collected
+Device or other IDs → Not collected  [AdMob may use device advertising ID
+                                      per Google's own policy; see below]
+
+--------------------------------------------------------------------------
+SECTION 3: AdMob disclosure (third-party SDK)
+--------------------------------------------------------------------------
+
+Paperkeep uses Google AdMob for interstitial ads (after every 5th export).
+Google's AdMob SDK may collect:
+
+  • Device or other IDs (Advertising ID) — for ad personalisation
+    Purpose: Advertising or marketing
+    Required or optional: Optional (user can opt out via system settings)
+    Data shared with third parties: Yes (Google)
+    Processing: Ephemeral (not stored by Paperkeep)
+
+All AdMob data handling is governed by Google's Privacy Policy.
+EU users are shown a GDPR UMP consent form before any ad loads.
+Paperkeep Pro users (coming soon) see no ads and no ad SDK is initialised.
+
+--------------------------------------------------------------------------
+SECTION 4: Privacy Policy URL
+--------------------------------------------------------------------------
+
+https://paperkeep.app/privacy
+
+(Served from docs/PRIVACY_POLICY.md via GitHub Pages or similar static host
+before Play Store submission.)
+
+--------------------------------------------------------------------------
+SECTION 5: Summary statement for Play Store
+--------------------------------------------------------------------------
+
+"No data collected" — Paperkeep does not collect, share, or transmit any
+user data. All scanned documents, OCR text, and settings stay on your
+device, encrypted with AES-256-GCM. The only network traffic is Google
+AdMob (interstitial ads, subject to Google's Privacy Policy) and optional
+Play Billing for the Pro upgrade.
+
+===========================================================================
