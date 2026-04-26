@@ -98,9 +98,12 @@ fun DocumentCard(
                     .aspectRatio(3f / 4f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                val thumbPath = document.pages.firstOrNull()?.encryptedThumbPath
+                val thumbFile = document.pages.firstOrNull()
+                    ?.encryptedThumbPath
+                    ?.let { java.io.File(it) }
+                    ?.takeIf { it.exists() }
                 AsyncImage(
-                    model = thumbPath,
+                    model = thumbFile,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize(),

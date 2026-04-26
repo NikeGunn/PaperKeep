@@ -28,7 +28,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PageEntity::class,
         PageOcrEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class PaperkeepDatabase : RoomDatabase() {
@@ -189,6 +189,45 @@ abstract class PaperkeepDatabase : RoomDatabase() {
          * The table is intentionally NOT pre-populated here; OcrOrchestrator
          * populates it on the next OCR run for existing pages.
          */
+        /**
+         * Migration 6 → 7: Ensure both FTS virtual tables exist.
+         *
+         * These tables were created in MIGRATION_2_3 and MIGRATION_5_6 respectively,
+         * but a bug in the original DataModule meant they were never created on fresh
+         * installs (Room's onCreate creates schema from entities only; virtual tables
+         * are not in @Database(entities=[])). This migration is a no-op for DBs that
+         * already have the tables; for others it creates them now.
+         */
+        /**
+         * Migration 6 → 7: Ensure both FTS virtual tables exist.
+         *
+         * FTS4 reserves 'docid' as an internal rowid alias; creating a column
+         * named 'docId' (case-insensitive match) causes a SQLite error on some
+         * API levels. We check existence via sqlite_master before attempting
+         * creation so this migration is safe to run on DBs that already have
+         * the tables (avoids the IF NOT EXISTS + FTS4 conflict).
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val hasFts = db.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='documents_fts'"
+                ).use { it.count > 0 }
+                if (!hasFts) {
+                    db.execSQL(
+                        "CREATE VIRTUAL TABLE documents_fts USING fts4(docId, title, ocrText)"
+                    )
+                }
+                val hasOcrFts = db.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='page_ocr_fts'"
+                ).use { it.count > 0 }
+                if (!hasOcrFts) {
+                    db.execSQL(
+                        "CREATE VIRTUAL TABLE page_ocr_fts USING fts4(pageId, tokens)"
+                    )
+                }
+            }
+        }
+
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(

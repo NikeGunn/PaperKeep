@@ -81,6 +81,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    // Coil 3 — for SingletonImageLoader.Factory in PaperkeepApplication
+    implementation(libs.coil.compose)
+
     // Core AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.splashscreen)

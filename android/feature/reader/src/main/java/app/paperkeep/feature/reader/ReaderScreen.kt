@@ -225,7 +225,7 @@ fun ReaderScreen(
             ) { pageIndex ->
                 val page = pages[pageIndex]
                 ZoomablePage(
-                    imagePath = page.encryptedImagePath,
+                    imageFile = java.io.File(page.encryptedImagePath),
                     ocrText = if (ocrOverlayEnabled) page.ocrText else null,
                     onTap = viewModel::toggleBottomBar,
                 )
@@ -423,7 +423,7 @@ private fun ReaderBottomBar(
 
 @Composable
 private fun ZoomablePage(
-    imagePath: String,
+    imageFile: java.io.File,
     ocrText: String?,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
@@ -445,7 +445,7 @@ private fun ZoomablePage(
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
-            model = imagePath,
+            model = imageFile.takeIf { it.exists() },
             contentDescription = "Document page",
             contentScale = ContentScale.Fit,
             modifier = Modifier
