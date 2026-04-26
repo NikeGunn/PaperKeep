@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,16 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// Release signing: read from <rootDir>/keystore.properties if present.
+// File is gitignored. See android/store/signing-setup.md for setup steps.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile")?.let {
+    rootProject.file(it).exists()
+} == true
 
 android {
     namespace = "app.paperkeep"
@@ -21,6 +33,21 @@ android {
         testInstrumentationRunner = "app.paperkeep.HiltTestRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -32,6 +59,9 @@ android {
             // R8 full mode: more aggressive dead-code elimination
             // Uncomment if minSdk >= 24 (no legacy class backporting needed)
             // proguardFile("$rootDir/r8-full-mode.pro")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -50,6 +80,18 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    lint {
+        // P4.10 will populate translations for all 8 supported locales.
+        // Until then, the values-XX/ stub files are intentional placeholders;
+        // don't fail the release build on missing translations.
+        disable += "MissingTranslation"
+        // We enforce zero hardcoded strings via design review, but lint's
+        // HardcodedText check fights with Compose previews — keep as warning.
+        warning += "HardcodedText"
+        abortOnError = true
+        checkReleaseBuilds = true
     }
 
     packaging {

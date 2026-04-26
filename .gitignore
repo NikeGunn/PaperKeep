@@ -76,6 +76,7 @@ coverage.xml
 *.env
 *.jks
 *.keystore
+keystore.properties
 play-service-account.json
 google-services.json
 GoogleService-Info.plist

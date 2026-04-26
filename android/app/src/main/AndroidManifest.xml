@@ -34,6 +34,9 @@
         android:theme="@style/Theme.Paperkeep">
 
         <!-- ── Main Activity ─────────────────────────────────────────────── -->
+        <!-- exported=true: required because this activity holds the LAUNCHER
+             intent-filter (system launchers must resolve it) and receives
+             OPEN_CAMERA / IMPORT_IMAGES actions from our own widget + QS tile. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -56,6 +59,9 @@
         </activity>
 
         <!-- ── Share Import Activity (receives images from other apps) ───── -->
+        <!-- exported=true: required to receive ACTION_SEND / ACTION_SEND_MULTIPLE
+             from third-party apps (Gallery, Files, etc.). MIME filter allowlist
+             below restricts to image/* and application/pdf only. -->
         <activity
             android:name=".share.ShareImportActivity"
             android:exported="true"
@@ -95,6 +101,9 @@
         </receiver>
 
         <!-- ── Quick Settings Tile: "Scan document" ──────────────────────── -->
+        <!-- exported=true: mandatory for QS tiles — system SystemUI binds the
+             service. Protected by android.permission.BIND_QUICK_SETTINGS_TILE
+             so only the system can bind. -->
         <service
             android:name=".qs.ScanDocumentTileService"
             android:exported="true"

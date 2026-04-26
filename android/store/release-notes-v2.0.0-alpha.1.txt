@@ -1,0 +1,68 @@
+PAPERKEEP 2.0.0-alpha.1 — closed testing release
+==================================================
+
+First closed-testing build of Paperkeep. If you're reading this, you are one
+of the ~12 alpha testers. Thank you.
+
+WHAT WORKS
+----------
+- Real-time edge detection + manual crop
+- Multi-page batch capture, drag-to-reorder
+- 5 image filters (Original / Auto / Magic / Grayscale / B&W)
+- 6 smart modes: Auto / ID card / Receipt / Whiteboard / Book / A4
+- Searchable PDF export (text inside PDF is selectable in any reader)
+- JPEG / PNG / ZIP / TXT export
+- Encrypted ZIP backup (Argon2id + AES-256-GCM)
+- Library: folders, favorites, archive, multi-select, full-text search
+- Reader: pinch-zoom, OCR overlay, inline rename, share to any app
+- Biometric lock (fingerprint / face) with configurable auto-lock timeout
+- Settings: lock toggle, screenshot protection, OSS licenses, privacy policy
+- Recent-apps redaction (no preview leaks in task switcher)
+- Clipboard auto-clear after 60s when copying OCR text
+- Annotations + signatures (3 saved slots) + true destructive redaction
+- Image cleanup (denoise / sharpen / fix lighting)
+- AdMob interstitials (test ads in this build) capped at 1-per-3-min,
+  shown after every 5th export — never on camera, never on reader
+
+WHAT'S MISSING (intentional — coming in next builds)
+----------------------------------------------------
+- Local SAF-based backup → Phase 4
+- 8-language localization (EN-only for alpha) → Phase 4
+- Home-screen widgets + Quick Settings tile (already wired, but polish later) → Phase 4
+- On-device summarizer + Pro IAP unlock → Phase 5
+
+WHAT TO TEST (in priority order)
+--------------------------------
+1. CAPTURE: open camera, scan a real document. Does edge detection find the
+   corners? If not, does the manual crop work? Does the saved page look right?
+2. PDF EXPORT: scan 3 pages, export as PDF, open the PDF in any reader.
+   Long-press to copy text — does it actually select text?
+3. PRIVACY: turn on airplane mode, use the whole app. Everything except
+   AdMob test ads should still work. (Network access for AdMob is the only
+   exception in our privacy posture.)
+4. BIOMETRIC LOCK: turn it on in Settings. Background the app, come back
+   after 1 minute, confirm it asks for your fingerprint/face.
+5. RECENT APPS: with sensitive content on screen, hit recent apps. The
+   preview should be a neutral "Paperkeep" card, not your scanned doc.
+
+KNOWN ISSUES
+------------
+- Edge auto-detect sometimes misses on cluttered backgrounds — fall back
+  to manual crop. (Tracked: real OpenCV findContours integration in P5.x.)
+- ML Kit OCR language model is downloaded on demand on first OCR; English
+  is default, other scripts may show a one-time "downloading" toast.
+- ANR / freeze on extremely large multi-page captures (>20 pages) — please
+  report if you hit this, scope of fix depends on device perf.
+
+HOW TO REPORT BUGS
+------------------
+Reply to the alpha tester email thread, or fill the feedback form in the
+Play Console listing. Include: device model, Android version, what you did,
+what you expected, what happened. Screenshot if visual.
+
+Privacy: this build collects ZERO data about you. Crash reports are stored
+encrypted on your device only — they do NOT auto-upload. There's a "Send
+crash report" button in Settings that opens your email client with the log
+attached, manually. (Phase 4 implementation.)
+
+— Nikhil

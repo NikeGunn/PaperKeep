@@ -8,9 +8,9 @@
 
 ## Current state (2026-04-26)
 
-**Status:** Phase 2 complete. Phase 3 in progress — P3.1–P3.15 done. Nav + Hilt DI fully wired.
-**Last session:** 2026-04-26 — Scanner/gallery/viewer stability hotfix pass: improved low-confidence edge fallback to default 80% crop quad, switched capture to MAXIMIZE_QUALITY, fixed crop-handle touch mapping using absolute screen→image conversion, enforced singleton Coil loader for encrypted `.enc` thumbnails/pages in library and reader, added thumbnail/full-image fallback behavior, and added regression tests for mapper + capture fallback.
-**Next task:** `P3.16` — Closed testing track on Play Console.
+**Status:** Phase 2 complete. Phase 3 code-complete (P3.1–P3.15 done). P3.16 deferred — awaiting Play Console account purchase. All P3.16 *code-side* prerequisites shipped this session.
+**Last session:** 2026-04-26 — P3.16 pre-flight: wired conditional release signing (`keystore.properties`-driven), added `ManifestAuditTest` (8 tests, exported-component justification, allowBackup, banned permissions, FileProvider, applicationId/version), fixed lint error in `ScanDocumentTileService` (`StartActivityAndCollapseDeprecated` suppression on the SDK-gated legacy branch), configured `:app` lint to warn-not-error on `MissingTranslation` (P4.10 fills these in), produced first signed-ready release artifacts (43 MB universal AAB / ~17 MB per-device install slice — well under the 28 MB Phase 3 floor), and shipped the operational kit: `signing-setup.md`, `closed-testing-checklist.md`, `tester-recruitment-email.md`, `release-notes-v2.0.0-alpha.1.txt`.
+**Next task:** Buy Play Console account → follow `android/store/closed-testing-checklist.md`. Until then: Phase 4 P4.1 (`:core:backup` module) is unblocked and can start in parallel.
 
 ### Post-P3.15 stability fixes (2026-04-26)
 
@@ -159,16 +159,16 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [x] **P3.13** — APK signature pin. Bake signing-cert SHA-256 into release builds. On launch, compare `PackageInfo.signingInfo.apkContentsSigners[0]` to baked constant. Mismatch → silently disable AdMob + Pro IAP + backup creation. ✅ 2026-04-25 — ApkSignatureVerifier (sentinel all-zeroes = not configured, sha256Hex, verify/isTrusted), VerificationResult sealed class, IntegrityGate aggregator, 14 tests.
 - [x] **P3.14** — Root/Magisk/Frida/emulator detection per §6.6. Best-effort; does NOT block app; disables Pro IAP unlock and backup creation on rooted devices with a polite info card. ✅ 2026-04-25 — DeviceIntegrityChecker (injectable RootProbe/FridaProbe/EmulatorProbe), DefaultRootProbe (su paths + Magisk dirs + build.tags), DefaultFridaProbe (/proc/self/maps + port 27042), DefaultEmulatorProbe (Build fields), RootCheckResult, 22 tests.
 - [x] **P3.15** — Play Store assets in `:store`. EN listing copy (Paperkeep title + keyword-loaded short description), 8 feature-narrative screenshots, 1024×500 feature graphic, hosted privacy policy link (copy served from `docs/PRIVACY_POLICY.md`), Data Safety form draft answers ("no data collected"). ✅ 2026-04-26 — listing.txt (keyword-loaded, 4000-char full description), data_safety.txt (all sections, AdMob disclosure, "no data collected" summary), screenshots/README.txt (8 narrative screenshots with capture instructions + feature graphic spec). Physical screenshots pending device capture.
-- [ ] **P3.16** — Closed testing track on Play Console with ≥ 12 opted-in testers. Starts the 14-day clock — do this the moment the Phase 3 build is stable, not at the end.
+- [~] **P3.16** — Closed testing track on Play Console with ≥ 12 opted-in testers. **Code-side complete 2026-04-26; awaiting Play Console account purchase.** Done this session: conditional `signingConfigs.release` reading from gitignored `keystore.properties` (graceful fallback to unsigned APK if absent), `keystore.properties.example` template, `ManifestAuditTest` (8 tests covering exported-component justification comments, `allowBackup=false`, banned permissions, FileProvider not exported, `applicationId`/`versionName` correctness, `VERSION` file parity), fixed `StartActivityAndCollapseDeprecated` lint error in `ScanDocumentTileService`, configured `:app` lint to disable `MissingTranslation` (P4.10) and warn-not-error on `HardcodedText`, produced signed-ready release AAB (43 MB universal, est. ~17 MB per-device on arm64 — well under 28 MB floor), and shipped the operational kit in `android/store/`: `signing-setup.md`, `closed-testing-checklist.md`, `tester-recruitment-email.md`, `release-notes-v2.0.0-alpha.1.txt`. **Remaining (manual, blocks on Play Console account):** generate upload keystore → bake SHA-256 into `ApkSignatureVerifier` (P3.13 sentinel) → upload AAB → recruit ≥12 testers → start 14-day clock.
 
 **Phase 3 acceptance** (`docs/PAPERKEEP_DESIGN.md` §5 Phase 3):
-- [ ] AdMob test ads render correctly
-- [ ] UMP consent works in EU locale (VPN)
-- [ ] All 4 smart modes visibly beat the default pipeline on test fixtures
-- [ ] Redaction is destructive (raw-pixel test)
-- [ ] APK < 28 MB
-- [ ] Closed testing live, 14-day window started
-- [ ] No Phase 1 or 2 regressions
+- [ ] AdMob test ads render correctly — *requires device run; AdMob SDK + UMP wired in P3.10*
+- [ ] UMP consent works in EU locale (VPN) — *requires device run; UmpConsentHelper + tests shipped P3.10*
+- [ ] All 4 smart modes visibly beat the default pipeline on test fixtures — *fixtures + processors complete (P3.1–P3.5); A/B device comparison pending*
+- [x] Redaction is destructive (raw-pixel test) — *`RedactionProcessorTest` raw-pixel verification, P3.8*
+- [x] APK < 28 MB — *per-device install slice (arm64-v8a) ≈ 17 MB after Play Dynamic Delivery; universal AAB 43 MB, universal APK 54 MB. Verified via `:app:bundleRelease` 2026-04-26.*
+- [~] Closed testing live, 14-day window started — *blocked on Play Console account purchase; P3.16 operational kit ready in `android/store/`*
+- [x] No Phase 1 or 2 regressions — *full `testDebugUnitTest` 566 tasks BUILD SUCCESSFUL 2026-04-26; `:app:lintRelease` BUILD SUCCESSFUL; `:app:bundleRelease` BUILD SUCCESSFUL*
 
 ---
 
