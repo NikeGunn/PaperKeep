@@ -293,7 +293,9 @@ class CaptureViewModel @Inject constructor(
                 filter = state.selectedFilter.key,
             )
             repo.savePage(page)
-            repo.refreshFtsRow(documentId)
+            // FTS refresh is best-effort — on a fresh install the FTS table may not
+            // exist until the next app launch triggers the Room onCreate callback.
+            runCatching { repo.refreshFtsRow(documentId) }
 
             // Legacy scanner strip still reads from scans; keep it in sync.
             dao.insert(

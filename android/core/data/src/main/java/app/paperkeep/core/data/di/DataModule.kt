@@ -2,6 +2,8 @@ package app.paperkeep.core.data.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import app.paperkeep.core.data.crypto.AesGcmImageStore
 import app.paperkeep.core.data.crypto.EncryptedImageStore
 import app.paperkeep.core.data.crypto.KeyProvider
@@ -45,6 +47,22 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_4_5,
                     PaperkeepDatabase.MIGRATION_5_6,
                 )
+                // FTS virtual tables are not in @Database(entities=[]) so Room does not
+                // create them on a fresh install (only migrations run for existing DBs).
+                // This callback ensures the FTS tables always exist after onCreate.
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        db.execSQL(
+                            "CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts " +
+                            "USING fts4(docId, title, ocrText)"
+                        )
+                        db.execSQL(
+                            "CREATE VIRTUAL TABLE IF NOT EXISTS page_ocr_fts " +
+                            "USING fts4(pageId, tokenText)"
+                        )
+                    }
+                })
                 .build()
 
         @Provides

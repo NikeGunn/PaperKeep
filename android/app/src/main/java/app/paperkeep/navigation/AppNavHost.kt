@@ -105,8 +105,10 @@ fun AppNavHost(
             CropScreen(
                 onNext = {
                     captureViewModel.saveCurrentCapture { _ ->
+                        // Pop CropRoute inclusive so back from Library goes to Scanner,
+                        // not back to an empty crop screen.
                         navController.navigate(LibraryRoute) {
-                            popUpTo<ScannerRoute>()
+                            popUpTo<CropRoute> { inclusive = true }
                         }
                     }
                 },

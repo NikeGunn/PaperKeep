@@ -41,10 +41,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.paperkeep.core.imaging.FilterPreviewStrip
 import app.paperkeep.core.imaging.ImageFilter
+import app.paperkeep.core.imaging.ImageFilterProcessor
 import app.paperkeep.core.imaging.Point2f
 import app.paperkeep.core.imaging.Quad
-import app.paperkeep.core.imaging.FilterPreviewStrip
 
 // Test tags
 const val TAG_CROP_SCREEN = "crop_screen"
@@ -157,15 +158,19 @@ private fun CropContent(
                 .fillMaxWidth()
                 .clipToBounds(),
         ) {
-            val bitmap = state.image
+            // Apply the selected filter to the displayed bitmap so the user
+            // sees a live preview of the filter on the full crop canvas.
+            val displayBitmap = remember(state.image, state.selectedFilter) {
+                ImageFilterProcessor.apply(state.image, state.selectedFilter)
+            }
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val bmp = bitmap.asImageBitmap()
-                val scaleX = size.width / bitmap.width
-                val scaleY = size.height / bitmap.height
+                val bmp = displayBitmap.asImageBitmap()
+                val scaleX = size.width / displayBitmap.width
+                val scaleY = size.height / displayBitmap.height
                 val scale = minOf(scaleX, scaleY)
-                val offsetX = (size.width - bitmap.width * scale) / 2f
-                val offsetY = (size.height - bitmap.height * scale) / 2f
+                val offsetX = (size.width - displayBitmap.width * scale) / 2f
+                val offsetY = (size.height - displayBitmap.height * scale) / 2f
                 drawImage(image = bmp, topLeft = Offset(offsetX, offsetY))
             }
 
