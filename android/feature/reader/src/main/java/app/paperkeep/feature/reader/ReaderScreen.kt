@@ -1,6 +1,10 @@
 package app.paperkeep.feature.reader
 
+import android.content.Intent
+import android.net.Uri
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,12 +39,17 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -48,6 +57,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -60,7 +70,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -101,6 +113,7 @@ fun ReaderScreen(
     documentId: String,
     onNavigateBack: () -> Unit,
     onNavigateToReorder: (String) -> Unit = {},
+    onAddPage: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ReaderViewModel = hiltViewModel(),
 ) {
@@ -112,9 +125,25 @@ fun ReaderScreen(
     val isRenaming by viewModel.isRenaming.collectAsStateWithLifecycle()
     val documentTitle by viewModel.documentTitle.collectAsStateWithLifecycle()
     val event by viewModel.event.collectAsStateWithLifecycle()
+    val formatSheetMode by viewModel.formatSheetMode.collectAsStateWithLifecycle()
+    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
     val snackbarState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(documentId) { viewModel.loadDocument(documentId) }
+
+    // Re-fetch when the screen returns to the foreground (e.g. after the
+    // user added a page via the camera flow).
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // FLAG_SECURE — prevents screenshots of document content (§6.5)
     val view = LocalView.current
@@ -123,15 +152,47 @@ fun ReaderScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
+    // Holds the last "Save to..." request so the SAF result handler knows
+    // which file to copy bytes from.
+    var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
+
+    val safExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { destUri: Uri? ->
+        val request = pendingExport
+        pendingExport = null
+        if (destUri != null && request != null) {
+            viewModel.writeExportTo(
+                destUri = destUri,
+                sourceFilePath = request.sourceFilePath,
+            ) { uri -> context.contentResolver.openOutputStream(uri) }
+        }
+    }
+
     // Handle one-shot events
     LaunchedEffect(event) {
-        when (event) {
+        when (val e = event) {
             is ReaderEvent.DocumentDeleted -> {
                 viewModel.consumeEvent()
                 onNavigateBack()
             }
-            is ReaderEvent.SharePage -> viewModel.consumeEvent()
-            is ReaderEvent.ExportDocument -> viewModel.consumeEvent()
+            is ReaderEvent.ShareIntent -> {
+                viewModel.consumeEvent()
+                launchShareIntent(context, e.uri, e.mimeType)
+            }
+            is ReaderEvent.ShareMultipleIntent -> {
+                viewModel.consumeEvent()
+                launchShareMultipleIntent(context, e.uris, e.mimeType)
+            }
+            is ReaderEvent.StartSafExport -> {
+                viewModel.consumeEvent()
+                pendingExport = PendingExport(e.sourceFilePath)
+                safExportLauncher.launch(e.suggestedName)
+            }
+            is ReaderEvent.Toast -> {
+                viewModel.consumeEvent()
+                snackbarState.showSnackbar(e.message)
+            }
             null -> Unit
         }
     }
@@ -167,10 +228,11 @@ fun ReaderScreen(
             ) {
                 ReaderBottomBar(
                     documentId = documentId,
-                    onShare = viewModel::shareCurrentPage,
+                    onShare = viewModel::openShareSheet,
                     onDelete = viewModel::deleteDocument,
                     onReorder = { onNavigateToReorder(documentId) },
-                    onExport = viewModel::requestExport,
+                    onAddPage = onAddPage,
+                    onExport = viewModel::openDownloadSheet,
                     modifier = Modifier.testTag(TAG_READER_BOTTOM_BAR),
                 )
             }
@@ -248,8 +310,154 @@ fun ReaderScreen(
                     )
                 }
             }
+
+            if (isBusy) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.30f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        formatSheetMode?.let { mode ->
+            FormatChooserSheet(
+                mode = mode,
+                pageCount = pages.size,
+                hasOcrText = pages.any { !it.ocrText.isNullOrBlank() },
+                onDismiss = viewModel::dismissFormatSheet,
+                onPick = viewModel::onFormatPicked,
+            )
         }
     }
+}
+
+// ── Pending SAF export wrapper ────────────────────────────────────────────────
+
+private data class PendingExport(val sourceFilePath: String)
+
+// ── Share / SAF helpers ───────────────────────────────────────────────────────
+
+private fun launchShareIntent(
+    context: android.content.Context,
+    uri: Uri,
+    mimeType: String,
+) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = mimeType
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    val chooser = Intent.createChooser(sendIntent, "Share with").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(chooser)
+}
+
+private fun launchShareMultipleIntent(
+    context: android.content.Context,
+    uris: List<Uri>,
+    mimeType: String,
+) {
+    val sendIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = mimeType
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    val chooser = Intent.createChooser(sendIntent, "Share with").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(chooser)
+}
+
+// ── Format chooser bottom sheet ───────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FormatChooserSheet(
+    mode: ReaderViewModel.FormatSheetMode,
+    pageCount: Int,
+    hasOcrText: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (ShareFormat) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    val verb = when (mode) {
+        ReaderViewModel.FormatSheetMode.SHARE -> "Share as"
+        ReaderViewModel.FormatSheetMode.DOWNLOAD -> "Save as"
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(modifier = Modifier.padding(bottom = 16.dp)) {
+            Text(
+                text = verb,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 24.dp, top = 8.dp, bottom = 8.dp),
+            )
+
+            FormatRow(
+                icon = Icons.Filled.PictureAsPdf,
+                title = "PDF",
+                subtitle = if (pageCount > 1) "All $pageCount pages, single file" else "1 page",
+                tag = "format_pdf",
+                onClick = { onPick(ShareFormat.PDF) },
+            )
+
+            FormatRow(
+                icon = Icons.Filled.Image,
+                title = "Image",
+                subtitle = when {
+                    mode == ReaderViewModel.FormatSheetMode.DOWNLOAD ->
+                        "Current page as JPEG"
+                    pageCount > 1 -> "All $pageCount pages as JPEGs"
+                    else -> "Current page as JPEG"
+                },
+                tag = "format_image",
+                onClick = { onPick(ShareFormat.IMAGE) },
+            )
+
+            FormatRow(
+                icon = Icons.Filled.TextSnippet,
+                title = "Text",
+                subtitle = if (hasOcrText)
+                    "Recognized text (.txt)"
+                else
+                    "Recognized text — not ready yet",
+                tag = "format_text",
+                onClick = { onPick(ShareFormat.TEXT) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FormatRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    tag: String,
+    onClick: () -> Unit,
+) {
+    ListItem(
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .testTag(tag),
+    )
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
@@ -356,6 +564,7 @@ private fun ReaderBottomBar(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onReorder: () -> Unit,
+    onAddPage: () -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -398,11 +607,11 @@ private fun ReaderBottomBar(
                 Icon(Icons.Filled.SortByAlpha, contentDescription = null)
             }
             IconButton(
-                onClick = {},
+                onClick = onAddPage,
                 modifier = Modifier
                     .size(48.dp)
                     .testTag(TAG_READER_ADD_PAGE)
-                    .semantics { contentDescription = "Add page" },
+                    .semantics { contentDescription = "Add page to this document" },
             ) {
                 Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
             }

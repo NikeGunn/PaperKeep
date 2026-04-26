@@ -43,6 +43,7 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:common"))
+    implementation(project(":core:pdf"))
 
     // Hilt — KSP only (avoids Windows KAPT path bug)
     implementation(libs.hilt.android)

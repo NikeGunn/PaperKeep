@@ -109,6 +109,19 @@
                 android:value="false" />
         </service>
 
+        <!-- ── FileProvider for share/export payloads ──────────────────── -->
+        <!-- Only exposes cacheDir/{shares,exports}/ to other apps via grantUriPermission.
+             Plaintext PDFs and JPEGs live here for ~minutes during a share, never longer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- WorkManager initialization (required on API < 24 for PeriodicWork) -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -23,7 +23,20 @@ class AppRoutesTest {
 
     @Test
     fun scannerRoute_isNotNull() {
-        assertNotNull(ScannerRoute)
+        assertNotNull(ScannerRoute())
+    }
+
+    @Test
+    fun scannerRoute_serializesAndDeserializes() {
+        val original = ScannerRoute(appendToDocumentId = "doc-42")
+        val restored = json.decodeFromString<ScannerRoute>(json.encodeToString(original))
+        assertEquals(original.appendToDocumentId, restored.appendToDocumentId)
+    }
+
+    @Test
+    fun scannerRoute_defaultsToNullAppendId() {
+        val route = ScannerRoute()
+        assertEquals(null, route.appendToDocumentId)
     }
 
     @Test
@@ -45,10 +58,9 @@ class AppRoutesTest {
 
     @Test
     fun cropRoute_serializesAndDeserializes() {
-        val serialized = json.encodeToString(CropRoute)
-        val restored = json.decodeFromString<CropRoute>(serialized)
-
-        assertEquals(CropRoute, restored)
+        val original = CropRoute(appendToDocumentId = "doc-42")
+        val restored = json.decodeFromString<CropRoute>(json.encodeToString(original))
+        assertEquals(original.appendToDocumentId, restored.appendToDocumentId)
     }
 
     @Test
@@ -76,7 +88,7 @@ class AppRoutesTest {
 
     @Test
     fun scannerAndLibraryRoute_areDifferentTypes() {
-        val scanner: Any = ScannerRoute
+        val scanner: Any = ScannerRoute()
         val library: Any = LibraryRoute
         assert(scanner.javaClass != library.javaClass) {
             "ScannerRoute and LibraryRoute must be distinct types for type-safe navigation"

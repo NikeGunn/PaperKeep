@@ -71,7 +71,7 @@ fun AppNavHost(
         return
     }
 
-    val startDestination = if (completed) ScannerRoute else OnboardingRoute
+    val startDestination = if (completed) ScannerRoute() else OnboardingRoute
 
     NavHost(
         navController = navController,
@@ -81,7 +81,7 @@ fun AppNavHost(
         composable<OnboardingRoute> {
             OnboardingScreen(
                 onComplete = {
-                    navController.navigate(ScannerRoute) {
+                    navController.navigate(ScannerRoute()) {
                         popUpTo<OnboardingRoute> { inclusive = true }
                         launchSingleTop = true
                     }
@@ -89,10 +89,11 @@ fun AppNavHost(
             )
         }
 
-        composable<ScannerRoute> {
+        composable<ScannerRoute> { backStack ->
+            val route = backStack.toRoute<ScannerRoute>()
             ScannerScreen(
                 onCaptureDone = {
-                    navController.navigate(CropRoute)
+                    navController.navigate(CropRoute(route.appendToDocumentId))
                 },
                 onOpenLibrary = {
                     navController.navigate(LibraryRoute)
@@ -101,14 +102,20 @@ fun AppNavHost(
             )
         }
 
-        composable<CropRoute> {
+        composable<CropRoute> { backStack ->
+            val route = backStack.toRoute<CropRoute>()
+            val append = route.appendToDocumentId
             CropScreen(
                 onNext = {
-                    captureViewModel.saveCurrentCapture { _ ->
-                        // Pop CropRoute inclusive so back from Library goes to Scanner,
-                        // not back to an empty crop screen.
-                        navController.navigate(LibraryRoute) {
-                            popUpTo<CropRoute> { inclusive = true }
+                    captureViewModel.saveCurrentCapture(append) { docId ->
+                        if (append != null) {
+                            // Append mode: pop scanner+crop so we land back on
+                            // the reader, which will refresh and show the new page.
+                            navController.popBackStack(ReaderRoute(docId), inclusive = false)
+                        } else {
+                            navController.navigate(LibraryRoute) {
+                                popUpTo<CropRoute> { inclusive = true }
+                            }
                         }
                     }
                 },
@@ -133,6 +140,9 @@ fun AppNavHost(
                 documentId = route.scanId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToReorder = { /* Phase 2 reorder nav — handled by BatchCaptureViewModel */ },
+                onAddPage = {
+                    navController.navigate(ScannerRoute(appendToDocumentId = route.scanId))
+                },
             )
         }
 

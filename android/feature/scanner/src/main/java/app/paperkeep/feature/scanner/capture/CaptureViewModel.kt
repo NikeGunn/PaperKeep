@@ -184,20 +184,31 @@ class CaptureViewModel @Inject constructor(
     // ── Persist to encrypted store + Room ───────────────────────────────────
 
     /**
-     * Saves the current crop result as a new document, then invokes [onSaved]
-     * with the created document id.
+     * Saves the current crop result.
+     *
+     * @param appendToDocumentId when non-null, the page is appended to that
+     * existing document (incrementing its page count). Otherwise a brand-new
+     * document is created. The [onSaved] callback receives the document id
+     * either way.
      */
-    fun saveCurrentCapture(onSaved: (String) -> Unit = {}) {
+    fun saveCurrentCapture(
+        appendToDocumentId: String? = null,
+        onSaved: (String) -> Unit = {},
+    ) {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
-        DebugLog.d("Paperkeep.Capture", "saveCurrentCapture: start")
+        DebugLog.d(
+            "Paperkeep.Capture",
+            "saveCurrentCapture: start append=$appendToDocumentId",
+        )
         _state.value = CaptureState.Processing(current.image)
 
         viewModelScope.launch(dispatchers.io) {
             try {
-                val saveResult = persistCurrentCapture(current)
+                val saveResult = persistCurrentCapture(current, appendToDocumentId)
                 DebugLog.d(
                     "Paperkeep.Capture",
                     "saveCurrentCapture: persisted doc=${saveResult.documentId} " +
+                        "pageIndex=${saveResult.page.pageIndex} " +
                         "imageBytes=${saveResult.imageBytes.size}",
                 )
 
@@ -322,7 +333,10 @@ class CaptureViewModel @Inject constructor(
         return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
-    private suspend fun persistCurrentCapture(state: CaptureState.ReadyToCrop): PersistResult {
+    private suspend fun persistCurrentCapture(
+        state: CaptureState.ReadyToCrop,
+        appendToDocumentId: String?,
+    ): PersistResult {
         val repo        = documentRepository
         val cryptoStore = imageStore
         val dao         = scanDao
@@ -330,11 +344,17 @@ class CaptureViewModel @Inject constructor(
 
         val nowMillis = System.currentTimeMillis()
         val now = Instant.ofEpochMilli(nowMillis)
-        val documentId = UUID.randomUUID().toString()
-        val pageId = UUID.randomUUID().toString()
 
-        val imageFile = File(context.filesDir, "scans/$documentId/page_0.enc")
-        val thumbFile = File(context.filesDir, "scans/$documentId/thumb_0.enc")
+        // Resolve target document — either the existing one (append mode)
+        // or a freshly-minted one.
+        val existingDoc = appendToDocumentId?.let { repo.getDocumentById(it) }
+        val isAppend = existingDoc != null
+        val documentId = existingDoc?.id ?: UUID.randomUUID().toString()
+        val pageId = UUID.randomUUID().toString()
+        val nextPageIndex = existingDoc?.pages?.maxOfOrNull { it.pageIndex }?.plus(1) ?: 0
+
+        val imageFile = File(context.filesDir, "scans/$documentId/page_$nextPageIndex.enc")
+        val thumbFile = File(context.filesDir, "scans/$documentId/thumb_$nextPageIndex.enc")
 
         val warped = PerspectiveTransform.warp(state.image, state.quad)
         val finalImage = ImageFilterProcessor.apply(warped, state.selectedFilter)
@@ -365,25 +385,35 @@ class CaptureViewModel @Inject constructor(
                 ?.takeIf { it != DocumentType.UNKNOWN }
                 ?.key
 
-            val document = Document(
-                id = documentId,
-                title = "Scan $nowMillis",
-                createdAt = now,
-                updatedAt = now,
-                folderId = null,
-                pageCount = 1,
-                colorTag = null,
-                docType = docType,
-                isFavorite = false,
-                isArchived = false,
-                pages = emptyList(),
-            )
-            repo.saveDocument(document)
+            if (!isAppend) {
+                val document = Document(
+                    id = documentId,
+                    title = "Scan $nowMillis",
+                    createdAt = now,
+                    updatedAt = now,
+                    folderId = null,
+                    pageCount = 1,
+                    colorTag = null,
+                    docType = docType,
+                    isFavorite = false,
+                    isArchived = false,
+                    pages = emptyList(),
+                )
+                repo.saveDocument(document)
+            } else {
+                val newCount = (existingDoc!!.pageCount).coerceAtLeast(0) + 1
+                repo.updateDocument(
+                    existingDoc.copy(
+                        pageCount = newCount,
+                        updatedAt = now,
+                    )
+                )
+            }
 
             val page = Page(
                 id = pageId,
                 documentId = documentId,
-                pageIndex = 0,
+                pageIndex = nextPageIndex,
                 encryptedImagePath = imageFile.absolutePath,
                 encryptedThumbPath = thumbFile.absolutePath,
                 ocrStatus = OcrStatus.PENDING,
@@ -398,20 +428,24 @@ class CaptureViewModel @Inject constructor(
             // exist until the next app launch triggers the Room onCreate callback.
             runCatching { repo.refreshFtsRow(documentId) }
 
-            // Legacy scanner strip still reads from scans; keep it in sync.
-            dao.insert(
-                ScanEntity(
-                    id = documentId,
-                    title = document.title,
-                    pageCount = 1,
-                    createdAt = nowMillis,
-                    updatedAt = nowMillis,
-                    originalPath = imageFile.absolutePath,
-                    thumbnailPath = thumbFile.absolutePath,
-                    widthPx = finalImage.width,
-                    heightPx = finalImage.height,
+            if (!isAppend) {
+                // Legacy scanner strip still reads from scans; keep it in sync.
+                // Append mode doesn't need a new strip row — the existing doc
+                // is already represented.
+                dao.insert(
+                    ScanEntity(
+                        id = documentId,
+                        title = "Scan $nowMillis",
+                        pageCount = 1,
+                        createdAt = nowMillis,
+                        updatedAt = nowMillis,
+                        originalPath = imageFile.absolutePath,
+                        thumbnailPath = thumbFile.absolutePath,
+                        widthPx = finalImage.width,
+                        heightPx = finalImage.height,
+                    )
                 )
-            )
+            }
 
             return PersistResult(
                 documentId = documentId,

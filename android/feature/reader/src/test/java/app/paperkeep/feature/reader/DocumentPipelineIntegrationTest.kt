@@ -1,6 +1,8 @@
 package app.paperkeep.feature.reader
 
+import app.paperkeep.core.common.AppDispatchers
 import app.paperkeep.core.data.repository.DocumentRepository
+import app.paperkeep.core.data.share.SharePayloadBuilder
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.Page
 import app.paperkeep.core.pdf.PageData
@@ -91,7 +93,13 @@ class DocumentPipelineIntegrationTest {
         Dispatchers.setMain(testDispatcher)
         repository = mockk()
         pdfExporter = mockk(relaxed = true)
-        viewModel = ReaderViewModel(repository)
+        val sharePayloadBuilder = mockk<SharePayloadBuilder>(relaxed = true)
+        val dispatchers = object : AppDispatchers {
+            override val main = testDispatcher
+            override val io = testDispatcher
+            override val default = testDispatcher
+        }
+        viewModel = ReaderViewModel(repository, sharePayloadBuilder, dispatchers)
     }
 
     @After

@@ -13,17 +13,23 @@ import kotlinx.serialization.Serializable
  *                    └──► Library (from bottom nav)
  */
 
-/** Camera / scanner screen — entry point of the app. */
+/**
+ * Camera / scanner screen — entry point of the app.
+ *
+ * @param appendToDocumentId when non-null, the captured page is appended to
+ * the existing document with this id (instead of creating a new document).
+ * Used by the reader's "Add page" button.
+ */
 @Serializable
-object ScannerRoute
+data class ScannerRoute(val appendToDocumentId: String? = null)
 
 /**
  * Manual crop screen — shown after a capture.
  * Crop state is kept in [app.paperkeep.feature.scanner.capture.CaptureViewModel],
- * so this route does not carry image arguments.
+ * so this route does not carry image data — only the append target id.
  */
 @Serializable
-object CropRoute
+data class CropRoute(val appendToDocumentId: String? = null)
 
 /** Document library screen. */
 @Serializable

@@ -1,6 +1,8 @@
 package app.paperkeep.feature.reader
 
+import app.paperkeep.core.common.AppDispatchers
 import app.paperkeep.core.data.repository.DocumentRepository
+import app.paperkeep.core.data.share.SharePayloadBuilder
 import app.paperkeep.core.domain.model.Document
 import app.paperkeep.core.domain.model.Page
 import io.mockk.coEvery
@@ -66,7 +68,13 @@ class ReaderViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
-        viewModel = ReaderViewModel(repository)
+        val sharePayloadBuilder = mockk<SharePayloadBuilder>(relaxed = true)
+        val dispatchers = object : AppDispatchers {
+            override val main = testDispatcher
+            override val io = testDispatcher
+            override val default = testDispatcher
+        }
+        viewModel = ReaderViewModel(repository, sharePayloadBuilder, dispatchers)
     }
 
     @After
@@ -261,41 +269,46 @@ class ReaderViewModelTest {
         assertNull(viewModel.event.value)
     }
 
-    // ── Share / Export events ─────────────────────────────────────────────────
+    // ── Format-sheet flow ─────────────────────────────────────────────────────
 
     @Test
-    fun `shareCurrentPage emits SharePage event`() = runTest {
+    fun `openShareSheet sets format sheet to SHARE when pages loaded`() = runTest {
         val pages = listOf(fakePage(0))
         coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
-        viewModel.shareCurrentPage()
-
-        val ev = viewModel.event.value
-        assertTrue(ev is ReaderEvent.SharePage)
-        assertEquals("page-0", (ev as ReaderEvent.SharePage).pageId)
+        viewModel.openShareSheet()
+        assertEquals(ReaderViewModel.FormatSheetMode.SHARE, viewModel.formatSheetMode.value)
     }
 
     @Test
-    fun `requestExport emits ExportDocument event`() = runTest {
-        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument()
+    fun `openShareSheet does nothing when no pages`() {
+        viewModel.openShareSheet()
+        assertNull(viewModel.formatSheetMode.value)
+    }
+
+    @Test
+    fun `openDownloadSheet sets format sheet to DOWNLOAD`() = runTest {
+        val pages = listOf(fakePage(0))
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = pages)
 
         viewModel.loadDocument("doc-1")
         advanceUntilIdle()
 
-        viewModel.requestExport()
-
-        val ev = viewModel.event.value
-        assertTrue(ev is ReaderEvent.ExportDocument)
-        assertEquals("doc-1", (ev as ReaderEvent.ExportDocument).documentId)
+        viewModel.openDownloadSheet()
+        assertEquals(ReaderViewModel.FormatSheetMode.DOWNLOAD, viewModel.formatSheetMode.value)
     }
 
     @Test
-    fun `shareCurrentPage does nothing when no pages loaded`() {
-        viewModel.shareCurrentPage()
-        assertNull(viewModel.event.value)
+    fun `dismissFormatSheet clears mode`() = runTest {
+        coEvery { repository.getDocumentById("doc-1") } returns fakeDocument(pages = listOf(fakePage(0)))
+        viewModel.loadDocument("doc-1")
+        advanceUntilIdle()
+        viewModel.openShareSheet()
+        viewModel.dismissFormatSheet()
+        assertNull(viewModel.formatSheetMode.value)
     }
 
     // ── FLAG_SECURE constant ──────────────────────────────────────────────────
