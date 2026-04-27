@@ -76,6 +76,8 @@ fun SettingsScreen(
     appVersion: String = "",
     onNavigateBack: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
+    onOpenBackup: () -> Unit = {},
+    onOpenStorage: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -188,9 +190,17 @@ fun SettingsScreen(
                 title = "Backup & Restore",
                 modifier = Modifier.testTag(TAG_SETTINGS_SECTION_BACKUP),
             )
-            InfoSettingsRow(
+            ClickableSettingsRow(
                 label = "Local backup",
-                description = "Encrypted backup to any location — coming in Phase 4",
+                value = "Open",
+                description = "Encrypted backup to Drive / Dropbox / SD card / USB — your pick.",
+                onClick = onOpenBackup,
+            )
+            ClickableSettingsRow(
+                label = "Storage",
+                value = "Manage",
+                description = "See per-bucket usage and free up cache.",
+                onClick = onOpenStorage,
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

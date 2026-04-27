@@ -113,6 +113,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:domain"))
     implementation(project(":core:security"))
+    implementation(project(":core:backup"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:scanner"))
     implementation(project(":feature:library"))

@@ -3,11 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
-    namespace = "app.paperkeep.feature.settings"
+    namespace = "app.paperkeep.core.backup"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
@@ -20,47 +20,31 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    buildFeatures {
-        compose = true
-    }
+    kotlinOptions { jvmTarget = "17" }
 
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
         }
     }
-
 }
 
 dependencies {
-    implementation(project(":core:ui"))
     implementation(project(":core:common"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
-    implementation(project(":core:crypto"))
-    implementation(project(":core:security"))
-    implementation(project(":core:backup"))
 
-    // Hilt
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.datastore.preferences)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    // Compose
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.bundles.compose)
-    implementation(libs.bundles.lifecycle)
-    implementation(libs.hilt.navigation.compose)
-    implementation(libs.androidx.navigation.compose)
-
-    // Biometric
-    implementation(libs.androidx.biometric)
-
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.androidx.material.icons.extended)
+    // Argon2id KDF (P4.1 — m=128MiB t=4)
+    implementation(libs.argon2.jvm)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

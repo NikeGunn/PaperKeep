@@ -46,3 +46,11 @@ object SettingsRoute
 /** Onboarding flow — shown once on first launch, guarded by DataStore flag. */
 @Serializable
 object OnboardingRoute
+
+/** Backup & Restore screen (P4.1–P4.5). */
+@Serializable
+object BackupRoute
+
+/** Storage manager screen (P4.6). */
+@Serializable
+object StorageRoute

@@ -13,6 +13,9 @@
     <!-- WorkManager background sync -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- P4.4 — backup reminder notifications. Runtime-prompted on API 33+; AlarmManager
+         uses inexact repeating so we deliberately do NOT request SCHEDULE_EXACT_ALARM. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Write crash logs and backups to external storage on API < 29 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -117,6 +120,16 @@
                 android:name="android.service.quicksettings.ACTIVE_TILE"
                 android:value="false" />
         </service>
+
+        <!-- ── P4.4: Backup reminder receiver ──────────────────────────── -->
+        <!-- exported=false: only AlarmManager (inside our own UID) wakes this. -->
+        <receiver
+            android:name="app.paperkeep.core.backup.reminder.BackupReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="app.paperkeep.action.BACKUP_REMINDER" />
+            </intent-filter>
+        </receiver>
 
         <!-- ── FileProvider for share/export payloads ──────────────────── -->
         <!-- Only exposes cacheDir/{shares,exports}/ to other apps via grantUriPermission.

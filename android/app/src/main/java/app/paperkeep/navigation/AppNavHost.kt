@@ -23,6 +23,8 @@ import app.paperkeep.feature.scanner.ScannerScreen
 import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.capture.CropScreen
 import app.paperkeep.feature.settings.SettingsScreen
+import app.paperkeep.feature.settings.backup.BackupScreen
+import app.paperkeep.feature.settings.storage.StorageManagerScreen
 
 /**
  * Root navigation graph for Paperkeep.
@@ -149,6 +151,20 @@ fun AppNavHost(
         composable<SettingsRoute> {
             SettingsScreen(
                 appVersion = "2.0.0-alpha.1",
+                onNavigateBack = { navController.popBackStack() },
+                onOpenBackup = { navController.navigate(BackupRoute) },
+                onOpenStorage = { navController.navigate(StorageRoute) },
+            )
+        }
+
+        composable<BackupRoute> {
+            BackupScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable<StorageRoute> {
+            StorageManagerScreen(
                 onNavigateBack = { navController.popBackStack() },
             )
         }

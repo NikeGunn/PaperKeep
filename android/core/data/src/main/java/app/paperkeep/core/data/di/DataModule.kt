@@ -9,6 +9,7 @@ import app.paperkeep.core.data.crypto.AesGcmImageStore
 import app.paperkeep.core.data.crypto.EncryptedImageStore
 import app.paperkeep.core.data.crypto.KeyProvider
 import app.paperkeep.core.data.crypto.KeyStoreKeyProvider
+import app.paperkeep.core.data.db.BackupDao
 import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.ScanDao
 import app.paperkeep.core.data.db.PaperkeepDatabase
@@ -52,6 +53,7 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_4_5,
                     PaperkeepDatabase.MIGRATION_5_6,
                     PaperkeepDatabase.MIGRATION_6_7,
+                    PaperkeepDatabase.MIGRATION_7_8,
                 )
                 // No destructive fallback. Wiping the DB on every debug reinstall
                 // makes "library is empty" bugs indistinguishable from data loss.
@@ -80,6 +82,9 @@ abstract class DataModule {
 
         @Provides
         fun provideDocumentDao(db: PaperkeepDatabase): DocumentDao = db.documentDao()
+
+        @Provides
+        fun provideBackupDao(db: PaperkeepDatabase): BackupDao = db.backupDao()
 
         /**
          * Provides the app-wide [ImageLoader] with the [EncryptedImageFetcher]

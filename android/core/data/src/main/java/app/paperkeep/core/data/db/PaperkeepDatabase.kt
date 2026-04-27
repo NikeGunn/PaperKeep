@@ -27,13 +27,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocumentEntity::class,
         PageEntity::class,
         PageOcrEntity::class,
+        BackupEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class PaperkeepDatabase : RoomDatabase() {
     abstract fun scanDao(): ScanDao
     abstract fun documentDao(): DocumentDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
 
@@ -203,6 +205,31 @@ abstract class PaperkeepDatabase : RoomDatabase() {
          * on the next OCR run, and by DocumentRepository.refreshFtsRow on next save.
          * The data loss is search-index only; the underlying documents/pages are intact.
          */
+        /**
+         * Migration 7 → 8 (P4.2): adds the `backups` table tracking each
+         * successful backup written via SAF. No existing data is touched.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS backups (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        safUri TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        documentCount INTEGER NOT NULL,
+                        pageCount INTEGER NOT NULL,
+                        sizeBytes INTEGER NOT NULL,
+                        sha256 TEXT NOT NULL,
+                        schemaVersion INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_backups_createdAt ON backups(createdAt)")
+            }
+        }
+
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Drop old FTS tables unconditionally — recreate with safe column names.
