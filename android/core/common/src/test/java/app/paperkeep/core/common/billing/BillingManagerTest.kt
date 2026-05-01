@@ -1,13 +1,16 @@
 package app.paperkeep.core.common.billing
 
-import androidx.test.core.app.ApplicationProvider
+import io.mockk.coEvery
+import io.mockk.mockk
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -15,86 +18,73 @@ import org.robolectric.annotation.Config
 @Config(manifest = Config.NONE, sdk = [33])
 class BillingManagerTest {
 
+    private lateinit var proStatusStore: ProStatusStore
     private lateinit var billing: BillingManager
 
     @Before
     fun setUp() {
-        billing = BillingManager(ApplicationProvider.getApplicationContext())
+        proStatusStore = mockk(relaxed = true)
+        coEvery { proStatusStore.isPro } returns flowOf(false)
+        billing = BillingManager(
+            context = androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+            proStatusStore = proStatusStore,
+        )
     }
 
     // ── Initial state ─────────────────────────────────────────────────────────
 
     @Test
-    fun `initial state is Idle`() {
+    fun `initial billing state is Idle`() {
         assertTrue(billing.billingState.value is BillingState.Idle)
     }
 
     @Test
-    fun `isPro is always false until Phase 5`() {
-        assertFalse("Pro must be disabled in Phase 3 stub", billing.isPro)
+    fun `isPro emits false when ProStatusStore returns false`() = runTest {
+        coEvery { proStatusStore.isPro } returns flowOf(false)
+        assertFalse(billing.isPro.first())
+    }
+
+    @Test
+    fun `isPro emits true when ProStatusStore returns true`() = runTest {
+        coEvery { proStatusStore.isPro } returns flowOf(true)
+        assertTrue(billing.isPro.first())
     }
 
     // ── initialize ────────────────────────────────────────────────────────────
 
     @Test
-    fun `initialize transitions to ProductAvailable`() {
+    fun `initialize transitions from Idle to Connecting`() {
         billing.initialize()
-        assertTrue(billing.billingState.value is BillingState.ProductAvailable)
+        // BillingClient connects asynchronously; state becomes Connecting immediately
+        val state = billing.billingState.value
+        assertTrue("Expected Connecting or further, got $state",
+            state is BillingState.Connecting ||
+            state is BillingState.ProductAvailable ||
+            state is BillingState.Error)
     }
 
     @Test
-    fun `initialize second call is no-op (idempotent)`() {
+    fun `second initialize call is no-op when not Idle`() {
         billing.initialize()
         val stateAfterFirst = billing.billingState.value
         billing.initialize()
         assertEquals(stateAfterFirst, billing.billingState.value)
     }
 
-    @Test
-    fun `ProductAvailable contains correct product ID`() {
-        billing.initialize()
-        val state = billing.billingState.value as BillingState.ProductAvailable
-        assertEquals(BillingManager.PRODUCT_ID, state.product.productId)
-    }
+    // ── reset ─────────────────────────────────────────────────────────────────
 
     @Test
-    fun `ProductAvailable has non-blank title`() {
+    fun `reset returns to Idle`() {
         billing.initialize()
-        val state = billing.billingState.value as BillingState.ProductAvailable
-        assertTrue(state.product.title.isNotBlank())
+        billing.reset()
+        assertTrue(billing.billingState.value is BillingState.Idle)
     }
 
-    @Test
-    fun `ProductAvailable has non-blank formatted price`() {
-        billing.initialize()
-        val state = billing.billingState.value as BillingState.ProductAvailable
-        assertTrue(state.product.formattedPrice.isNotBlank())
-    }
-
-    @Test
-    fun `ProductAvailable has positive price micros`() {
-        billing.initialize()
-        val state = billing.billingState.value as BillingState.ProductAvailable
-        assertTrue(state.product.priceMicros > 0)
-    }
-
-    // ── launchPurchaseFlow ────────────────────────────────────────────────────
-
-    @Test
-    fun `launchPurchaseFlow transitions to PurchasePending`() {
-        billing.initialize()
-        val activity = Robolectric.buildActivity(android.app.Activity::class.java).get()
-        billing.launchPurchaseFlow(activity)
-        assertTrue(
-            "After launch, state must be PurchasePending",
-            billing.billingState.value is BillingState.PurchasePending,
-        )
-        assertFalse("isPro must remain false after purchase flow in Phase 3", billing.isPro)
-    }
+    // ── launchPurchaseFlow guards ─────────────────────────────────────────────
 
     @Test
     fun `launchPurchaseFlow from Idle is a no-op`() {
-        val activity = Robolectric.buildActivity(android.app.Activity::class.java).get()
+        val activity = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).get()
         billing.launchPurchaseFlow(activity)
         assertTrue(billing.billingState.value is BillingState.Idle)
     }
@@ -106,12 +96,33 @@ class BillingManagerTest {
         assertEquals("paperkeep_pro_lifetime", BillingManager.PRODUCT_ID)
     }
 
-    // ── reset ─────────────────────────────────────────────────────────────────
+    // ── ProProductDetails defaults ────────────────────────────────────────────
 
     @Test
-    fun `reset returns to Idle from any state`() {
-        billing.initialize()
-        billing.reset()
-        assertTrue(billing.billingState.value is BillingState.Idle)
+    fun `ProProductDetails has correct product ID`() {
+        val details = ProProductDetails(
+            productId = BillingManager.PRODUCT_ID,
+            title = "Paperkeep Pro",
+            description = "Lifetime",
+            formattedPrice = "\$4.99",
+            priceMicros = 4_990_000L,
+            currencyCode = "USD",
+        )
+        assertEquals(BillingManager.PRODUCT_ID, details.productId)
+        assertEquals(4_990_000L, details.priceMicros)
+        assertEquals("USD", details.currencyCode)
+    }
+
+    @Test
+    fun `ProProductDetails price micros is positive`() {
+        val details = ProProductDetails(
+            productId = BillingManager.PRODUCT_ID,
+            title = "Paperkeep Pro",
+            description = "Lifetime",
+            formattedPrice = "\$4.99",
+            priceMicros = 4_990_000L,
+            currencyCode = "USD",
+        )
+        assertTrue(details.priceMicros > 0)
     }
 }

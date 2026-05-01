@@ -65,6 +65,8 @@ const val TAG_SCREENSHOT_TOGGLE = "settings_screenshot_toggle"
 const val TAG_LOCK_TIMEOUT = "settings_lock_timeout"
 const val TAG_THEME_PICKER = "settings_theme_picker"
 const val TAG_OLED_TOGGLE = "settings_oled_toggle"
+const val TAG_SETTINGS_SECTION_PRO = "settings_section_pro"
+const val TAG_SETTINGS_PRO_UPGRADE_ROW = "settings_pro_upgrade_row"
 
 /**
  * Full Settings screen for Paperkeep v2.
@@ -83,6 +85,7 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
     onOpenStorage: () -> Unit = {},
+    onOpenProUpgrade: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -232,6 +235,22 @@ fun SettingsScreen(
                 value = "Latin (bundled)",
                 description = "Download packs for Devanagari, Chinese, Arabic…",
                 onClick = {},
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // ── Pro upgrade section ──────────────────────────────────────────
+            SettingsSectionHeader(
+                icon = Icons.Filled.CheckCircle,
+                title = "Paperkeep Pro",
+                modifier = Modifier.testTag(TAG_SETTINGS_SECTION_PRO),
+            )
+            ClickableSettingsRow(
+                label = "Upgrade to Pro",
+                value = "$4.99",
+                description = "No ads · Unlimited summaries · Batch export · Pro theme",
+                onClick = onOpenProUpgrade,
+                testTag = TAG_SETTINGS_PRO_UPGRADE_ROW,
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

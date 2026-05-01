@@ -54,3 +54,11 @@ object BackupRoute
 /** Storage manager screen (P4.6). */
 @Serializable
 object StorageRoute
+
+/** Pro upgrade / IAP screen (P5.2). */
+@Serializable
+object ProUpgradeRoute
+
+/** Document summarizer result screen (P5.1). */
+@Serializable
+data class SummaryRoute(val documentId: String)

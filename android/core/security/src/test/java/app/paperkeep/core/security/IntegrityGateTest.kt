@@ -76,7 +76,11 @@ class IntegrityGateTest {
 
     @Test
     fun `evaluate with sentinel pin always produces Ok apkVerification`() {
-        val gate = IntegrityGate(ApplicationProvider.getApplicationContext())
+        val gate = IntegrityGate(
+            ApplicationProvider.getApplicationContext(),
+            ApkSignatureVerifier,
+            DeviceIntegrityChecker,
+        )
         gate.evaluate()
         // With sentinel all-zeroes pin, verification must be Ok
         assertTrue(
@@ -87,14 +91,22 @@ class IntegrityGateTest {
 
     @Test
     fun `isAdMobEnabled true on clean Robolectric context`() {
-        val gate = IntegrityGate(ApplicationProvider.getApplicationContext())
+        val gate = IntegrityGate(
+            ApplicationProvider.getApplicationContext(),
+            ApkSignatureVerifier,
+            DeviceIntegrityChecker,
+        )
         gate.evaluate()
         assertTrue(gate.isAdMobEnabled)
     }
 
     @Test
     fun `isProIapEnabled true on clean non-rooted Robolectric context`() {
-        val gate = IntegrityGate(ApplicationProvider.getApplicationContext())
+        val gate = IntegrityGate(
+            ApplicationProvider.getApplicationContext(),
+            ApkSignatureVerifier,
+            DeviceIntegrityChecker,
+        )
         gate.evaluate()
         // Robolectric environment does not trigger root detection in default probes
         // (no su paths, no Magisk dirs, Build.TAGS is not "test-keys" in Robolectric)

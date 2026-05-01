@@ -22,6 +22,7 @@ import app.paperkeep.feature.reader.ReaderScreen
 import app.paperkeep.feature.scanner.ScannerScreen
 import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.capture.CropScreen
+import app.paperkeep.feature.settings.ProUpgradeScreen
 import app.paperkeep.feature.settings.SettingsScreen
 import app.paperkeep.feature.settings.backup.BackupScreen
 import app.paperkeep.feature.settings.storage.StorageManagerScreen
@@ -154,6 +155,7 @@ fun AppNavHost(
                 onNavigateBack = { navController.popBackStack() },
                 onOpenBackup = { navController.navigate(BackupRoute) },
                 onOpenStorage = { navController.navigate(StorageRoute) },
+                onOpenProUpgrade = { navController.navigate(ProUpgradeRoute) },
             )
         }
 
@@ -166,6 +168,12 @@ fun AppNavHost(
         composable<StorageRoute> {
             StorageManagerScreen(
                 onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable<ProUpgradeRoute> {
+            ProUpgradeScreen(
+                onBack = { navController.popBackStack() },
             )
         }
     }

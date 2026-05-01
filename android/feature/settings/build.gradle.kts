@@ -62,6 +62,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.material.icons.extended)
 
+    // Play Billing — Pro IAP UI (P5.2)
+    implementation(libs.play.billing.ktx)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

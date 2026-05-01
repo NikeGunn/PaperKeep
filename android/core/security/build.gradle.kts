@@ -53,6 +53,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // Play Integrity — Pro unlock gate (P5.3)
+    implementation(libs.play.integrity)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

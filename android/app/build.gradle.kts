@@ -56,9 +56,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // R8 full mode: more aggressive dead-code elimination
-            // Uncomment if minSdk >= 24 (no legacy class backporting needed)
-            // proguardFile("$rootDir/r8-full-mode.pro")
+            // R8 full mode: more aggressive dead-code elimination (P5.5)
+            // minSdk=26 >= 24, so legacy backporting is not needed — safe to enable.
+            proguardFile("r8-full-mode.pro")
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -151,6 +151,12 @@ dependencies {
 
     // Baseline Profile installer — ships pre-compiled hot paths with the APK
     implementation(libs.androidx.profileinstaller)
+
+    // Play Billing — Pro IAP (P5.2) — needed in :app for Activity context
+    implementation(libs.play.billing.ktx)
+
+    // Play Integrity — Pro unlock gate (P5.3)
+    implementation(libs.play.integrity)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

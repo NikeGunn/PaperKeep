@@ -1,0 +1,22 @@
+package app.paperkeep.core.security.di
+
+import app.paperkeep.core.security.ApkSignatureVerifier
+import app.paperkeep.core.security.DeviceIntegrityChecker
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object SecurityModule {
+
+    @Provides
+    @Singleton
+    fun provideApkSignatureVerifier(): ApkSignatureVerifier = ApkSignatureVerifier
+
+    @Provides
+    @Singleton
+    fun provideDeviceIntegrityChecker(): DeviceIntegrityChecker = DeviceIntegrityChecker
+}

@@ -24,8 +24,8 @@ import javax.inject.Singleton
 @Singleton
 class IntegrityGate @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val signatureVerifier: ApkSignatureVerifier = ApkSignatureVerifier,
-    private val deviceChecker: DeviceIntegrityChecker = DeviceIntegrityChecker,
+    private val signatureVerifier: ApkSignatureVerifier,
+    private val deviceChecker: DeviceIntegrityChecker,
 ) {
 
     private val _status = MutableStateFlow(IntegrityStatus())

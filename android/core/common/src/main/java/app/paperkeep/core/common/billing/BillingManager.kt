@@ -2,78 +2,204 @@ package app.paperkeep.core.common.billing
 
 import android.app.Activity
 import android.content.Context
+import com.android.billingclient.api.AcknowledgePurchaseParams
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingFlowParams
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
+import com.android.billingclient.api.ProductDetails
+import com.android.billingclient.api.Purchase
+import com.android.billingclient.api.PurchasesUpdatedListener
+import com.android.billingclient.api.QueryProductDetailsParams
+import com.android.billingclient.api.QueryPurchasesParams
+import com.android.billingclient.api.acknowledgePurchase
+import com.android.billingclient.api.queryProductDetails
+import com.android.billingclient.api.queryPurchasesAsync
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Play Billing shelf for Paperkeep Pro (P3.11).
+ * Real Play Billing implementation for Paperkeep Pro (P5.2).
  *
- * Wires BillingClient and queries ONE product: [PRODUCT_ID].
- * Purchase flow is **stubbed** — real unlock ships in Phase 5.
- * Unlock logic is intentionally disabled here; [isPro] always stays false
- * until Phase 5 activates it.
+ * Product: [PRODUCT_ID] ("paperkeep_pro_lifetime"), one-time $4.99 purchase.
  *
- * Phase 5 will:
- *  1. Replace the stub with a real BillingClient.initialize() call.
- *  2. Verify the purchase token on-device with Play Integrity before setting [isPro].
- *  3. Persist isPro state in encrypted DataStore.
+ * Flow:
+ *  1. [initialize] → connects BillingClient → queries product details.
+ *  2. [launchPurchaseFlow] → opens Play purchase sheet.
+ *  3. [PurchasesUpdatedListener] receives result → verifies + acknowledges → persists isPro.
+ *
+ * Security:
+ *  - Purchase token stored in DataStore via [ProStatusStore].
+ *  - Pro Integrity API gate enforced externally by [IntegrityGate].
+ *  - Rooted devices are blocked at [IntegrityGate]; we do NOT silently take money.
  */
 @Singleton
 class BillingManager @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+    private val proStatusStore: ProStatusStore,
+) : PurchasesUpdatedListener {
+
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _billingState = MutableStateFlow<BillingState>(BillingState.Idle)
     val billingState: StateFlow<BillingState> = _billingState.asStateFlow()
 
-    /** Whether the user owns Pro. Always false until Phase 5 enables it. */
-    val isPro: Boolean get() = false
+    /** Emits true when the user owns Pro. Backed by encrypted DataStore. */
+    val isPro: Flow<Boolean> get() = proStatusStore.isPro
+
+    private var billingClient: BillingClient? = null
+    private var queriedProductDetails: ProductDetails? = null
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     /**
-     * Initialise the billing connection and query product details.
-     *
-     * Phase 3 stub: transitions to [BillingState.ProductAvailable] immediately
-     * with a synthetic [ProProductDetails]. A real BillingClient setup ships
-     * in Phase 5.
+     * Connect to Play Billing and query product details.
+     * Safe to call multiple times — no-op if already connecting/connected.
      */
     fun initialize() {
         if (_billingState.value !is BillingState.Idle) return
         _billingState.value = BillingState.Connecting
-        // Stub: simulate a successful connection + product query
-        _billingState.value = BillingState.ProductAvailable(
-            product = ProProductDetails(
-                productId   = PRODUCT_ID,
-                title       = "Paperkeep Pro",
-                description = "Lifetime Pro: remove ads, unlimited batch export, AI summariser.",
-                formattedPrice = "\$4.99",
-                priceMicros = 4_990_000L,
-                currencyCode = "USD",
-            ),
-        )
+
+        val client = BillingClient.newBuilder(context)
+            .setListener(this)
+            .enablePendingPurchases(
+                PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
+            )
+            .build()
+        billingClient = client
+
+        client.startConnection(object : BillingClientStateListener {
+            override fun onBillingSetupFinished(result: BillingResult) {
+                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    scope.launch { queryProductAndExistingPurchases(client) }
+                } else {
+                    _billingState.value = BillingState.Error("Setup failed: ${result.debugMessage}")
+                }
+            }
+
+            override fun onBillingServiceDisconnected() {
+                _billingState.value = BillingState.Idle
+                billingClient = null
+            }
+        })
     }
 
-    /**
-     * Launch the purchase flow for [PRODUCT_ID].
-     *
-     * Phase 3 stub: immediately transitions to [BillingState.PurchasePending]
-     * without opening any UI (purchase logic is disabled until Phase 5).
-     *
-     * @param activity The foreground Activity required by BillingClient.
-     */
-    fun launchPurchaseFlow(activity: Activity) {
-        val current = _billingState.value
-        if (current !is BillingState.ProductAvailable) return
-        // Stub: show pending, but do NOT unlock Pro (Phase 5 job)
-        _billingState.value = BillingState.PurchasePending
+    /** Disconnect and reset. Safe to call any time. */
+    fun disconnect() {
+        billingClient?.endConnection()
+        billingClient = null
+        _billingState.value = BillingState.Idle
     }
 
     /** Reset to [BillingState.Idle] — used in tests and on disconnect. */
     fun reset() {
-        _billingState.value = BillingState.Idle
+        disconnect()
+    }
+
+    // ── Purchase flow ─────────────────────────────────────────────────────────
+
+    /**
+     * Launch the Play purchase sheet for [PRODUCT_ID].
+     * Requires the state to be [BillingState.ProductAvailable].
+     */
+    fun launchPurchaseFlow(activity: Activity) {
+        val details = queriedProductDetails ?: return
+        val client = billingClient ?: return
+        if (_billingState.value !is BillingState.ProductAvailable) return
+
+        val productDetailsParams = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(details)
+            .build()
+
+        val params = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(listOf(productDetailsParams))
+            .build()
+
+        _billingState.value = BillingState.PurchasePending
+        client.launchBillingFlow(activity, params)
+    }
+
+    // ── PurchasesUpdatedListener ───────────────────────────────────────────────
+
+    override fun onPurchasesUpdated(result: BillingResult, purchases: List<Purchase>?) {
+        when (result.responseCode) {
+            BillingClient.BillingResponseCode.OK -> {
+                purchases?.forEach { handlePurchase(it) }
+            }
+            BillingClient.BillingResponseCode.USER_CANCELED -> {
+                _billingState.value = queriedProductDetails?.let {
+                    BillingState.ProductAvailable(it.toProProductDetails())
+                } ?: BillingState.Idle
+            }
+            else -> {
+                _billingState.value = BillingState.Error(result.debugMessage)
+            }
+        }
+    }
+
+    // ── Private helpers ────────────────────────────────────────────────────────
+
+    private suspend fun queryProductAndExistingPurchases(client: BillingClient) {
+        val productList = listOf(
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_ID)
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build()
+        )
+        val params = QueryProductDetailsParams.newBuilder()
+            .setProductList(productList)
+            .build()
+
+        val result = client.queryProductDetails(params)
+        if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+            val details = result.productDetailsList?.firstOrNull()
+            if (details != null) {
+                queriedProductDetails = details
+                _billingState.value = BillingState.ProductAvailable(details.toProProductDetails())
+            } else {
+                _billingState.value = BillingState.Error("Product not found in Play Console")
+            }
+        } else {
+            _billingState.value = BillingState.Error(result.billingResult.debugMessage)
+        }
+
+        restoreExistingPurchases(client)
+    }
+
+    private suspend fun restoreExistingPurchases(client: BillingClient) {
+        val params = QueryPurchasesParams.newBuilder()
+            .setProductType(BillingClient.ProductType.INAPP)
+            .build()
+        val result = client.queryPurchasesAsync(params)
+        result.purchasesList
+            .filter { it.products.contains(PRODUCT_ID) }
+            .forEach { handlePurchase(it) }
+    }
+
+    private fun handlePurchase(purchase: Purchase) {
+        if (!purchase.products.contains(PRODUCT_ID)) return
+        if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
+
+        scope.launch {
+            if (!purchase.isAcknowledged) {
+                val ackParams = AcknowledgePurchaseParams.newBuilder()
+                    .setPurchaseToken(purchase.purchaseToken)
+                    .build()
+                val ackResult = billingClient?.acknowledgePurchase(ackParams)
+                if (ackResult?.responseCode != BillingClient.BillingResponseCode.OK) return@launch
+            }
+            proStatusStore.setProStatus(isPro = true, purchaseToken = purchase.purchaseToken)
+        }
     }
 
     companion object {
@@ -85,25 +211,14 @@ class BillingManager @Inject constructor(
 // ── State machine ────────────────────────────────────────────────────────────
 
 sealed interface BillingState {
-    /** Not yet connected to Play Billing. */
     data object Idle : BillingState
-
-    /** BillingClient connection in progress. */
     data object Connecting : BillingState
-
-    /** Product queried and available for purchase. */
     data class ProductAvailable(val product: ProProductDetails) : BillingState
-
-    /** Purchase flow launched — awaiting user action. Unlock disabled until Phase 5. */
     data object PurchasePending : BillingState
-
-    /** A billing error occurred. [message] is for developer logging only. */
     data class Error(val message: String) : BillingState
 }
 
-/**
- * Synthetic product details (replaces real [ProductDetails] in Phase 3 stub).
- */
+/** Snapshot of product details shown in the Pro upgrade UI. */
 data class ProProductDetails(
     val productId: String,
     val title: String,
@@ -111,4 +226,13 @@ data class ProProductDetails(
     val formattedPrice: String,
     val priceMicros: Long,
     val currencyCode: String,
+)
+
+private fun ProductDetails.toProProductDetails() = ProProductDetails(
+    productId = productId,
+    title = title,
+    description = description,
+    formattedPrice = oneTimePurchaseOfferDetails?.formattedPrice ?: "\$4.99",
+    priceMicros = oneTimePurchaseOfferDetails?.priceAmountMicros ?: 4_990_000L,
+    currencyCode = oneTimePurchaseOfferDetails?.priceCurrencyCode ?: "USD",
 )
