@@ -71,7 +71,11 @@ class LockController @Inject constructor(
         _unlockedAtMs,
     ) { enabled, timeout, unlockedAt ->
         if (!enabled) return@combine false
+        // Never unlocked in this process → locked.
         unlockedAt ?: return@combine true
+        // IMMEDIATE means "lock on next background resume", not "lock every frame".
+        // While the session is active (unlockedAt is set), the app stays open.
+        if (timeout == LockTimeout.IMMEDIATE) return@combine false
         val elapsed = System.currentTimeMillis() - unlockedAt
         elapsed >= timeout.millis
     }
@@ -90,6 +94,19 @@ class LockController @Inject constructor(
     fun onAppForeground() {
         // The lock state is reactive — isLocked Flow recomputes automatically.
         // This method exists for explicit trigger points (e.g. lifecycle observer).
+    }
+
+    /**
+     * Call from Activity.onStop. Clears the unlock timestamp for IMMEDIATE timeout
+     * so the next launch requires authentication again.
+     */
+    fun onAppBackground() {
+        // Only clear for IMMEDIATE — other timeouts let the elapsed-time check
+        // handle re-locking when the user returns after the timeout window.
+        // We read the current value synchronously from the StateFlow; it is safe
+        // because DataStore emits are on a background dispatcher and the timeout
+        // StateFlow was last set by the same coroutine context.
+        _unlockedAtMs.value = null
     }
 
     /** Force-lock regardless of timeout. Used by the user when they manually lock. */

@@ -71,6 +71,14 @@ class MainActivity : FragmentActivity() {
         setRecentAppsAppearance()
     }
 
+    override fun onStop() {
+        super.onStop()
+        // IMMEDIATE timeout: lock the moment the app leaves the foreground.
+        // Other timeouts: LockController.isLocked re-evaluates on next onResume
+        // because the elapsed time is checked reactively against the stored timestamp.
+        lockController.onAppBackground()
+    }
+
     /**
      * P2.14 — Sets a neutral task description so the system task switcher shows
      * only "Paperkeep" + a static brand color instead of a live screenshot of

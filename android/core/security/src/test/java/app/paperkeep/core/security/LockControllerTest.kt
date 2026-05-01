@@ -69,19 +69,26 @@ class LockControllerTest {
     // ── onUnlocked ────────────────────────────────────────────────────────────
 
     @Test
-    fun `isLocked is false after onUnlocked with IMMEDIATE timeout`() = runTest {
+    fun `isLocked is false after onUnlocked with IMMEDIATE timeout — stays open during session`() = runTest {
         lockEnabledFlow.value = true
         controller.setLockTimeout(LockTimeout.IMMEDIATE)
         controller.onUnlocked()
 
-        // IMMEDIATE timeout: millis=0 so elapsed >= 0 is always true → LOCKED again
-        // This is the correct design: IMMEDIATE means re-lock after any navigation
-        // In practice the biometric prompt fires on each screen entry.
-        // For this test we verify the unlock-then-re-lock contract.
-        // The key invariant: lockNow() always locks regardless.
-        controller.lockNow()
+        // IMMEDIATE means "lock when app goes to background", NOT "lock every frame".
+        // The app must stay unlocked while the session is active.
         val locked = controller.isLocked.first()
-        assertTrue("lockNow should force lock", locked)
+        assertFalse("App should stay unlocked during an active IMMEDIATE session", locked)
+    }
+
+    @Test
+    fun `onAppBackground with IMMEDIATE timeout re-locks the app`() = runTest {
+        lockEnabledFlow.value = true
+        controller.setLockTimeout(LockTimeout.IMMEDIATE)
+        controller.onUnlocked()
+
+        controller.onAppBackground()
+        val locked = controller.isLocked.first()
+        assertTrue("App must re-lock after going to background with IMMEDIATE timeout", locked)
     }
 
     @Test
