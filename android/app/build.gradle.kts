@@ -135,6 +135,7 @@ dependencies {
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)
+    implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.ui.tooling.preview)
 
     // Lifecycle

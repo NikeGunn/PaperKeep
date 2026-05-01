@@ -3,6 +3,7 @@ package app.paperkeep.feature.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,6 +82,8 @@ const val TAG_SETTINGS_PRO_UPGRADE_ROW = "settings_pro_upgrade_row"
 @Composable
 fun SettingsScreen(
     appVersion: String = "",
+    showBackButton: Boolean = false,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     onNavigateBack: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
@@ -133,13 +136,17 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.semantics { contentDescription = "Navigate back" },
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                navigationIcon = if (showBackButton) {
+                    {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.semantics { contentDescription = "Navigate back" },
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
                     }
+                } else {
+                    {}
                 },
             )
         },

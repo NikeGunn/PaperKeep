@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
@@ -98,8 +99,9 @@ const val TAG_LIBRARY_ARCHIVE_BTN = "library_archive_button"
 fun LibraryScreen(
     onDocumentClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     isTablet: Boolean = false,
-    onOpenSettings: () -> Unit = {},
+    onScanNew: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -150,6 +152,20 @@ fun LibraryScreen(
                 )
             }
         },
+        floatingActionButton = {
+            if (!state.isMultiSelect) {
+                FloatingActionButton(
+                    onClick = onScanNew,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .padding(bottom = contentPadding.calculateBottomPadding())
+                        .semantics { contentDescription = "Scan new document" },
+                ) {
+                    Icon(Icons.Filled.CameraAlt, contentDescription = null)
+                }
+            }
+        },
         modifier = modifier.windowInsetsPadding(WindowInsets.safeDrawing),
     ) { innerPadding ->
         PullToRefreshBox(
@@ -164,6 +180,7 @@ fun LibraryScreen(
                 LibraryEmptyState(
                     isSearchActive = state.isSearchActive,
                     query = state.searchQuery,
+                    onScanNew = onScanNew,
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag(TAG_LIBRARY_EMPTY),
@@ -451,6 +468,7 @@ private enum class SortOption(val label: String, val sort: DocumentSort) {
 private fun LibraryEmptyState(
     isSearchActive: Boolean,
     query: String,
+    onScanNew: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -459,6 +477,14 @@ private fun LibraryEmptyState(
         verticalArrangement = Arrangement.Center,
     ) {
         if (isSearchActive) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(64.dp)
+                    .padding(bottom = 16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 text = "No results for \"$query\"",
                 style = MaterialTheme.typography.headlineSmall,
@@ -472,19 +498,36 @@ private fun LibraryEmptyState(
                 modifier = Modifier.padding(top = 8.dp),
             )
         } else {
-            Text(
-                text = "No documents yet",
-                style = MaterialTheme.typography.headlineSmall,
+            Icon(
+                Icons.Filled.FolderOpen,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(72.dp)
+                    .padding(bottom = 16.dp),
+                tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Tap the camera button to scan your first document",
-                style = MaterialTheme.typography.bodyMedium,
+                text = "No documents yet",
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Scan a document to get started",
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .padding(top = 8.dp)
+                    .padding(top = 8.dp, bottom = 24.dp)
                     .fillMaxWidth(0.7f),
                 textAlign = TextAlign.Center,
             )
+            FloatingActionButton(
+                onClick = onScanNew,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.semantics { contentDescription = "Scan first document" },
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = null)
+            }
         }
     }
 }
