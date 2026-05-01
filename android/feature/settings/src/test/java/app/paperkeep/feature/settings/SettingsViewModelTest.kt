@@ -6,6 +6,8 @@ import app.cash.turbine.test
 import app.paperkeep.core.security.BiometricLockManager
 import app.paperkeep.core.security.LockController
 import app.paperkeep.core.security.LockTimeout
+import app.paperkeep.core.ui.theme.AppTheme
+import app.paperkeep.core.ui.theme.ThemePreferences
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -36,10 +38,13 @@ class SettingsViewModelTest {
     private lateinit var context: Context
     private lateinit var biometricManager: BiometricLockManager
     private lateinit var lockController: LockController
+    private lateinit var themePreferences: ThemePreferences
     private lateinit var vm: SettingsViewModel
 
     private val lockEnabledFlow = MutableStateFlow(false)
     private val timeoutFlow = MutableStateFlow(LockTimeout.IMMEDIATE)
+    private val appThemeFlow = MutableStateFlow(AppTheme.SYSTEM)
+    private val oledFlow = MutableStateFlow(false)
 
     @Before
     fun setUp() {
@@ -52,7 +57,11 @@ class SettingsViewModelTest {
         lockController = mockk(relaxed = true) {
             every { lockTimeout } returns timeoutFlow
         }
-        vm = SettingsViewModel(context, biometricManager, lockController)
+        themePreferences = mockk(relaxed = true) {
+            every { appTheme } returns appThemeFlow
+            every { oledTrueBlack } returns oledFlow
+        }
+        vm = SettingsViewModel(context, biometricManager, lockController, themePreferences)
     }
 
     @After
@@ -172,6 +181,68 @@ class SettingsViewModelTest {
 
             val state = awaitItem()
             assertTrue(state.biometricLockEnabled)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ── Dark mode (P4.8) ──────────────────────────────────────────────────────
+
+    @Test
+    fun `initial appTheme is SYSTEM`() = runTest {
+        vm.uiState.test {
+            val state = awaitItem()
+            assertEquals(AppTheme.SYSTEM, state.appTheme)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `initial oledTrueBlack is false`() = runTest {
+        vm.uiState.test {
+            val state = awaitItem()
+            assertFalse(state.oledTrueBlack)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setAppTheme calls themePreferences setAppTheme`() = runTest {
+        vm.setAppTheme(AppTheme.DARK)
+        advanceUntilIdle()
+        coVerify { themePreferences.setAppTheme(AppTheme.DARK) }
+    }
+
+    @Test
+    fun `setOledTrueBlack calls themePreferences setOledTrueBlack`() = runTest {
+        vm.setOledTrueBlack(true)
+        advanceUntilIdle()
+        coVerify { themePreferences.setOledTrueBlack(true) }
+    }
+
+    @Test
+    fun `appTheme from flow is reflected in uiState`() = runTest {
+        vm.uiState.test {
+            awaitItem() // initial
+
+            appThemeFlow.value = AppTheme.DARK
+            advanceUntilIdle()
+
+            val state = awaitItem()
+            assertEquals(AppTheme.DARK, state.appTheme)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `oledTrueBlack from flow is reflected in uiState`() = runTest {
+        vm.uiState.test {
+            awaitItem() // initial
+
+            oledFlow.value = true
+            advanceUntilIdle()
+
+            val state = awaitItem()
+            assertTrue(state.oledTrueBlack)
             cancelAndIgnoreRemainingEvents()
         }
     }

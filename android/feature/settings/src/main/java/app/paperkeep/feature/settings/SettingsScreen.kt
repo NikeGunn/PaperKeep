@@ -43,13 +43,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.paperkeep.core.common.crash.CrashLogStore
 import app.paperkeep.core.security.LockTimeout
+import app.paperkeep.core.ui.theme.AppTheme
 
 // ── Test tags ─────────────────────────────────────────────────────────────────
 const val TAG_SETTINGS_SCREEN = "settings_screen"
@@ -60,6 +63,8 @@ const val TAG_SETTINGS_SECTION_ABOUT = "settings_section_about"
 const val TAG_BIOMETRIC_TOGGLE = "settings_biometric_toggle"
 const val TAG_SCREENSHOT_TOGGLE = "settings_screenshot_toggle"
 const val TAG_LOCK_TIMEOUT = "settings_lock_timeout"
+const val TAG_THEME_PICKER = "settings_theme_picker"
+const val TAG_OLED_TOGGLE = "settings_oled_toggle"
 
 /**
  * Full Settings screen for Paperkeep v2.
@@ -82,8 +87,11 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var showTimeoutPicker by remember { mutableStateOf(false) }
     var showPrivacyPolicy by remember { mutableStateOf(false) }
+    var showThemePicker by remember { mutableStateOf(false) }
+    var showCrashLogs by remember { mutableStateOf(false) }
 
     if (showTimeoutPicker) {
         LockTimeoutDialog(
@@ -98,6 +106,24 @@ fun SettingsScreen(
 
     if (showPrivacyPolicy) {
         PrivacyPolicyDialog(onDismiss = { showPrivacyPolicy = false })
+    }
+
+    if (showThemePicker) {
+        ThemePickerDialog(
+            currentTheme = uiState.appTheme,
+            onSelect = { theme ->
+                viewModel.setAppTheme(theme)
+                showThemePicker = false
+            },
+            onDismiss = { showThemePicker = false },
+        )
+    }
+
+    if (showCrashLogs) {
+        CrashLogsDialog(
+            context = context,
+            onDismiss = { showCrashLogs = false },
+        )
     }
 
     Scaffold(
@@ -165,6 +191,32 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+            // ── Appearance section ────────────────────────────────────────────
+            SettingsSectionHeader(
+                icon = Icons.Filled.Language,
+                title = "Appearance",
+            )
+            ClickableSettingsRow(
+                label = "Theme",
+                value = uiState.appTheme.label,
+                description = "Light, dark, or follow system setting",
+                onClick = { showThemePicker = true },
+                testTag = TAG_THEME_PICKER,
+            )
+            if (uiState.appTheme == AppTheme.DARK ||
+                uiState.appTheme == AppTheme.SYSTEM) {
+                SwitchSettingsRow(
+                    label = "OLED true black",
+                    description = "Pure black background for AMOLED screens (saves battery)",
+                    checked = uiState.oledTrueBlack,
+                    enabled = true,
+                    onCheckedChange = viewModel::setOledTrueBlack,
+                    testTag = TAG_OLED_TOGGLE,
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             // ── Scanning section ─────────────────────────────────────────────
             SettingsSectionHeader(
                 icon = Icons.Filled.CameraAlt,
@@ -228,6 +280,21 @@ fun SettingsScreen(
             InfoSettingsRow(
                 label = "Data collection",
                 description = "None. 100% on-device. No account required.",
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // ── Crash logs section ────────────────────────────────────────────
+            SettingsSectionHeader(
+                icon = Icons.Filled.Info,
+                title = "Diagnostics",
+            )
+            ClickableSettingsRow(
+                label = "Crash logs",
+                value = "View",
+                description = "Encrypted on-device crash reports (never auto-sent)",
+                onClick = { showCrashLogs = true },
+                testTag = "settings_crash_logs",
             )
         }
     }
@@ -411,6 +478,103 @@ private fun LockTimeoutDialog(
                         )
                         Text(
                             text = timeout.label,
+                            modifier = Modifier.padding(start = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun CrashLogsDialog(
+    context: android.content.Context,
+    onDismiss: () -> Unit,
+) {
+    val logs = remember { CrashLogStore.listFiles(context) }
+    var cleared by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Crash Logs") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                if (cleared || logs.isEmpty()) {
+                    Text(
+                        text = "No crash logs stored.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        text = "${logs.size} encrypted log(s) stored on device. Tap 'Clear' to delete them.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    logs.take(5).forEach { file ->
+                        Text(
+                            text = "• ${file.name}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 2.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Nothing is auto-uploaded. Use 'Clear' to delete all logs from this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        dismissButton = {
+            if (!cleared && logs.isNotEmpty()) {
+                TextButton(onClick = {
+                    CrashLogStore.clear(context)
+                    cleared = true
+                }) { Text("Clear all") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ThemePickerDialog(
+    currentTheme: AppTheme,
+    onSelect: (AppTheme) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Theme") },
+        text = {
+            Column {
+                AppTheme.entries.forEach { theme ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(theme) }
+                            .padding(vertical = 4.dp)
+                            .semantics { contentDescription = theme.label },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = currentTheme == theme,
+                            onClick = { onSelect(theme) },
+                        )
+                        Text(
+                            text = theme.label,
                             modifier = Modifier.padding(start = 8.dp),
                             style = MaterialTheme.typography.bodyMedium,
                         )

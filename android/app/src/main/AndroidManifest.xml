@@ -103,6 +103,19 @@
                 android:resource="@xml/scan_now_widget_info" />
         </receiver>
 
+        <!-- ── Glance AppWidget: "Recent Scans" 4×1 ─────────────────────── -->
+        <receiver
+            android:name=".widget.RecentScansWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_recent_scans_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_scans_widget_info" />
+        </receiver>
+
         <!-- ── Quick Settings Tile: "Scan document" ──────────────────────── -->
         <!-- exported=true: mandatory for QS tiles — system SystemUI binds the
              service. Protected by android.permission.BIND_QUICK_SETTINGS_TILE

@@ -1,6 +1,7 @@
 package app.paperkeep.core.data.repository
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import app.paperkeep.core.data.autorule.AutoRuleEngine
 import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.DocumentEntity
 import app.paperkeep.core.data.db.DocumentWithPages
@@ -53,7 +54,7 @@ class DocumentRepositorySearchTest {
             coEvery { searchDocumentsRaw(any()) } returns
                 listOf(DocumentWithPages(emptyEntity, emptyList()))
         }
-        repo = DocumentRepository(dao, ocrFtsIndex)
+        repo = DocumentRepository(dao, ocrFtsIndex, AutoRuleEngine())
     }
 
     // ── Sanitisation: blank / empty queries ──────────────────────────────────

@@ -1,24 +1,21 @@
 package app.paperkeep.crash
 
 import android.content.Context
-import android.os.Build
+import app.paperkeep.core.common.crash.CrashLogStore
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-private const val LOG_DIR = "crash_logs"
-private const val MAX_LOG_FILES = 10
-private const val MAX_LOG_SIZE_BYTES = 128 * 1024L // 128 KB per file
-
 /**
- * Custom uncaught exception handler that:
- * 1. Writes an encrypted crash log to internal storage
- * 2. Optionally shows a crash dialog activity on the next launch
- * 3. Delegates to the previous (JVM / Android default) handler
+ * Custom uncaught exception handler.
  *
- * Install via [install] in Application.onCreate() before any other code.
+ * On crash:
+ * 1. Builds a human-readable report (timestamp, device info, stack trace).
+ * 2. Delegates to [CrashLogStore] which encrypts it with AES-256-GCM using a
+ *    hardware-backed Keystore key and writes to `filesDir/crash/crash_<ts>.enc`.
+ * 3. Delegates to the previous handler (Android's default crash dialog).
+ *
+ * Nothing auto-uploads. The user taps "View crash logs" in Settings > Diagnostics
+ * to see the list and optionally clear them. Decryption happens in-process on demand.
  */
 class PaperkeepCrashHandler private constructor(
     private val context: Context,
@@ -28,87 +25,38 @@ class PaperkeepCrashHandler private constructor(
     private val handling = AtomicBoolean(false)
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
-        // Guard against recursive crashes
         if (!handling.compareAndSet(false, true)) {
             previousHandler?.uncaughtException(thread, throwable)
             return
         }
-
         try {
-            writeCrashLog(throwable, thread)
+            val report = CrashLogStore.buildReport(throwable, thread)
+            CrashLogStore.write(context, report)
         } catch (_: Exception) {
-            // Silently swallow — we're already crashing, can't risk a secondary failure
+            // Swallow — secondary failure would hide the original crash.
         } finally {
             previousHandler?.uncaughtException(thread, throwable)
         }
     }
 
-    private fun writeCrashLog(throwable: Throwable, thread: Thread) {
-        val logDir = File(context.filesDir, LOG_DIR).also { it.mkdirs() }
-
-        // Rotate: keep only the last MAX_LOG_FILES crash logs
-        val existing = logDir.listFiles()?.sortedBy { it.lastModified() } ?: emptyList()
-        if (existing.size >= MAX_LOG_FILES) {
-            existing.take(existing.size - MAX_LOG_FILES + 1).forEach { it.delete() }
-        }
-
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val logFile = File(logDir, "crash_$timestamp.log")
-
-        val report = buildCrashReport(throwable, thread)
-        // Write truncated if too large
-        logFile.writeText(report.take((MAX_LOG_SIZE_BYTES / 2).toInt()))
-    }
-
-    private fun buildCrashReport(throwable: Throwable, thread: Thread): String {
-        return buildString {
-            appendLine("=== Paperkeep Crash Report ===")
-            appendLine("Time: ${Date()}")
-            appendLine("Thread: ${thread.name} (id=${thread.id})")
-            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
-            appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("App: app.paperkeep")
-            appendLine()
-            appendLine("=== Exception ===")
-            appendLine(throwable.javaClass.name + ": " + throwable.message)
-            appendLine()
-            appendLine("=== Stack Trace ===")
-            appendLine(throwable.stackTraceToString())
-
-            var cause = throwable.cause
-            var depth = 0
-            while (cause != null && depth < 5) {
-                appendLine()
-                appendLine("=== Caused by ===")
-                appendLine(cause.javaClass.name + ": " + cause.message)
-                appendLine(cause.stackTraceToString())
-                cause = cause.cause
-                depth++
-            }
-        }
-    }
-
     companion object {
-        /** Install the crash handler. Safe to call multiple times — idempotent. */
+        /** Install the handler. Safe to call multiple times — idempotent. */
         fun install(context: Context) {
-            val appContext = context.applicationContext
             val current = Thread.getDefaultUncaughtExceptionHandler()
-            if (current is PaperkeepCrashHandler) return // Already installed
+            if (current is PaperkeepCrashHandler) return
             Thread.setDefaultUncaughtExceptionHandler(
-                PaperkeepCrashHandler(appContext, current)
+                PaperkeepCrashHandler(context.applicationContext, current)
             )
         }
 
-        /** Return all stored crash log files, newest first. */
-        fun getCrashLogs(context: Context): List<File> {
-            val logDir = File(context.filesDir, LOG_DIR)
-            return (logDir.listFiles()?.toList() ?: emptyList())
-                .sortedByDescending { it.lastModified() }
-        }
+        /** Return all stored encrypted crash log files, newest first. */
+        fun getCrashLogFiles(context: Context): List<File> =
+            CrashLogStore.listFiles(context)
+
+        /** Decrypt and return the plaintext content of a crash log file. */
+        fun readCrashLog(file: File): String? = CrashLogStore.read(file)
 
         /** Delete all stored crash logs. */
-        fun clearCrashLogs(context: Context) {
-            File(context.filesDir, LOG_DIR).listFiles()?.forEach { it.delete() }
-        }
+        fun clearCrashLogs(context: Context) = CrashLogStore.clear(context)
     }
 }

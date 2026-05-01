@@ -1,6 +1,7 @@
 package app.paperkeep.core.data.repository
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import app.paperkeep.core.data.autorule.AutoRuleEngine
 import app.paperkeep.core.data.db.DocumentDao
 import app.paperkeep.core.data.db.DocumentWithPages
 import app.paperkeep.core.data.db.toDomain
@@ -12,6 +13,7 @@ import app.paperkeep.core.domain.model.Folder
 import app.paperkeep.core.domain.model.Page
 import app.paperkeep.core.domain.model.PageOcr
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +22,7 @@ import javax.inject.Singleton
 class DocumentRepository @Inject constructor(
     private val dao: DocumentDao,
     private val ocrFtsIndex: OcrFtsIndex,
+    private val autoRuleEngine: AutoRuleEngine,
 ) {
 
     // ── Documents ──────────────────────────────────────────────────────────────
@@ -69,8 +72,31 @@ class DocumentRepository @Inject constructor(
         dao.setArchived(documentId, archived)
     }
 
+    /**
+     * Set the docType for a document and automatically apply folder auto-rules.
+     *
+     * After setting the type, the engine checks every user folder's [autoRule].
+     * If a matching folder is found AND the document is currently unfiled (folderId == null),
+     * the document is moved there automatically. Documents already in a folder are left alone
+     * so users can manually override the classifier result.
+     */
     suspend fun setDocType(documentId: String, docType: String?) {
         dao.setDocType(documentId, docType)
+        if (docType != null) {
+            applyAutoRules(documentId)
+        }
+    }
+
+    /**
+     * Check folder auto-rules for a single document and move it if a rule matches.
+     * Safe to call anytime — no-ops if the document is already in a folder or if no rule matches.
+     */
+    suspend fun applyAutoRules(documentId: String) {
+        val doc = dao.getDocumentWithPagesById(documentId)?.toDomain() ?: return
+        if (doc.folderId != null) return // already filed — respect user's choice
+        val folders = observeFolders().first()
+        val targetFolderId = autoRuleEngine.findMatchingFolder(doc, folders) ?: return
+        moveDocumentToFolder(documentId, targetFolderId)
     }
 
     suspend fun updateTitle(documentId: String, title: String) {

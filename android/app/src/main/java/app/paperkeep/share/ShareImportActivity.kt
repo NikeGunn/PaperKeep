@@ -72,13 +72,22 @@ class ShareImportActivity : ComponentActivity() {
     }
 
     private suspend fun processSharedUris(uris: List<Uri>) = withContext(Dispatchers.IO) {
-        // Copy each URI to the app's cache directory so Room / the scan pipeline can access it.
-        // The actual import into the document library is handled by the scanner ViewModel.
+        // Validate each URI: MIME type allowlist + 50 MB size cap.
         val imported = mutableListOf<Uri>()
+        var tooLarge = false
+
         for (uri in uris) {
             try {
                 val type = contentResolver.getType(uri) ?: continue
-                if (!type.startsWith("image/") && type != "application/pdf") continue
+                if (!isMimeAllowed(type)) continue
+
+                // Enforce 50 MB per-file size cap
+                val size = queryFileSize(uri)
+                if (size != null && size > MAX_IMPORT_BYTES) {
+                    tooLarge = true
+                    continue
+                }
+
                 imported.add(uri)
             } catch (_: Exception) {
                 // Skip URIs we can't read
@@ -86,20 +95,49 @@ class ShareImportActivity : ComponentActivity() {
         }
 
         withContext(Dispatchers.Main) {
-            if (imported.isEmpty()) {
-                Toast.makeText(this@ShareImportActivity, getString(R.string.share_unsupported_type), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@ShareImportActivity, getString(R.string.share_success), Toast.LENGTH_SHORT).show()
-                // Hand off to MainActivity with the import URIs
-                val launch = Intent(this@ShareImportActivity, app.paperkeep.MainActivity::class.java).apply {
-                    action = "app.paperkeep.action.IMPORT_IMAGES"
-                    putParcelableArrayListExtra("import_uris", ArrayList(imported))
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            when {
+                imported.isEmpty() && tooLarge ->
+                    Toast.makeText(this@ShareImportActivity, getString(R.string.share_too_large), Toast.LENGTH_SHORT).show()
+                imported.isEmpty() ->
+                    Toast.makeText(this@ShareImportActivity, getString(R.string.share_unsupported_type), Toast.LENGTH_SHORT).show()
+                else -> {
+                    if (tooLarge) {
+                        Toast.makeText(this@ShareImportActivity, getString(R.string.share_some_skipped), Toast.LENGTH_SHORT).show()
+                    }
+                    Toast.makeText(this@ShareImportActivity, getString(R.string.share_success), Toast.LENGTH_SHORT).show()
+                    // Hand off to MainActivity with the import URIs
+                    val launch = Intent(this@ShareImportActivity, app.paperkeep.MainActivity::class.java).apply {
+                        action = "app.paperkeep.action.IMPORT_IMAGES"
+                        putParcelableArrayListExtra("import_uris", ArrayList(imported))
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    startActivity(launch)
                 }
-                startActivity(launch)
             }
             finish()
         }
+    }
+
+    private fun isMimeAllowed(mime: String): Boolean =
+        mime == "image/jpeg" ||
+            mime == "image/png" ||
+            mime == "image/webp" ||
+            mime == "image/heic" ||
+            mime == "image/heif" ||
+            mime == "application/pdf"
+
+    /** Query the file size via [ContentResolver] open-file descriptor. Returns null if unknown. */
+    private fun queryFileSize(uri: Uri): Long? = try {
+        contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+            pfd.statSize.takeIf { it >= 0 }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    companion object {
+        /** 50 MB maximum per imported file. */
+        private const val MAX_IMPORT_BYTES = 50L * 1024 * 1024
     }
 
     private fun extractUris(intent: Intent?): List<Uri> {

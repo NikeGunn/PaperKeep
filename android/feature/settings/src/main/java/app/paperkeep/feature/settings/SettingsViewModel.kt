@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import app.paperkeep.core.security.BiometricLockManager
 import app.paperkeep.core.security.LockController
 import app.paperkeep.core.security.LockTimeout
+import app.paperkeep.core.ui.theme.AppTheme
+import app.paperkeep.core.ui.theme.ThemePreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,8 @@ data class SettingsUiState(
     val isBiometricAvailable: Boolean = false,
     val screenshotProtectionEnabled: Boolean = true,
     val lockTimeout: LockTimeout = LockTimeout.IMMEDIATE,
+    val appTheme: AppTheme = AppTheme.SYSTEM,
+    val oledTrueBlack: Boolean = false,
 )
 
 @HiltViewModel
@@ -28,6 +32,7 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val biometricLockManager: BiometricLockManager,
     private val lockController: LockController,
+    private val themePreferences: ThemePreferences,
 ) : ViewModel() {
 
     private val _screenshotProtection = MutableStateFlow(true)
@@ -36,12 +41,21 @@ class SettingsViewModel @Inject constructor(
         biometricLockManager.isLockEnabled,
         lockController.lockTimeout,
         _screenshotProtection,
-    ) { lockEnabled, timeout, screenshotProtection ->
+        themePreferences.appTheme,
+        themePreferences.oledTrueBlack,
+    ) { arr ->
+        val lockEnabled = arr[0] as Boolean
+        val timeout = arr[1] as LockTimeout
+        val screenshotProtection = arr[2] as Boolean
+        val appTheme = arr[3] as AppTheme
+        val oledTrueBlack = arr[4] as Boolean
         SettingsUiState(
             biometricLockEnabled = lockEnabled,
             isBiometricAvailable = biometricLockManager.isBiometricAvailable(),
             screenshotProtectionEnabled = screenshotProtection,
             lockTimeout = timeout,
+            appTheme = appTheme,
+            oledTrueBlack = oledTrueBlack,
         )
     }.stateIn(
         viewModelScope,
@@ -64,5 +78,13 @@ class SettingsViewModel @Inject constructor(
 
     fun setScreenshotProtection(enabled: Boolean) {
         _screenshotProtection.value = enabled
+    }
+
+    fun setAppTheme(theme: AppTheme) {
+        viewModelScope.launch { themePreferences.setAppTheme(theme) }
+    }
+
+    fun setOledTrueBlack(enabled: Boolean) {
+        viewModelScope.launch { themePreferences.setOledTrueBlack(enabled) }
     }
 }

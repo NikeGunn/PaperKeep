@@ -124,6 +124,24 @@
     <string name="widget_no_recent_scans">No recent scans</string>
     <string name="widget_tap_to_scan">Tap to scan</string>
 
+    <!-- Widget extra -->
+    <string name="widget_open_library">Open library</string>
+    <string name="widget_recent_scans_label">Paperkeep — Recent Scans</string>
+
+    <!-- Auto-rules -->
+    <string name="auto_rule_none">No auto-rule</string>
+    <string name="auto_rule_receipt">docType = receipt</string>
+    <string name="auto_rule_id">docType = id card</string>
+    <string name="auto_rule_whiteboard">docType = whiteboard</string>
+    <string name="auto_rule_business_card">docType = business card</string>
+
+    <!-- Crash reporting (P4.14) -->
+    <string name="crash_logs_section">Crash Logs</string>
+    <string name="crash_logs_description">Encrypted crash logs stored on device only</string>
+    <string name="crash_send_email">Send via email</string>
+    <string name="crash_no_logs">No crash logs</string>
+    <string name="crash_logs_cleared">Crash logs cleared</string>
+
     <!-- Quick Settings tile -->
     <string name="qs_tile_label">Scan document</string>
     <string name="qs_tile_subtitle">Paperkeep</string>
@@ -138,6 +156,8 @@
     <string name="share_processing">Processing image…</string>
     <string name="share_success">Document imported successfully</string>
     <string name="share_unsupported_type">File type not supported</string>
+    <string name="share_too_large">File too large (max 50 MB)</string>
+    <string name="share_some_skipped">Some files skipped (over 50 MB)</string>
 
     <!-- Backup/Restore -->
     <string name="backup_title">Backup</string>

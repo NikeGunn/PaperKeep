@@ -1,5 +1,6 @@
 package app.paperkeep.core.data.db
 
+import app.paperkeep.core.data.autorule.AutoRuleEngine
 import app.paperkeep.core.data.fts.OcrFtsIndex
 import app.paperkeep.core.data.fts.OcrFtsKeyProvider
 import app.paperkeep.core.data.repository.DocumentRepository
@@ -29,7 +30,7 @@ class DocumentSearchSanitisationTest {
         every { provider.getKey() } returns key
         OcrFtsIndex(provider)
     }
-    private val repo = DocumentRepository(dao, ocrFtsIndex)
+    private val repo = DocumentRepository(dao, ocrFtsIndex, AutoRuleEngine())
 
     // ── Empty / blank input ───────────────────────────────────────────────────
 

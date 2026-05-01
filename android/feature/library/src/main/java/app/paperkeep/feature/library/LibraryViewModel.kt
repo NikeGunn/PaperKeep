@@ -10,6 +10,7 @@ import app.paperkeep.core.domain.model.Folder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -215,6 +216,21 @@ class LibraryViewModel @Inject constructor(
     fun renameFolder(folder: Folder, newName: String) {
         viewModelScope.launch {
             repo.updateFolder(folder.copy(name = newName, updatedAt = java.time.Instant.now()))
+        }
+    }
+
+    /**
+     * Update the auto-rule for a folder. Pass null to remove the rule.
+     * After updating, re-applies rules to all currently unfiled documents.
+     */
+    fun setFolderAutoRule(folder: Folder, autoRule: String?) {
+        viewModelScope.launch {
+            repo.updateFolder(folder.copy(autoRule = autoRule, updatedAt = java.time.Instant.now()))
+            // Apply the new rule to existing unfiled documents
+            val unfiled = repo.observeDocuments(app.paperkeep.core.domain.model.DocumentSort.NEWEST).first()
+            unfiled.filter { it.folderId == null && it.docType != null }.forEach { doc ->
+                repo.applyAutoRules(doc.id)
+            }
         }
     }
 

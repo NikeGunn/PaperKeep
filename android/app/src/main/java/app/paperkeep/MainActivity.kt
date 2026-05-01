@@ -6,17 +6,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.paperkeep.core.ui.theme.AppTheme
 import app.paperkeep.core.ui.theme.PaperkeepTheme
+import app.paperkeep.core.ui.theme.ThemePreferences
 import app.paperkeep.navigation.AppNavHost
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var themePreferences: ThemePreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -24,7 +32,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setRecentAppsAppearance()
         setContent {
-            PaperkeepTheme {
+            val appTheme by themePreferences.appTheme.collectAsStateWithLifecycle(AppTheme.SYSTEM)
+            val oledTrueBlack by themePreferences.oledTrueBlack.collectAsStateWithLifecycle(false)
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (appTheme) {
+                AppTheme.DARK   -> true
+                AppTheme.LIGHT  -> false
+                AppTheme.SYSTEM -> systemDark
+            }
+            PaperkeepTheme(
+                darkTheme = darkTheme,
+                oledTrueBlack = oledTrueBlack,
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
