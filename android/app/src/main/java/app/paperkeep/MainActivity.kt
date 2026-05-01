@@ -3,7 +3,7 @@ package app.paperkeep
 import android.app.ActivityManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -12,8 +12,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import app.paperkeep.core.security.BiometricLockManager
+import app.paperkeep.core.security.LockController
 import app.paperkeep.core.ui.theme.AppTheme
 import app.paperkeep.core.ui.theme.PaperkeepTheme
 import app.paperkeep.core.ui.theme.ThemePreferences
@@ -22,9 +24,11 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject lateinit var themePreferences: ThemePreferences
+    @Inject lateinit var biometricLockManager: BiometricLockManager
+    @Inject lateinit var lockController: LockController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -48,7 +52,15 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    AppNavHost()
+                    AppNavHost(
+                        onRequestBiometric = { onSuccess, onFailure ->
+                            biometricLockManager.showPrompt(
+                                activity = this,
+                                onSuccess = onSuccess,
+                                onFailure = onFailure,
+                            )
+                        },
+                    )
                 }
             }
         }
@@ -60,13 +72,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * P2.14 — Sets a neutral task description so the system task switcher
-     * shows only "Paperkeep" + a static brand color instead of a live screenshot
-     * of document content. This supplements FLAG_SECURE (which prevents the
-     * screenshot entirely on most launchers) with a defence-in-depth fallback.
-     *
-     * Icon null → system falls back to the launcher icon.
-     * Color 0xFF7A4F00 matches the M3 light primary derived from our Saffron anchor.
+     * P2.14 — Sets a neutral task description so the system task switcher shows
+     * only "Paperkeep" + a static brand color instead of a live screenshot of
+     * document content.
      */
     @Suppress("DEPRECATION")
     private fun setRecentAppsAppearance() {

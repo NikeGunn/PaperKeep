@@ -62,6 +62,7 @@ import app.paperkeep.feature.settings.storage.StorageManagerScreen
  */
 @Composable
 fun AppNavHost(
+    onRequestBiometric: (onSuccess: () -> Unit, onFailure: (String) -> Unit) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     lockController: LockController = hiltViewModel<LockNavViewModel>().lockController,
@@ -73,7 +74,8 @@ fun AppNavHost(
 
     if (isLocked) {
         LockScreen(
-            onUnlock = { lockController.onUnlocked() },
+            onRequestBiometric = onRequestBiometric,
+            onUnlocked = { lockController.onUnlocked() },
             modifier = modifier,
         )
         return
