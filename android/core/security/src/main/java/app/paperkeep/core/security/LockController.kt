@@ -68,9 +68,10 @@ class LockController @Inject constructor(
     val isLocked: Flow<Boolean> = combine(
         biometricManager.isLockEnabled,
         lockTimeout,
-    ) { enabled, timeout ->
+        _unlockedAtMs,
+    ) { enabled, timeout, unlockedAt ->
         if (!enabled) return@combine false
-        val unlockedAt = _unlockedAtMs.value ?: return@combine true
+        unlockedAt ?: return@combine true
         val elapsed = System.currentTimeMillis() - unlockedAt
         elapsed >= timeout.millis
     }
