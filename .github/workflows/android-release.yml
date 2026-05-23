@@ -43,6 +43,13 @@ jobs:
           java-version: 21
           distribution: temurin
 
+      - name: Ensure Gradle wrapper executable
+        run: chmod +x ./gradlew
+        working-directory: android
+
+      - name: Export Gradle Java home
+        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
         with:

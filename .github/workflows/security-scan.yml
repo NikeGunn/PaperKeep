@@ -68,11 +68,20 @@ jobs:
           head: ${{ github.event.pull_request.head.sha }}
           extra_args: --only-verified
 
-      - name: TruffleHog secrets scan (push/schedule)
-        if: github.event_name != 'pull_request'
+        - name: TruffleHog secrets scan (push)
+          if: github.event_name == 'push'
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
+            base: ${{ github.event.before }}
+            head: ${{ github.sha }}
+            extra_args: --only-verified
+
+        - name: TruffleHog secrets scan (schedule/dispatch)
+          if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+          uses: trufflesecurity/trufflehog@main
+          with:
+            path: ./
           extra_args: --only-verified
 
   detekt-security:
@@ -92,6 +101,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+        - name: Export Gradle Java home
+          run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
 
       - name: Gradle setup with cache
         uses: gradle/actions/setup-gradle@v4

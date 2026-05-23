@@ -30,6 +30,9 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Export Gradle Java home
+        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
       - name: Gradle setup with cache
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -89,6 +92,9 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Export Gradle Java home
+        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
       - name: Gradle setup with cache
         uses: gradle/actions/setup-gradle@v4
 
@@ -140,6 +146,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Export Gradle Java home
+        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
 
       - name: Gradle setup with cache
         uses: gradle/actions/setup-gradle@v4
