@@ -60,11 +60,19 @@ jobs:
           fetch-depth: 0
 
       - name: TruffleHog secrets scan
+        if: github.event_name == 'pull_request'
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: main
-          head: HEAD
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+      - name: TruffleHog secrets scan (push/schedule)
+        if: github.event_name != 'pull_request'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
           extra_args: --only-verified
 
   detekt-security:
@@ -74,6 +82,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Ensure Gradle wrapper executable
+        run: chmod +x ./gradlew
+        working-directory: android
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
