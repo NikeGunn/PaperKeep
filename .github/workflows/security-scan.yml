@@ -8,6 +8,10 @@ on:
     paths: ['android/**', '.github/workflows/security-scan.yml']
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   owasp-dependency-check:
     name: OWASP Dependency Check (Android)
@@ -16,6 +20,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Ensure Gradle wrapper executable
+        run: chmod +x ./gradlew
+        working-directory: android
 
       - name: OWASP dependency check
         uses: dependency-check/Dependency-Check_Action@main

@@ -40,6 +40,9 @@ cd android
 Outputs:
 - AAB: android/app/build/outputs/bundle/release/app-release.aab
 - APK: android/app/build/outputs/apk/release/app-release.apk
+Notes:
+- Play Store accepts AAB only.
+- APK is for direct installs or GitHub releases.
 
 ## Release signing (do NOT commit secrets)
 - Keystore: android/paperkeep-upload.jks (gitignored)
@@ -51,11 +54,24 @@ Outputs:
 ## Play Console release steps (when account is ready)
 1) Create Play Console account
 2) Create a new app (app.paperkeep)
-3) Upload AAB: android/app/build/outputs/bundle/release/app-release.aab
-4) Complete store listing (use android/store/ assets)
-5) Use the same upload keystore above; never lose it
+3) Enable Play App Signing (recommended by Google)
+4) Upload AAB: android/app/build/outputs/bundle/release/app-release.aab
+5) Complete store listing (use android/store/ assets)
 6) Set up internal/closed testing first, then production
 7) Verify AdMob is configured with real ad unit IDs before production
+
+## Play Console checklist (detailed)
+- Versioning: bump VERSION, versionName, and versionCode before each upload
+- App signing: keep android/paperkeep-upload.jks safe forever
+- Data Safety: use android/store/data_safety.txt as the source of truth
+- Privacy policy URL: use docs/PRIVACY_POLICY.md content hosted on the repo or a web page
+- Store listing: use android/store/listing.txt and android/store/feature-graphic-spec.txt
+- Screenshots: follow android/store/screenshots/README.txt
+- Release notes: add a new android/store/release-notes-<version>.txt
+- Testing: meet Play Console requirements for tester count and duration (check current policy)
+- Ads: confirm UMP consent and real AdMob IDs before production
+- Integrity: update ApkSignatureVerifier with the release cert SHA-256 after keystore is final
+- Mapping file: keep android/app/build/outputs/mapping/release/mapping.txt for deobfuscation
 
 ## GitHub release (for sharing APK today)
 - Create GitHub release and attach APK/AAB
