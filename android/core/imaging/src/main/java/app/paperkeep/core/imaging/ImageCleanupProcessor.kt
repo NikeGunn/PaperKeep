@@ -107,6 +107,20 @@ object ImageCleanupProcessor {
     }
 
     /**
+     * Remove uneven illumination (hand shadows, vignette, lopsided desk lamp)
+     * so paper reads uniformly bright across the whole page. This is the
+     * "clean document" step that makes scans look government-grade.
+     *
+     * Delegates to OpenCV's illumination-normalisation pipeline when native
+     * libs are loaded. On JVM unit tests (no OpenCV) returns null so callers
+     * can fall back to the raw bitmap.
+     */
+    fun removeShadow(source: Bitmap): Bitmap? {
+        if (!OpenCvEdgeDetector.isLoaded) return null
+        return OpenCvBridge.removeShadow(source)
+    }
+
+    /**
      * Fix lighting: brightness +20, contrast ×1.2 via direct pixel manipulation.
      */
     fun fixLighting(source: Bitmap): Bitmap {

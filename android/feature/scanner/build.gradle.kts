@@ -60,7 +60,15 @@ dependencies {
     // CameraX
     implementation(libs.bundles.camerax)
 
+    // Google ML Kit Document Scanner — the same engine that powers Google
+    // Drive Scan. Replaces the custom OpenCV viewfinder pipeline for the
+    // capture flow with Google's on-device, professional scanner UI.
+    implementation(libs.mlkit.document.scanner)
+
     implementation(libs.kotlinx.coroutines.android)
+
+    // DataStore — MagicScanPreferences (auto-capture toggle)
+    implementation(libs.datastore.preferences)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

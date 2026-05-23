@@ -17,6 +17,7 @@ import app.paperkeep.core.domain.model.Page
 import app.paperkeep.core.imaging.DetectionResult
 import app.paperkeep.core.imaging.EdgeDetector
 import app.paperkeep.core.imaging.ImageFilter
+import app.paperkeep.core.imaging.ImageCleanupProcessor
 import app.paperkeep.core.imaging.ImageFilterProcessor
 import app.paperkeep.core.imaging.PerspectiveTransform
 import app.paperkeep.core.imaging.Point2f
@@ -63,6 +64,147 @@ class CaptureViewModel @Inject constructor(
 
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
+
+    private val _reviewState = MutableStateFlow<FilterReviewState>(FilterReviewState.Idle)
+    val reviewState: StateFlow<FilterReviewState> = _reviewState.asStateFlow()
+
+    // ── Filter review (post-ML-Kit multi-page batch) ─────────────────────────
+
+    /**
+     * Hand a batch of cropped pages (returned by Google's ML Kit scanner) to
+     * the filter-review screen. Picks an opinionated default filter based on
+     * the document classifier (run once on the first page) so first-time users
+     * get a sensible look without touching the strip.
+     */
+    fun beginFilterReview(pages: List<Bitmap>) {
+        if (pages.isEmpty()) {
+            _reviewState.value = FilterReviewState.Idle
+            return
+        }
+        // Show the review screen immediately with the raw pages so the user
+        // sees their scan instantly. Default to DOCUMENT (the most-used look
+        // in mainstream scanner apps); the classifier may refine this once
+        // it returns. Shadow removal runs in the background and patches the
+        // state per page as each finishes — so previews look clean within a
+        // second or two without blocking the UI.
+        _reviewState.value = FilterReviewState.Reviewing(
+            pages = pages,
+            cleanedPages = List(pages.size) { null },
+            currentIndex = 0,
+            selectedFilter = ImageFilter.DOCUMENT,
+        )
+
+        viewModelScope.launch(dispatchers.default) {
+            val recommended = runCatching {
+                val cls = classifier.classify(pages.first())
+                DocTypePolicies.forType(cls.type).recommendedFilter
+            }.getOrDefault(ImageFilter.DOCUMENT)
+            withContext(dispatchers.main) {
+                val current = _reviewState.value as? FilterReviewState.Reviewing
+                    ?: return@withContext
+                _reviewState.value = current.copy(selectedFilter = recommended)
+            }
+        }
+
+        // Shadow-removal pass per page. Patches state incrementally so the
+        // first page goes clean within ~300ms while the rest catch up.
+        viewModelScope.launch(dispatchers.default) {
+            pages.forEachIndexed { idx, page ->
+                val cleaned = runCatching { ImageCleanupProcessor.removeShadow(page) }.getOrNull()
+                    ?: return@forEachIndexed
+                withContext(dispatchers.main) {
+                    val current = _reviewState.value as? FilterReviewState.Reviewing
+                        ?: return@withContext
+                    val updated = current.cleanedPages.toMutableList()
+                    if (idx < updated.size) updated[idx] = cleaned
+                    _reviewState.value = current.copy(cleanedPages = updated)
+                }
+            }
+        }
+    }
+
+    fun selectReviewFilter(filter: ImageFilter) {
+        val current = _reviewState.value as? FilterReviewState.Reviewing ?: return
+        _reviewState.value = current.copy(selectedFilter = filter)
+    }
+
+    fun selectReviewPage(index: Int) {
+        val current = _reviewState.value as? FilterReviewState.Reviewing ?: return
+        if (index !in current.pages.indices) return
+        _reviewState.value = current.copy(currentIndex = index)
+    }
+
+    /**
+     * Persist every page in the review batch with the currently selected filter.
+     * Pages share a document — the first page creates it (or appends), subsequent
+     * pages append to whatever documentId came back.
+     *
+     * On success: clears the review state and invokes [onSaved] with the docId.
+     * On failure: reverts to [FilterReviewState.Reviewing] so the user can retry.
+     */
+    fun saveReviewedBatch(
+        appendToDocumentId: String? = null,
+        replacePageId: String? = null,
+        onSaved: (String) -> Unit = {},
+    ) {
+        val reviewing = _reviewState.value as? FilterReviewState.Reviewing ?: return
+        // Prefer the shadow-cleaned version of every page when available, so
+        // what the user previewed is what gets saved. Falls back to the raw
+        // page for any page whose cleanup hasn't completed yet — the
+        // persistence path runs removeShadow again as a safety net.
+        val pages = reviewing.pages.mapIndexed { i, p -> reviewing.cleanedPages.getOrNull(i) ?: p }
+        val filter = reviewing.selectedFilter
+        if (pages.isEmpty()) return
+
+        _reviewState.value = FilterReviewState.Saving
+        viewModelScope.launch(dispatchers.io) {
+            var docId: String? = appendToDocumentId
+            var firstReplace: String? = replacePageId
+            try {
+                for (bitmap in pages) {
+                    val w = bitmap.width.toFloat()
+                    val h = bitmap.height.toFloat()
+                    val fullQuad = Quad(
+                        topLeft = Point2f(0f, 0f),
+                        topRight = Point2f(w - 1f, 0f),
+                        bottomRight = Point2f(w - 1f, h - 1f),
+                        bottomLeft = Point2f(0f, h - 1f),
+                    )
+                    val readyState = CaptureState.ReadyToCrop(
+                        image = bitmap,
+                        quad = fullQuad,
+                        classification = null,
+                        selectedFilter = filter,
+                    )
+                    val saveResult = persistCurrentCapture(readyState, docId, firstReplace)
+                    docId = saveResult.documentId
+                    // replacePageId only applies to the first page; everything
+                    // after that is an append into the same document.
+                    firstReplace = null
+
+                    launch(dispatchers.default) {
+                        runCatching { ocrOrchestrator.processPage(saveResult.page, saveResult.imageBytes) }
+                    }
+                }
+
+                withContext(dispatchers.main) {
+                    _reviewState.value = FilterReviewState.Idle
+                    docId?.let(onSaved)
+                }
+            } catch (e: Exception) {
+                DebugLog.e("Paperkeep.Capture", "saveReviewedBatch: failed", e)
+                withContext(dispatchers.main) {
+                    // Reinstate the review state so the user can try again.
+                    _reviewState.value = reviewing
+                    _state.value = CaptureState.Error(e.message ?: "Failed to save scan")
+                }
+            }
+        }
+    }
+
+    fun cancelFilterReview() {
+        _reviewState.value = FilterReviewState.Idle
+    }
 
     // ── Capture pipeline ──────────────────────────────────────────────────────
 
@@ -191,20 +333,87 @@ class CaptureViewModel @Inject constructor(
      * document is created. The [onSaved] callback receives the document id
      * either way.
      */
+    /**
+     * Save a page that's already been cropped by an external scanner (ML Kit
+     * document scanner). Bypasses the local Crop screen entirely — the
+     * incoming bitmap IS the document, edge-to-edge.
+     *
+     * Internally this builds a full-bitmap quad and reuses [persistCurrentCapture]
+     * so encryption, thumbnailing, classification, and OCR all run identically
+     * to the manual-crop path.
+     */
+    fun savePreCroppedPage(
+        bitmap: Bitmap,
+        appendToDocumentId: String? = null,
+        replacePageId: String? = null,
+        onSaved: (String) -> Unit = {},
+    ) {
+        _state.value = CaptureState.Processing(bitmap)
+        viewModelScope.launch(dispatchers.io) {
+            try {
+                val w = bitmap.width.toFloat()
+                val h = bitmap.height.toFloat()
+                val fullQuad = Quad(
+                    topLeft = Point2f(0f, 0f),
+                    topRight = Point2f(w - 1f, 0f),
+                    bottomRight = Point2f(w - 1f, h - 1f),
+                    bottomLeft = Point2f(0f, h - 1f),
+                )
+                // Classify in the same coroutine — runs on the already-cropped
+                // image so the recommended filter is the right one for this
+                // doc type. Cheap on small images; doesn't hold up persistence.
+                val classification = runCatching { classifier.classify(bitmap) }.getOrNull()
+                val policy = classification?.let { DocTypePolicies.forType(it.type) }
+                val filter = policy?.recommendedFilter ?: ImageFilter.AUTO
+
+                val readyState = CaptureState.ReadyToCrop(
+                    image = bitmap,
+                    quad = fullQuad,
+                    classification = classification,
+                    selectedFilter = filter,
+                )
+
+                val saveResult = persistCurrentCapture(readyState, appendToDocumentId, replacePageId)
+                DebugLog.d(
+                    "Paperkeep.Capture",
+                    "savePreCroppedPage: persisted doc=${saveResult.documentId} " +
+                        "pageIndex=${saveResult.page.pageIndex} " +
+                        "imageBytes=${saveResult.imageBytes.size}",
+                )
+
+                launch(dispatchers.default) {
+                    runCatching { ocrOrchestrator.processPage(saveResult.page, saveResult.imageBytes) }
+                }
+
+                withContext(dispatchers.main) {
+                    _state.value = CaptureState.Idle
+                    savedState.remove<FloatArray>(KEY_QUAD)
+                    onSaved(saveResult.documentId)
+                }
+            } catch (e: Exception) {
+                DebugLog.e("Paperkeep.Capture", "savePreCroppedPage: failed", e)
+                withContext(dispatchers.main) {
+                    _state.value = CaptureState.Error(e.message ?: "Failed to save scan")
+                }
+            }
+        }
+    }
+
     fun saveCurrentCapture(
         appendToDocumentId: String? = null,
+        replacePageId: String? = null,
         onSaved: (String) -> Unit = {},
     ) {
         val current = _state.value as? CaptureState.ReadyToCrop ?: return
         DebugLog.d(
             "Paperkeep.Capture",
-            "saveCurrentCapture: start append=$appendToDocumentId",
+            "saveCurrentCapture: start append=$appendToDocumentId replace=$replacePageId",
         )
         _state.value = CaptureState.Processing(current.image)
 
         viewModelScope.launch(dispatchers.io) {
             try {
-                val saveResult = persistCurrentCapture(current, appendToDocumentId)
+                val saveResult = persistCurrentCapture(current, appendToDocumentId, replacePageId)
                 DebugLog.d(
                     "Paperkeep.Capture",
                     "saveCurrentCapture: persisted doc=${saveResult.documentId} " +
@@ -327,6 +536,25 @@ class CaptureViewModel @Inject constructor(
         return true
     }
 
+    /**
+     * If [bitmap] is landscape (wider than tall) rotate it 90° clockwise so
+     * the long edge runs vertically. This is the same auto-orient step
+     * CamScanner / Adobe Scan apply — 95% of scanned documents (letters,
+     * receipts, notes, contracts, IDs) are naturally portrait, so a
+     * landscape result almost always means the user held the phone sideways.
+     *
+     * Square-ish bitmaps (within 5% of 1:1) are left alone — they're
+     * receipts or stamps where orientation is ambiguous.
+     */
+    private fun autoOrientToPortrait(bitmap: Bitmap): Bitmap {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0) return bitmap
+        val aspect = w.toFloat() / h.toFloat()
+        if (aspect <= 1.05f) return bitmap // already portrait or square
+        return PerspectiveTransform.rotate(bitmap, 90)
+    }
+
     private fun distance(a: Point2f, b: Point2f): Float {
         val dx = a.x - b.x
         val dy = a.y - b.y
@@ -336,6 +564,7 @@ class CaptureViewModel @Inject constructor(
     private suspend fun persistCurrentCapture(
         state: CaptureState.ReadyToCrop,
         appendToDocumentId: String?,
+        replacePageId: String? = null,
     ): PersistResult {
         val repo        = documentRepository
         val cryptoStore = imageStore
@@ -345,19 +574,50 @@ class CaptureViewModel @Inject constructor(
         val nowMillis = System.currentTimeMillis()
         val now = Instant.ofEpochMilli(nowMillis)
 
-        // Resolve target document — either the existing one (append mode)
+        // Resolve target document — either the existing one (append/replace mode)
         // or a freshly-minted one.
         val existingDoc = appendToDocumentId?.let { repo.getDocumentById(it) }
         val isAppend = existingDoc != null
-        val documentId = existingDoc?.id ?: UUID.randomUUID().toString()
-        val pageId = UUID.randomUUID().toString()
-        val nextPageIndex = existingDoc?.pages?.maxOfOrNull { it.pageIndex }?.plus(1) ?: 0
+        val replaceTarget = if (replacePageId != null && existingDoc != null) {
+            existingDoc.pages.firstOrNull { it.id == replacePageId }
+        } else null
+        val isReplace = replaceTarget != null
 
-        val imageFile = File(context.filesDir, "scans/$documentId/page_$nextPageIndex.enc")
-        val thumbFile = File(context.filesDir, "scans/$documentId/thumb_$nextPageIndex.enc")
+        val documentId = existingDoc?.id ?: UUID.randomUUID().toString()
+        val pageId = replaceTarget?.id ?: UUID.randomUUID().toString()
+        val nextPageIndex = when {
+            replaceTarget != null -> replaceTarget.pageIndex
+            else -> existingDoc?.pages?.maxOfOrNull { it.pageIndex }?.plus(1) ?: 0
+        }
+        // Add a timestamp suffix so replace writes don't collide with the
+        // existing on-disk filename. We still update the page's path in DB.
+        val pathSuffix = if (isReplace) "_${nowMillis}" else ""
+        val imageFile = File(context.filesDir, "scans/$documentId/page_$nextPageIndex$pathSuffix.enc")
+        val thumbFile = File(context.filesDir, "scans/$documentId/thumb_$nextPageIndex$pathSuffix.enc")
 
         val warped = PerspectiveTransform.warp(state.image, state.quad)
-        val finalImage = ImageFilterProcessor.apply(warped, state.selectedFilter)
+        // Shadow / illumination removal runs BEFORE the user-selected filter
+        // so all 10 filters inherit a clean uniformly-lit baseline. This is
+        // the same approach CamScanner uses — the "clean document" look
+        // government-grade exports require comes from normalized lighting,
+        // not from a single colour curve. Skipped for ORIGINAL because that
+        // filter's contract is "show me the raw photo, nothing applied".
+        val deshadowed = if (state.selectedFilter == ImageFilter.ORIGINAL) {
+            warped
+        } else {
+            ImageCleanupProcessor.removeShadow(warped) ?: warped
+        }
+        // Auto-orient to A4-fit: if a page came out landscape we rotate it to
+        // portrait so it fits naturally on an A4 export page. The vast
+        // majority of scans (letters, receipts, notes, contracts, IDs) are
+        // portrait-oriented; users with genuinely-landscape content can flip
+        // it back via the Reader's rotate tool. Skipped for ORIGINAL.
+        val oriented = if (state.selectedFilter == ImageFilter.ORIGINAL) {
+            deshadowed
+        } else {
+            autoOrientToPortrait(deshadowed)
+        }
+        val finalImage = ImageFilterProcessor.apply(oriented, state.selectedFilter)
 
         val imageBytes = finalImage.toJpegBytes(FULL_IMAGE_QUALITY)
         val thumbnailBytes = finalImage
@@ -385,7 +645,12 @@ class CaptureViewModel @Inject constructor(
                 ?.takeIf { it != DocumentType.UNKNOWN }
                 ?.key
 
-            if (!isAppend) {
+            if (isReplace) {
+                // Retake: update existing page row in place + bump document.
+                repo.updateDocument(
+                    existingDoc!!.copy(updatedAt = now)
+                )
+            } else if (!isAppend) {
                 val document = Document(
                     id = documentId,
                     title = "Scan $nowMillis",
@@ -422,15 +687,34 @@ class CaptureViewModel @Inject constructor(
                 width = finalImage.width,
                 height = finalImage.height,
                 filter = state.selectedFilter.key,
+                title = replaceTarget?.title,
             )
-            repo.savePage(page)
+            if (isReplace) {
+                // Update the existing row's paths/dims; reset OCR so it re-runs.
+                repo.updatePagePaths(
+                    pageId = pageId,
+                    imagePath = imageFile.absolutePath,
+                    thumbPath = thumbFile.absolutePath,
+                    width = finalImage.width,
+                    height = finalImage.height,
+                )
+                repo.updateOcrStatus(pageId, OcrStatus.PENDING, null)
+                repo.updateOcrText(pageId, null)
+                // Best-effort cleanup of the previous on-disk encrypted files.
+                runCatching {
+                    cryptoStore.delete(File(replaceTarget!!.encryptedImagePath))
+                    cryptoStore.delete(File(replaceTarget.encryptedThumbPath))
+                }
+            } else {
+                repo.savePage(page)
+            }
             // FTS refresh is best-effort — on a fresh install the FTS table may not
             // exist until the next app launch triggers the Room onCreate callback.
             runCatching { repo.refreshFtsRow(documentId) }
 
-            if (!isAppend) {
+            if (!isAppend && !isReplace) {
                 // Legacy scanner strip still reads from scans; keep it in sync.
-                // Append mode doesn't need a new strip row — the existing doc
+                // Append/replace modes don't need a new strip row — the existing doc
                 // is already represented.
                 dao.insert(
                     ScanEntity(

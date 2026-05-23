@@ -44,6 +44,11 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // OpenCV Android — native edge detection + perspective warp + enhancement.
+    // Pure-Kotlin fallback (ContourQuadFinder) runs on JVM unit tests where the
+    // .so libs are unavailable.
+    implementation(libs.opencv)
+
     // Compose (for FilterPreviewStrip)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)

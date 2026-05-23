@@ -54,6 +54,7 @@ abstract class DataModule {
                     PaperkeepDatabase.MIGRATION_5_6,
                     PaperkeepDatabase.MIGRATION_6_7,
                     PaperkeepDatabase.MIGRATION_7_8,
+                    PaperkeepDatabase.MIGRATION_8_9,
                 )
                 // No destructive fallback. Wiping the DB on every debug reinstall
                 // makes "library is empty" bugs indistinguishable from data loss.

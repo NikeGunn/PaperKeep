@@ -115,6 +115,49 @@ class DocumentRepository @Inject constructor(
         dao.insertPage(page.toEntity())
     }
 
+    /** Set or clear a page's per-page title (Edit toolbar — Page Title tool). */
+    suspend fun setPageTitle(pageId: String, title: String?) {
+        dao.setPageTitle(pageId, title?.trim()?.ifBlank { null })
+    }
+
+    /** Update the applied filter key for a page (Edit toolbar — Filter tool). */
+    suspend fun setPageFilter(pageId: String, filterKey: String) {
+        dao.setPageFilter(pageId, filterKey)
+    }
+
+    /** Update encrypted paths + dimensions for a page (Crop re-do, Retake). */
+    suspend fun updatePagePaths(
+        pageId: String,
+        imagePath: String,
+        thumbPath: String,
+        width: Int,
+        height: Int,
+    ) {
+        dao.setPagePaths(pageId, imagePath, thumbPath, width, height)
+    }
+
+    /**
+     * Re-order pages by writing the new pageIndex for each page id.
+     * Caller passes the page ids in their desired final order.
+     */
+    suspend fun reorderPages(documentId: String, orderedPageIds: List<String>) {
+        val now = System.currentTimeMillis()
+        // Two-phase index assignment avoids the unique (documentId, pageIndex)
+        // constraint blowing up on a swap. Step 1: park every page at a temporary
+        // high index; step 2: write the final index. Because Room runs each
+        // @Query inside its own implicit transaction we get atomicity per call,
+        // and the temporary indices are guaranteed not to collide with real
+        // indices in the same document.
+        val tempBase = TEMP_PAGE_INDEX_BASE
+        orderedPageIds.forEachIndexed { i, id -> dao.setPageIndex(id, tempBase + i) }
+        orderedPageIds.forEachIndexed { i, id -> dao.setPageIndex(id, i) }
+        dao.updatePageCount(documentId, orderedPageIds.size, now)
+    }
+
+    suspend fun deletePageById(pageId: String) {
+        dao.deletePageById(pageId)
+    }
+
     suspend fun savePages(pages: List<Page>) {
         dao.insertPages(pages.map { it.toEntity() })
     }
@@ -264,4 +307,13 @@ class DocumentRepository @Inject constructor(
             .split(Regex("\\s+"))
             .filter { it.length >= 3 }
             .joinToString(" ") { "$it*" }
+
+    companion object {
+        /**
+         * Temporary `pageIndex` base used during the two-phase reorder write.
+         * Must be larger than any plausible page count so it can never collide
+         * with a real index in the same document.
+         */
+        internal const val TEMP_PAGE_INDEX_BASE = 100_000
+    }
 }

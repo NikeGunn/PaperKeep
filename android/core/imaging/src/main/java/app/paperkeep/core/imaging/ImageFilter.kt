@@ -28,7 +28,38 @@ enum class ImageFilter(val key: String, val label: String) {
      * Black & White: adaptive threshold binarisation.
      * Best for high-contrast text, removing background noise.
      */
-    BLACK_AND_WHITE("bw", "B&W");
+    BLACK_AND_WHITE("bw", "B&W"),
+
+    /**
+     * Document: CamScanner-style "Enhanced Document" — pushes paper to clean
+     * white, ink to crisp black, slight desaturation. The most-used filter
+     * in mainstream scanner apps; pick this for routine receipts/letters.
+     */
+    DOCUMENT("document", "Document"),
+
+    /**
+     * Lighten: brightness boost without crushing whites. Best for faded ink,
+     * carbon-copy receipts, and dim indoor captures.
+     */
+    LIGHTEN("lighten", "Lighten"),
+
+    /**
+     * Vivid: high saturation + contrast. Best for coloured diagrams, art
+     * scans, sticky-notes, and forms with colour-coded fields.
+     */
+    VIVID("vivid", "Vivid"),
+
+    /**
+     * Whiteboard: glare-suppressing white-balance push. Best for marker-on-
+     * whiteboard photos where you want the background to read as pure white.
+     */
+    WHITEBOARD("whiteboard", "Whiteboard"),
+
+    /**
+     * Sepia: warm brown tint over a desaturated base. Vintage / archival
+     * aesthetic for letters, historical documents, journaling.
+     */
+    SEPIA("sepia", "Sepia");
 
     companion object {
         /** Look up a filter by its persisted [key], defaulting to [ORIGINAL]. */

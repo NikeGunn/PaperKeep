@@ -38,6 +38,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import app.paperkeep.feature.reader.reorder.ReaderReorderHost
 import app.paperkeep.core.security.LockController
 import app.paperkeep.core.security.LockScreen
 import app.paperkeep.feature.library.LibraryScreen
@@ -46,6 +47,7 @@ import app.paperkeep.feature.reader.ReaderScreen
 import app.paperkeep.feature.scanner.ScannerScreen
 import app.paperkeep.feature.scanner.capture.CaptureViewModel
 import app.paperkeep.feature.scanner.capture.CropScreen
+import app.paperkeep.feature.scanner.filter.FilterReviewScreen
 import app.paperkeep.feature.settings.ProUpgradeScreen
 import app.paperkeep.feature.settings.SettingsScreen
 import app.paperkeep.feature.settings.backup.BackupScreen
@@ -151,15 +153,50 @@ fun AppNavHost(
             composable<ScannerRoute> { backStack ->
                 val route = backStack.toRoute<ScannerRoute>()
                 ScannerScreen(
-                    onCaptureDone = {
-                        navController.navigate(CropRoute(route.appendToDocumentId))
-                    },
-                    onOpenLibrary = {
-                        navController.navigate(LibraryRoute) {
-                            popUpTo(LibraryRoute) { inclusive = false }
+                    onPagesReady = {
+                        // ML Kit handed us a batch of cropped pages. Move to
+                        // the filter-review screen so the user picks an
+                        // image effect before persistence.
+                        navController.navigate(
+                            FilterReviewRoute(
+                                appendToDocumentId = route.appendToDocumentId,
+                                replacePageId = route.replacePageId,
+                            )
+                        ) {
+                            popUpTo<ScannerRoute> { inclusive = true }
                             launchSingleTop = true
                         }
                     },
+                    onCancelled = { navController.popBackStack() },
+                    onError = { navController.popBackStack() },
+                    captureViewModel = captureViewModel,
+                )
+            }
+
+            composable<FilterReviewRoute> { backStack ->
+                val route = backStack.toRoute<FilterReviewRoute>()
+                FilterReviewScreen(
+                    appendToDocumentId = route.appendToDocumentId,
+                    replacePageId = route.replacePageId,
+                    onSaved = { docId ->
+                        // When appending/replacing into an existing document
+                        // there's already a ReaderRoute below us in the back
+                        // stack. Pop back to it so its ON_RESUME refresh()
+                        // reloads the document with the freshly-added pages,
+                        // rather than pushing a stale duplicate.
+                        val isAppending = route.appendToDocumentId != null ||
+                            route.replacePageId != null
+                        val poppedToReader = if (isAppending) {
+                            navController.popBackStack(ReaderRoute(docId), inclusive = false)
+                        } else false
+                        if (!poppedToReader) {
+                            navController.navigate(ReaderRoute(docId)) {
+                                popUpTo<FilterReviewRoute> { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    },
+                    onCancelled = { navController.popBackStack() },
                     captureViewModel = captureViewModel,
                 )
             }
@@ -167,9 +204,13 @@ fun AppNavHost(
             composable<CropRoute> { backStack ->
                 val route = backStack.toRoute<CropRoute>()
                 val append = route.appendToDocumentId
+                val replaceId = route.replacePageId
                 CropScreen(
                     onNext = {
-                        captureViewModel.saveCurrentCapture(append) { docId ->
+                        captureViewModel.saveCurrentCapture(
+                            appendToDocumentId = append,
+                            replacePageId = replaceId,
+                        ) { docId ->
                             if (append != null) {
                                 navController.popBackStack(ReaderRoute(docId), inclusive = false)
                             } else {
@@ -200,10 +241,33 @@ fun AppNavHost(
                 ReaderScreen(
                     documentId = route.scanId,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToReorder = { },
+                    onNavigateToReorder = { docId ->
+                        navController.navigate(PageReorderRoute(docId))
+                    },
                     onAddPage = {
                         navController.navigate(ScannerRoute(appendToDocumentId = route.scanId))
                     },
+                    onRetakePage = { docId, pageId ->
+                        navController.navigate(
+                            ScannerRoute(appendToDocumentId = docId, replacePageId = pageId)
+                        )
+                    },
+                    onReCropPage = { docId, pageId ->
+                        // Re-crop currently navigates to scanner so the user can recapture
+                        // (a full in-place re-crop flow against the stored encrypted page
+                        //  is queued for the next release alongside the other 5 edit tools).
+                        navController.navigate(
+                            ScannerRoute(appendToDocumentId = docId, replacePageId = pageId)
+                        )
+                    },
+                )
+            }
+
+            composable<PageReorderRoute> { backStack ->
+                val route = backStack.toRoute<PageReorderRoute>()
+                ReaderReorderHost(
+                    documentId = route.documentId,
+                    onDone = { navController.popBackStack() },
                 )
             }
 

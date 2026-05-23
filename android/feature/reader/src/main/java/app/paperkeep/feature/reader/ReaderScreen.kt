@@ -10,40 +10,36 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.SortByAlpha
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TextSnippet
-import androidx.compose.material3.BottomAppBar
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,11 +47,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -68,22 +68,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.paperkeep.core.data.compose.EncryptedImage
+import app.paperkeep.core.imaging.ImageFilter
+import app.paperkeep.feature.reader.edit.EditTool
+import app.paperkeep.feature.reader.edit.EditToolbar
+import app.paperkeep.feature.reader.edit.ReaderEditViewModel
+import app.paperkeep.feature.reader.viewer.DocumentViewer
 
 /** Test tags */
 const val TAG_READER_SCREEN = "reader_screen"
@@ -97,27 +97,9 @@ const val TAG_READER_ADD_PAGE = "reader_add_page"
 const val TAG_READER_BOTTOM_BAR = "reader_bottom_bar"
 const val TAG_READER_TITLE = "reader_title"
 const val TAG_READER_OCR_OVERLAY = "reader_ocr_overlay"
+const val TAG_READER_EDIT_TOGGLE = "reader_edit_toggle"
+const val TAG_READER_UNDO = "reader_undo"
 
-private const val ZOOM_PAGER_LOCK_EPSILON = 0.01f
-
-internal fun isPagerSwipeEnabled(zoomScale: Float): Boolean {
-    return zoomScale <= ReaderViewModel.MIN_ZOOM + ZOOM_PAGER_LOCK_EPSILON
-}
-
-internal fun shouldAllowPan(zoomScale: Float): Boolean {
-    return !isPagerSwipeEnabled(zoomScale)
-}
-
-/**
- * Full-screen document reader.
- *
- * Spec §5 Phase 2 / §6.5:
- *  - HorizontalPager with pinch-to-zoom (scale 1..5)
- *  - Bottom action bar: share / delete / rename / reorder (→ reorder screen) / add page / export
- *  - OCR text overlay toggle — transparent selectable text at page bottom
- *  - FLAG_SECURE set immediately via SideEffect (per-Activity, survives config change)
- *  - Tap anywhere on image hides/shows top+bottom bars (immersive toggle)
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -125,8 +107,11 @@ fun ReaderScreen(
     onNavigateBack: () -> Unit,
     onNavigateToReorder: (String) -> Unit = {},
     onAddPage: () -> Unit = {},
+    onRetakePage: (documentId: String, pageId: String) -> Unit = { _, _ -> },
+    onReCropPage: (documentId: String, pageId: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: ReaderViewModel = hiltViewModel(),
+    editViewModel: ReaderEditViewModel = hiltViewModel(),
 ) {
     val pages by viewModel.pages.collectAsStateWithLifecycle()
     val currentPage by viewModel.currentPage.collectAsStateWithLifecycle()
@@ -138,19 +123,20 @@ fun ReaderScreen(
     val event by viewModel.event.collectAsStateWithLifecycle()
     val formatSheetMode by viewModel.formatSheetMode.collectAsStateWithLifecycle()
     val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
+    val editMode by editViewModel.editMode.collectAsStateWithLifecycle()
+    val editBusy by editViewModel.isBusy.collectAsStateWithLifecycle()
+    val undoAvailable by editViewModel.undoAvailable.collectAsStateWithLifecycle()
+    val editEvent by editViewModel.event.collectAsStateWithLifecycle()
+
     val snackbarState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     LaunchedEffect(documentId) { viewModel.loadDocument(documentId) }
 
-    // Re-fetch when the screen returns to the foreground (e.g. after the
-    // user added a page via the camera flow).
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, ev ->
-            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                viewModel.refresh()
-            }
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) viewModel.refresh()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -163,10 +149,43 @@ fun ReaderScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
-    // Holds the last "Save to..." request so the SAF result handler knows
-    // which file to copy bytes from.
-    var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
+    // Dialog state for the edit sub-tools
+    var titleDialog by remember { mutableStateOf<TitleDialogState?>(null) }
+    var filterDialog by remember { mutableStateOf<FilterDialogState?>(null) }
+    var comingSoonTool by remember { mutableStateOf<EditTool?>(null) }
 
+    // Edit event router
+    LaunchedEffect(editEvent) {
+        when (val e = editEvent) {
+            is ReaderEditViewModel.EditEvent.OpenReorder -> {
+                editViewModel.consumeEvent(); onNavigateToReorder(e.documentId)
+            }
+            is ReaderEditViewModel.EditEvent.OpenCrop -> {
+                editViewModel.consumeEvent(); onReCropPage(e.documentId, e.pageId)
+            }
+            is ReaderEditViewModel.EditEvent.OpenRetake -> {
+                editViewModel.consumeEvent(); onRetakePage(e.documentId, e.pageId)
+            }
+            is ReaderEditViewModel.EditEvent.PromptPageTitle -> {
+                titleDialog = TitleDialogState(e.pageId, e.current.orEmpty())
+                editViewModel.consumeEvent()
+            }
+            is ReaderEditViewModel.EditEvent.PromptFilter -> {
+                filterDialog = FilterDialogState(e.pageId, e.current)
+                editViewModel.consumeEvent()
+            }
+            is ReaderEditViewModel.EditEvent.ComingSoon -> {
+                comingSoonTool = e.tool; editViewModel.consumeEvent()
+            }
+            is ReaderEditViewModel.EditEvent.Toast -> {
+                editViewModel.consumeEvent(); snackbarState.showSnackbar(e.message)
+            }
+            null -> Unit
+        }
+    }
+
+    // Share/export event router (unchanged)
+    var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
     val safExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
     ) { destUri: Uri? ->
@@ -179,31 +198,21 @@ fun ReaderScreen(
             ) { uri -> context.contentResolver.openOutputStream(uri) }
         }
     }
-
-    // Handle one-shot events
     LaunchedEffect(event) {
         when (val e = event) {
-            is ReaderEvent.DocumentDeleted -> {
-                viewModel.consumeEvent()
-                onNavigateBack()
-            }
+            is ReaderEvent.DocumentDeleted -> { viewModel.consumeEvent(); onNavigateBack() }
             is ReaderEvent.ShareIntent -> {
-                viewModel.consumeEvent()
-                launchShareIntent(context, e.uri, e.mimeType)
+                viewModel.consumeEvent(); launchShareIntent(context, e.uri, e.mimeType)
             }
             is ReaderEvent.ShareMultipleIntent -> {
-                viewModel.consumeEvent()
-                launchShareMultipleIntent(context, e.uris, e.mimeType)
+                viewModel.consumeEvent(); launchShareMultipleIntent(context, e.uris, e.mimeType)
             }
             is ReaderEvent.StartSafExport -> {
                 viewModel.consumeEvent()
                 pendingExport = PendingExport(e.sourceFilePath)
                 safExportLauncher.launch(e.suggestedName)
             }
-            is ReaderEvent.Toast -> {
-                viewModel.consumeEvent()
-                snackbarState.showSnackbar(e.message)
-            }
+            is ReaderEvent.Toast -> { viewModel.consumeEvent(); snackbarState.showSnackbar(e.message) }
             null -> Unit
         }
     }
@@ -219,15 +228,20 @@ fun ReaderScreen(
                 ReaderTopBar(
                     title = documentTitle,
                     pageCount = pages.size,
-                    currentPage = currentPage,
                     isRenaming = isRenaming,
+                    editMode = editMode,
                     ocrOverlayEnabled = ocrOverlayEnabled,
-                    onNavigateBack = onNavigateBack,
+                    undoAvailable = undoAvailable,
+                    onNavigateBack = if (editMode) {
+                        { editViewModel.exitEditMode() }
+                    } else onNavigateBack,
                     onToggleOcr = viewModel::toggleOcrOverlay,
                     onStartRename = viewModel::startRename,
                     onTitleChanged = viewModel::onTitleChanged,
                     onCommitRename = viewModel::commitRename,
                     onCancelRename = viewModel::cancelRename,
+                    onToggleEdit = editViewModel::toggleEditMode,
+                    onUndo = editViewModel::undo,
                 )
             }
         },
@@ -237,15 +251,29 @@ fun ReaderScreen(
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             ) {
-                ReaderBottomBar(
-                    documentId = documentId,
-                    onShare = viewModel::openShareSheet,
-                    onDelete = viewModel::deleteDocument,
-                    onReorder = { onNavigateToReorder(documentId) },
-                    onAddPage = onAddPage,
-                    onExport = viewModel::openDownloadSheet,
-                    modifier = Modifier.testTag(TAG_READER_BOTTOM_BAR),
-                )
+                if (editMode) {
+                    EditToolbar(
+                        onToolPicked = { tool ->
+                            val page = pages.getOrNull(currentPage)
+                            editViewModel.onToolPicked(
+                                tool = tool,
+                                documentId = documentId,
+                                currentPageId = page?.id,
+                                currentFilter = ImageFilter.fromKey(page?.filter ?: ImageFilter.ORIGINAL.key),
+                                currentTitle = page?.title,
+                            )
+                        },
+                    )
+                } else {
+                    ReaderBottomBar(
+                        onShare = viewModel::openShareSheet,
+                        onDelete = viewModel::deleteDocument,
+                        onAddPage = onAddPage,
+                        onExport = viewModel::openDownloadSheet,
+                        onOpenEdit = editViewModel::toggleEditMode,
+                        modifier = Modifier.testTag(TAG_READER_BOTTOM_BAR),
+                    )
+                }
             }
         },
         modifier = modifier
@@ -254,66 +282,29 @@ fun ReaderScreen(
     ) { innerPadding ->
         if (isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
+            ) { CircularProgressIndicator() }
             return@Scaffold
         }
-
         if (pages.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentAlignment = Alignment.Center,
-            ) {
-                Text("No pages found", style = MaterialTheme.typography.bodyLarge)
-            }
+            ) { Text("No pages found", style = MaterialTheme.typography.bodyLarge) }
             return@Scaffold
         }
 
-        var currentPageScale by remember { mutableStateOf(ReaderViewModel.MIN_ZOOM) }
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            DocumentViewer(
+                pages = pages,
+                ocrOverlayEnabled = ocrOverlayEnabled,
+                onSingleTap = viewModel::toggleBottomBar,
+                onCurrentPageChanged = viewModel::onPageChanged,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                modifier = Modifier.testTag(TAG_PAGE_PAGER),
+            )
 
-        val pagerState = rememberPagerState(
-            initialPage = currentPage.coerceIn(0, pages.size - 1),
-            pageCount = { pages.size },
-        )
-
-        LaunchedEffect(pagerState.currentPage) {
-            viewModel.onPageChanged(pagerState.currentPage)
-            currentPageScale = ReaderViewModel.MIN_ZOOM
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                userScrollEnabled = isPagerSwipeEnabled(currentPageScale),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag(TAG_PAGE_PAGER),
-            ) { pageIndex ->
-                val page = pages[pageIndex]
-                ZoomablePage(
-                    imageFile = java.io.File(page.encryptedImagePath),
-                    ocrText = if (ocrOverlayEnabled) page.ocrText else null,
-                    onTap = viewModel::toggleBottomBar,
-                    onScaleChanged = { scale ->
-                        if (pagerState.currentPage == pageIndex) {
-                            currentPageScale = scale
-                        }
-                    },
-                )
-            }
-
-            // Page counter
             if (pages.size > 1) {
                 Surface(
                     color = Color.Black.copy(alpha = 0.55f),
@@ -323,7 +314,7 @@ fun ReaderScreen(
                         .padding(bottom = 8.dp),
                 ) {
                     Text(
-                        text = "${pagerState.currentPage + 1} / ${pages.size}",
+                        text = "${currentPage + 1} / ${pages.size}",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White,
@@ -331,15 +322,14 @@ fun ReaderScreen(
                 }
             }
 
-            if (isBusy) {
+            if (isBusy || editBusy) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.30f)),
+                        .clickable(enabled = false) {} // swallow taps while busy
+                        .testTag("reader_busy_overlay"),
                     contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+                ) { CircularProgressIndicator() }
             }
         }
 
@@ -352,20 +342,56 @@ fun ReaderScreen(
                 onPick = viewModel::onFormatPicked,
             )
         }
+
+        titleDialog?.let { state ->
+            PageTitleDialog(
+                initial = state.initialTitle,
+                onConfirm = { newTitle ->
+                    editViewModel.setPageTitle(
+                        pageId = state.pageId,
+                        previous = state.initialTitle.takeIf { it.isNotBlank() },
+                        next = newTitle.ifBlank { null },
+                    )
+                    titleDialog = null
+                },
+                onDismiss = { titleDialog = null },
+            )
+        }
+
+        filterDialog?.let { state ->
+            FilterChooserSheet(
+                current = state.current,
+                onPick = { picked ->
+                    val page = pages.firstOrNull { it.id == state.pageId }
+                    if (page != null) {
+                        editViewModel.applyFilter(
+                            pageId = state.pageId,
+                            encryptedImagePath = page.encryptedImagePath,
+                            previousFilterKey = page.filter,
+                            newFilter = picked,
+                        )
+                    }
+                    filterDialog = null
+                },
+                onDismiss = { filterDialog = null },
+            )
+        }
+
+        comingSoonTool?.let { tool ->
+            ComingSoonSheet(tool = tool, onDismiss = { comingSoonTool = null })
+        }
     }
 }
 
-// ── Pending SAF export wrapper ────────────────────────────────────────────────
+// ── Dialog state holders ─────────────────────────────────────────────────────
 
+private data class TitleDialogState(val pageId: String, val initialTitle: String)
+private data class FilterDialogState(val pageId: String, val current: ImageFilter)
 private data class PendingExport(val sourceFilePath: String)
 
-// ── Share / SAF helpers ───────────────────────────────────────────────────────
+// ── Share/SAF helpers (unchanged) ───────────────────────────────────────────
 
-private fun launchShareIntent(
-    context: android.content.Context,
-    uri: Uri,
-    mimeType: String,
-) {
+private fun launchShareIntent(context: android.content.Context, uri: Uri, mimeType: String) {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, uri)
@@ -377,11 +403,7 @@ private fun launchShareIntent(
     context.startActivity(chooser)
 }
 
-private fun launchShareMultipleIntent(
-    context: android.content.Context,
-    uris: List<Uri>,
-    mimeType: String,
-) {
+private fun launchShareMultipleIntent(context: android.content.Context, uris: List<Uri>, mimeType: String) {
     val sendIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
         type = mimeType
         putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
@@ -393,7 +415,7 @@ private fun launchShareMultipleIntent(
     context.startActivity(chooser)
 }
 
-// ── Format chooser bottom sheet ───────────────────────────────────────────────
+// ── Format chooser bottom sheet (unchanged) ─────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -409,18 +431,13 @@ private fun FormatChooserSheet(
         ReaderViewModel.FormatSheetMode.SHARE -> "Share as"
         ReaderViewModel.FormatSheetMode.DOWNLOAD -> "Save as"
     }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(bottom = 16.dp)) {
             Text(
                 text = verb,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 24.dp, top = 8.dp, bottom = 8.dp),
             )
-
             FormatRow(
                 icon = Icons.Filled.PictureAsPdf,
                 title = "PDF",
@@ -428,7 +445,6 @@ private fun FormatChooserSheet(
                 tag = "format_pdf",
                 onClick = { onPick(ShareFormat.PDF) },
             )
-
             FormatRow(
                 icon = Icons.Filled.Image,
                 title = "Image",
@@ -441,14 +457,10 @@ private fun FormatChooserSheet(
                 tag = "format_image",
                 onClick = { onPick(ShareFormat.IMAGE) },
             )
-
             FormatRow(
                 icon = Icons.Filled.TextSnippet,
                 title = "Text",
-                subtitle = if (hasOcrText)
-                    "Recognized text (.txt)"
-                else
-                    "Recognized text — not ready yet",
+                subtitle = if (hasOcrText) "Recognized text (.txt)" else "Recognized text — not ready yet",
                 tag = "format_text",
                 onClick = { onPick(ShareFormat.TEXT) },
             )
@@ -457,53 +469,136 @@ private fun FormatChooserSheet(
 }
 
 @Composable
-private fun FormatRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    tag: String,
-    onClick: () -> Unit,
-) {
+private fun FormatRow(icon: ImageVector, title: String, subtitle: String, tag: String, onClick: () -> Unit) {
     ListItem(
         leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         },
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .testTag(tag),
+        modifier = Modifier.clickable(onClick = onClick).testTag(tag),
     )
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────────
+// ── Page title dialog ───────────────────────────────────────────────────────
+
+@Composable
+private fun PageTitleDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var value by remember(initial) { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Page title") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it.take(80) },
+                singleLine = true,
+                placeholder = { Text("e.g. Cover, Signature page") },
+                modifier = Modifier.testTag("page_title_field"),
+            )
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(value) }, modifier = Modifier.testTag("page_title_save")) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+// ── Filter chooser sheet ────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterChooserSheet(
+    current: ImageFilter,
+    onPick: (ImageFilter) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(modifier = Modifier.padding(bottom = 16.dp)) {
+            Text(
+                text = "Filter",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 24.dp, top = 8.dp, bottom = 8.dp),
+            )
+            ImageFilter.values().forEach { f ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(f) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                        .testTag("filter_${f.key}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = f == current, onClick = { onPick(f) })
+                    Text(text = f.label, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+        }
+    }
+}
+
+// ── Coming soon sheet ───────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ComingSoonSheet(tool: EditTool, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(modifier = Modifier.padding(24.dp).fillMaxWidth().testTag("coming_soon_sheet")) {
+            Text(tool.label, style = MaterialTheme.typography.titleMedium)
+            Text(
+                "This tool is coming soon. The 5 most-used edit actions ship in this release; the rest are queued for the next update.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.padding(top = 16.dp)) {
+                Text("Got it")
+            }
+        }
+    }
+}
+
+// ── Top bar ─────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReaderTopBar(
     title: String,
     pageCount: Int,
-    currentPage: Int,
     isRenaming: Boolean,
+    editMode: Boolean,
     ocrOverlayEnabled: Boolean,
+    undoAvailable: Boolean,
     onNavigateBack: () -> Unit,
     onToggleOcr: () -> Unit,
     onStartRename: () -> Unit,
     onTitleChanged: (String) -> Unit,
     onCommitRename: () -> Unit,
     onCancelRename: () -> Unit,
+    onToggleEdit: () -> Unit,
+    onUndo: () -> Unit,
 ) {
     TopAppBar(
         navigationIcon = {
             IconButton(
                 onClick = if (isRenaming) onCancelRename else onNavigateBack,
-                modifier = Modifier.semantics { contentDescription = if (isRenaming) "Cancel rename" else "Navigate back" },
+                modifier = Modifier.semantics {
+                    contentDescription = when {
+                        isRenaming -> "Cancel rename"
+                        editMode -> "Exit edit mode"
+                        else -> "Navigate back"
+                    }
+                },
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                Icon(
+                    if (editMode) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                )
             }
         },
         title = {
@@ -523,13 +618,13 @@ private fun ReaderTopBar(
             } else {
                 Column {
                     Text(
-                        text = title,
+                        text = if (editMode) "Edit · $title" else title,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .testTag(TAG_READER_TITLE)
-                            .clickable(onClick = onStartRename)
+                            .clickable(onClick = onStartRename, enabled = !editMode)
                             .semantics { contentDescription = "Document title: $title" },
                     )
                     if (pageCount > 0) {
@@ -546,17 +641,24 @@ private fun ReaderTopBar(
             if (isRenaming) {
                 IconButton(
                     onClick = onCommitRename,
-                    modifier = Modifier
-                        .testTag(TAG_READER_RENAME)
+                    modifier = Modifier.testTag(TAG_READER_RENAME)
                         .semantics { contentDescription = "Save title" },
                 ) {
                     Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null)
                 }
+            } else if (editMode) {
+                IconButton(
+                    onClick = onUndo,
+                    enabled = undoAvailable,
+                    modifier = Modifier.testTag(TAG_READER_UNDO)
+                        .semantics { contentDescription = "Undo last edit" },
+                ) {
+                    Icon(Icons.Filled.Undo, contentDescription = null)
+                }
             } else {
                 IconButton(
                     onClick = onToggleOcr,
-                    modifier = Modifier
-                        .testTag(TAG_OCR_TOGGLE)
+                    modifier = Modifier.testTag(TAG_OCR_TOGGLE)
                         .semantics { contentDescription = "Toggle OCR text overlay" },
                 ) {
                     Icon(
@@ -568,6 +670,13 @@ private fun ReaderTopBar(
                             MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                IconButton(
+                    onClick = onToggleEdit,
+                    modifier = Modifier.testTag(TAG_READER_EDIT_TOGGLE)
+                        .semantics { contentDescription = "Edit mode" },
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -576,19 +685,18 @@ private fun ReaderTopBar(
     )
 }
 
-// ── Bottom action bar ─────────────────────────────────────────────────────────
+// ── Bottom action bar (non-edit mode) ───────────────────────────────────────
 
 @Composable
 private fun ReaderBottomBar(
-    documentId: String,
     onShare: () -> Unit,
     onDelete: () -> Unit,
-    onReorder: () -> Unit,
     onAddPage: () -> Unit,
     onExport: () -> Unit,
+    onOpenEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BottomAppBar(
+    androidx.compose.material3.BottomAppBar(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
     ) {
@@ -597,19 +705,30 @@ private fun ReaderBottomBar(
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             IconButton(
-                onClick = onShare,
+                onClick = onAddPage,
                 modifier = Modifier
                     .size(48.dp)
-                    .testTag(TAG_READER_SHARE)
-                    .semantics { contentDescription = "Share page" },
-            ) {
-                Icon(Icons.Filled.Share, contentDescription = null)
-            }
+                    .testTag(TAG_READER_ADD_PAGE)
+                    .semantics { contentDescription = "Add page" },
+            ) { Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null) }
+            IconButton(
+                onClick = onOpenEdit,
+                modifier = Modifier.size(48.dp).testTag("reader_open_edit")
+                    .semantics { contentDescription = "Open edit toolbar" },
+            ) { Icon(Icons.Filled.Edit, contentDescription = null) }
+            IconButton(
+                onClick = onShare,
+                modifier = Modifier.size(48.dp).testTag(TAG_READER_SHARE)
+                    .semantics { contentDescription = "Share" },
+            ) { Icon(Icons.Filled.Share, contentDescription = null) }
+            IconButton(
+                onClick = onExport,
+                modifier = Modifier.size(48.dp).testTag(TAG_READER_EXPORT)
+                    .semantics { contentDescription = "Save / Export" },
+            ) { Icon(Icons.Filled.FileDownload, contentDescription = null) }
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier
-                    .size(48.dp)
-                    .testTag(TAG_READER_DELETE)
+                modifier = Modifier.size(48.dp).testTag(TAG_READER_DELETE)
                     .semantics { contentDescription = "Delete document" },
             ) {
                 Icon(
@@ -618,107 +737,7 @@ private fun ReaderBottomBar(
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
-            IconButton(
-                onClick = onReorder,
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics { contentDescription = "Reorder pages" },
-            ) {
-                Icon(Icons.Filled.SortByAlpha, contentDescription = null)
-            }
-            IconButton(
-                onClick = onAddPage,
-                modifier = Modifier
-                    .size(48.dp)
-                    .testTag(TAG_READER_ADD_PAGE)
-                    .semantics { contentDescription = "Add page to this document" },
-            ) {
-                Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
-            }
-            IconButton(
-                onClick = onExport,
-                modifier = Modifier
-                    .size(48.dp)
-                    .testTag(TAG_READER_EXPORT)
-                    .semantics { contentDescription = "Export document" },
-            ) {
-                Icon(Icons.Filled.FileDownload, contentDescription = null)
-            }
         }
     }
 }
 
-// ── Zoomable page ─────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun ZoomablePage(
-    imageFile: java.io.File,
-    ocrText: String?,
-    onTap: () -> Unit,
-    onScaleChanged: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(ReaderViewModel.MIN_ZOOM, ReaderViewModel.MAX_ZOOM)
-        if (shouldAllowPan(scale)) {
-            offset += panChange * scale
-        } else {
-            // Reset pan when at minimum zoom.
-            offset = Offset.Zero
-        }
-    }
-
-    LaunchedEffect(scale) {
-        onScaleChanged(scale)
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(onClick = onTap),
-        contentAlignment = Alignment.Center,
-    ) {
-        EncryptedImage(
-            file = imageFile.takeIf { it.exists() },
-            contentDescription = "Document page",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxSize()
-                .transformable(
-                    state = transformableState,
-                    canPan = { shouldAllowPan(scale) },
-                )
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y,
-                ),
-        )
-
-        // OCR overlay: selectable text drawn at bottom
-        if (!ocrText.isNullOrBlank()) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .testTag(TAG_READER_OCR_OVERLAY)
-                    .semantics { contentDescription = "OCR text overlay" },
-            ) {
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    Text(
-                        text = ocrText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }
-    }
-}

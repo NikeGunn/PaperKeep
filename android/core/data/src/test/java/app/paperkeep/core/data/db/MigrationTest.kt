@@ -179,6 +179,80 @@ class MigrationTest {
         } finally { db.close() }
     }
 
+    // ── v8 → v9: page title column ────────────────────────────────────────────
+
+    @Test
+    fun freshDatabase_pageTitleColumn_existsAndDefaultsToNull() = runTest {
+        val db = freshDb()
+        try {
+            val dao = db.documentDao()
+            val docId = "title-doc"
+            buildMinimalDoc(db, docId)
+            dao.insertPage(
+                buildMinimalPage("p1", docId)
+            )
+            val page = dao.getPageById("p1")
+            assertNotNull(page)
+            assertNull("freshly-inserted page must default to title=null", page!!.title)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun setPageTitle_persistsAndCanBeCleared() = runTest {
+        val db = freshDb()
+        try {
+            val dao = db.documentDao()
+            buildMinimalDoc(db, "td")
+            dao.insertPage(buildMinimalPage("p1", "td"))
+            dao.setPageTitle("p1", "Cover")
+            assertEquals("Cover", dao.getPageById("p1")!!.title)
+            dao.setPageTitle("p1", null)
+            assertNull(dao.getPageById("p1")!!.title)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun setPageFilter_persists() = runTest {
+        val db = freshDb()
+        try {
+            val dao = db.documentDao()
+            buildMinimalDoc(db, "fd")
+            dao.insertPage(buildMinimalPage("p1", "fd"))
+            dao.setPageFilter("p1", "magic_color")
+            assertEquals("magic_color", dao.getPageById("p1")!!.filter)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun setPageIndex_swapsCorrectly() = runTest {
+        val db = freshDb()
+        try {
+            val dao = db.documentDao()
+            buildMinimalDoc(db, "rd")
+            dao.insertPage(buildMinimalPage("p0", "rd").copy(pageIndex = 0))
+            dao.insertPage(buildMinimalPage("p1", "rd").copy(pageIndex = 1))
+            dao.insertPage(buildMinimalPage("p2", "rd").copy(pageIndex = 2))
+            // Move p2 to first via two-phase parking strategy.
+            val temp = 100_000
+            dao.setPageIndex("p2", temp)
+            dao.setPageIndex("p0", temp + 1)
+            dao.setPageIndex("p1", temp + 2)
+            dao.setPageIndex("p2", 0)
+            dao.setPageIndex("p0", 1)
+            dao.setPageIndex("p1", 2)
+            val ordered = dao.getPagesForDocument("rd")
+            assertEquals(listOf("p2", "p0", "p1"), ordered.map { it.id })
+        } finally {
+            db.close()
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private suspend fun buildMinimalDoc(db: PaperkeepDatabase, id: String): DocumentEntity {

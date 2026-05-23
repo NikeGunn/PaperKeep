@@ -24,6 +24,15 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
+    <!-- ML Kit Document Scanner: declare the module so Play Services
+         downloads it eagerly the first time the user opens the app, instead
+         of waiting until the scanner intent is launched. -->
+    <queries>
+        <intent>
+            <action android:name="com.google.mlkit.intent.action.SCAN_DOCUMENT" />
+        </intent>
+    </queries>
+
     <application
         android:name=".PaperkeepApplication"
         android:allowBackup="false"
@@ -169,6 +178,12 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- ML Kit dependency declaration: triggers Play Services to download
+             the document-scanner module eagerly rather than at first use. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="docscan" />
 
     </application>
 </manifest>

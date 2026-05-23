@@ -175,7 +175,7 @@ Phases are sequential. Do not start phase N+1 until phase N's acceptance criteri
 
 ---
 
-## Current State (post-pivot, as of 2026-04-26)
+## Current State (post-pivot, as of 2026-05-23)
 
 ### Product state
 - **Pivot decision:** v1 (Go backend + Python intelligence + AWS infra) abandoned for cost. Paperkeep v2 is Android-only, backend-free.
@@ -184,6 +184,19 @@ Phases are sequential. Do not start phase N+1 until phase N's acceptance criteri
 - **v1 Android modules deletion status:** `:core:network`, `:feature:account`, `:feature:sync` already deleted in P1.2.
 - **v1 non-Android directories:** fully deleted on 2026-04-23 (backend, intelligence, infra, ota, deploy, 12 old scripts, 7 backend-focused workflows, Makefile, nuke-config.yml, costs.csv). Recoverable via `git log`.
 - **AWS infra:** fully torn down on 2026-04-23. All resources manually removed. $0 ongoing cost.
+
+### Capture-pipeline rebuild (2026-05-23) — current state
+The custom OpenCV viewfinder + Compose camera screen has been **replaced** by Google's ML Kit Document Scanner (`play-services-mlkit-document-scanner`) as the live-capture front-end. The local OpenCV pipeline is still used for post-capture cleanup, not for live edge detection in the new flow.
+- **Scanner UX flow (current):** any "Scan" entry point → `ScannerRoute` → ML Kit DocumentScanner Intent opens → user captures (Google handles edge detection, auto-shutter, manual corner adjust, multi-page batch) → returns to Paperkeep → `FilterReviewRoute` opens with the cropped pages → user picks one of **10 filters** (Original, Auto, Magic Color, Document, Lighten, Vivid, Whiteboard, Grayscale, B&W, Sepia) → `saveReviewedBatch` persists each page → `ReaderRoute`.
+- **Append/Retake flow:** `popBackStack(ReaderRoute(docId), inclusive=false)` is used on save so the existing Reader refreshes via `ON_RESUME` instead of being duplicated on the back stack.
+- **Shadow / illumination removal:** `OpenCvBridge.removeShadow(bitmap)` does LAB→morphological-close-on-L → divide L by illumination → recombine. Runs **before** the user-selected filter (skipped for ORIGINAL). Same approach CamScanner uses for "clean document" exports. Exposed via `ImageCleanupProcessor.removeShadow`.
+- **Auto-orient to A4-fit:** `autoOrientToPortrait()` rotates landscape captures 90° CW so the long edge runs vertical. 95% of scanned docs (letters, receipts, IDs, contracts) are portrait; the Reader's rotate tool overrides per page.
+- **FilterReviewScreen:** shows the live shadow-cleaned preview + page strip (≥2 pages) + 10-tile filter strip with thumbnail previews. The cleaned source is patched in per-page on a background thread so the screen is instantly interactive.
+- **Status-bar polish:** `PaperkeepTheme` now drives `WindowInsetsController.isAppearanceLight{Status,Navigation}Bars` via `SideEffect` so edge-to-edge looks right in both themes.
+- **Custom edge-detection code still lives in `:core:imaging`** (OpenCvBridge.detectQuad with tap-anchoring, ROI fallback, edge-support gating). It is **NOT wired into the live capture flow** — it's only reachable via the legacy CropScreen + `EdgeDetector` interface used by the Edit→Crop tool and `CaptureViewModel.onImageCaptured`. Leave it in place; it's the JVM-testable detector that test suites exercise.
+
+### About the `<system-reminder>` tag nudging TaskCreate
+The harness periodically injects a system reminder suggesting we use `TaskCreate`/`TaskUpdate`. The reminder is **not from the user** — it's automated, opt-in tooling. Tasks are useful when the work has multiple independent steps the user will care about tracking (e.g. "do P3.16: closed testing track" with several sub-deliverables). They are **not** useful for sequential implementation work where a TODO list would just be noise. Make the judgement call; do NOT acknowledge the reminder in the user-visible response.
 
 ### What Claude Code should do on the very next session
 Open `PROGRESS.md`. The first unchecked task is `P3.16 — Closed testing track on Play Console (>=12 testers, start 14-day window)`. Do it.

@@ -48,6 +48,8 @@ data class PageEntity(
     val height: Int,
     /** Applied image filter. One of: "original" | "magic_color" | "grayscale" | "bw" | "auto". */
     val filter: String = "original",
+    /** Optional per-page title (e.g. "Cover", "Signature"). Null = no title. */
+    val title: String? = null,
 )
 
 /** OCR pipeline status values stored as TEXT in the database. */

@@ -40,6 +40,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
+    implementation(project(":core:imaging"))
     implementation(project(":core:pdf"))
 
     // Hilt — KSP avoids Windows kapt path bug

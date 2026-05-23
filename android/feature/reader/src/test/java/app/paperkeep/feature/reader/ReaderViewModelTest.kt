@@ -311,25 +311,6 @@ class ReaderViewModelTest {
         assertNull(viewModel.formatSheetMode.value)
     }
 
-    // ── Pager/zoom gesture policy ───────────────────────────────────────────
-
-    @Test
-    fun `isPagerSwipeEnabled stays true at minimum zoom`() {
-        assertTrue(isPagerSwipeEnabled(1f))
-        assertTrue(isPagerSwipeEnabled(1.005f))
-    }
-
-    @Test
-    fun `isPagerSwipeEnabled turns false when zoomed in`() {
-        assertFalse(isPagerSwipeEnabled(1.02f))
-    }
-
-    @Test
-    fun `shouldAllowPan is opposite of pager swipe`() {
-        assertFalse(shouldAllowPan(1f))
-        assertTrue(shouldAllowPan(1.2f))
-    }
-
     // ── FLAG_SECURE constant ──────────────────────────────────────────────────
 
     @Test

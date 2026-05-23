@@ -29,7 +29,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PageOcrEntity::class,
         BackupEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class PaperkeepDatabase : RoomDatabase() {
@@ -205,6 +205,16 @@ abstract class PaperkeepDatabase : RoomDatabase() {
          * on the next OCR run, and by DocumentRepository.refreshFtsRow on next save.
          * The data loss is search-index only; the underlying documents/pages are intact.
          */
+        /**
+         * Migration 8 → 9 (Edit toolbar — Page Title tool): adds nullable
+         * `title` column to the `pages` table. Pre-existing rows keep title=NULL.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pages ADD COLUMN title TEXT")
+            }
+        }
+
         /**
          * Migration 7 → 8 (P4.2): adds the `backups` table tracking each
          * successful backup written via SAF. No existing data is touched.

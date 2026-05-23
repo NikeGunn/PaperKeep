@@ -32,6 +32,7 @@ fun PageEntity.toDomain() = Page(
     width = width,
     height = height,
     filter = filter,
+    title = title,
 )
 
 fun FolderEntity.toDomain() = Folder(
@@ -73,6 +74,7 @@ fun Page.toEntity() = PageEntity(
     width = width,
     height = height,
     filter = filter,
+    title = title,
 )
 
 fun Folder.toEntity() = FolderEntity(

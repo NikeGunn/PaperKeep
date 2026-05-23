@@ -102,13 +102,15 @@ class ScanFlowTest {
     // ── Step 3: Live edge detection on preview ────────────────────────────────
 
     @Test
-    fun step3_edgeDetection_documentBitmap_transitionsToGood() = runTest {
+    fun step3_edgeDetection_documentBitmap_transitionsToSettling() = runTest {
         val edgeVm = EdgeDetectionViewModel(FakeEdgeDetector(), testDispatchers)
 
         edgeVm.processFrame(makeDocumentBitmap())
         advanceUntilIdle()
 
-        assertTrue(edgeVm.overlayState.value is EdgeOverlayState.Good)
+        // Magic Scan: first detection enters Settling. Holding for 1.5s would
+        // transition to Locked (covered in EdgeDetectionViewModelTest).
+        assertTrue(edgeVm.overlayState.value is EdgeOverlayState.Settling)
     }
 
     @Test

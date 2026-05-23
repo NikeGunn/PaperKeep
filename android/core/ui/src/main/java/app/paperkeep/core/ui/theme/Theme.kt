@@ -1,5 +1,6 @@
 package app.paperkeep.core.ui.theme
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -8,8 +9,11 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val paperkeepLightColorScheme = lightColorScheme(
     primary              = LightColors.primary,
@@ -103,6 +107,20 @@ fun PaperkeepTheme(
         darkTheme && oledTrueBlack -> paperkeepOledColorScheme
         darkTheme -> paperkeepDarkColorScheme
         else      -> paperkeepLightColorScheme
+    }
+
+    // Sync system bar icon appearance with the active theme. On Android 15+
+    // edge-to-edge mode the system bars are transparent, so icon contrast
+    // must come from light/dark mode flags — without this, dark status-bar
+    // icons over a dark background (or vice versa) are invisible.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !darkTheme
+            insetsController.isAppearanceLightNavigationBars = !darkTheme
+        }
     }
 
     MaterialTheme(

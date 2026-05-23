@@ -114,6 +114,10 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:security"))
     implementation(project(":core:backup"))
+    implementation(project(":core:imaging"))
+
+    // OpenCV — initialised in PaperkeepApplication
+    implementation(libs.opencv)
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:scanner"))
     implementation(project(":feature:library"))

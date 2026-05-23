@@ -131,6 +131,25 @@ interface DocumentDao {
     @Query("UPDATE pages SET ocrText = :text WHERE id = :id")
     suspend fun updateOcrText(id: String, text: String?)
 
+    /** Set or clear the per-page title (Edit toolbar — Page Title tool). */
+    @Query("UPDATE pages SET title = :title WHERE id = :id")
+    suspend fun setPageTitle(id: String, title: String?)
+
+    /** Update the applied filter key for a page (Edit toolbar — Filter tool). */
+    @Query("UPDATE pages SET filter = :filter WHERE id = :id")
+    suspend fun setPageFilter(id: String, filter: String)
+
+    /** Update encrypted file paths + dimensions for a page (Crop re-do, Retake). */
+    @Query(
+        "UPDATE pages SET encryptedImagePath = :imagePath, encryptedThumbPath = :thumbPath, " +
+            "width = :width, height = :height WHERE id = :id",
+    )
+    suspend fun setPagePaths(id: String, imagePath: String, thumbPath: String, width: Int, height: Int)
+
+    /** Update only the page index (Reorder Pages tool). Run inside a transaction. */
+    @Query("UPDATE pages SET pageIndex = :pageIndex WHERE id = :id")
+    suspend fun setPageIndex(id: String, pageIndex: Int)
+
     /** Fetch pages pending OCR, ordered by pageIndex. */
     @Query("SELECT * FROM pages WHERE ocrStatus = 'pending' ORDER BY pageIndex ASC LIMIT :limit")
     suspend fun getPendingOcrPages(limit: Int = 20): List<PageEntity>

@@ -37,10 +37,17 @@ object PerspectiveTransform {
     ): Bitmap {
         if (bitmap.isRecycled || bitmap.width == 0 || bitmap.height == 0) return bitmap
 
-        val clamped = outputWidth.coerceAtLeast(1) to outputHeight.coerceAtLeast(1)
+        val outW = outputWidth.coerceAtLeast(1)
+        val outH = outputHeight.coerceAtLeast(1)
+
+        // Prefer true projective warp via OpenCV when native libs are loaded.
+        if (OpenCvEdgeDetector.isLoaded) {
+            val opencvResult = OpenCvBridge.warp(bitmap, quad, outW, outH)
+            if (opencvResult != null) return opencvResult
+        }
 
         return try {
-            warpWithMatrix(bitmap, quad, clamped.first, clamped.second)
+            warpWithMatrix(bitmap, quad, outW, outH)
         } catch (e: Exception) {
             // Graceful fallback: return the original bitmap uncropped
             bitmap

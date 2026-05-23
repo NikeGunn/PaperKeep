@@ -20,6 +20,20 @@ interface EdgeDetector {
      *         detected, [DetectionResult.NotFound] otherwise.
      */
     fun detect(bitmap: Bitmap): DetectionResult
+
+    /**
+     * Tap-anchored detection: find the document quad that contains the tap
+     * point [tapX], [tapY] (in [bitmap] pixel coordinates).
+     *
+     * Used by the "tap to detect" UX: instead of the detector guessing the
+     * largest rectangle in the whole frame (which may be a wall edge, a
+     * neighbouring page, or a piece of furniture), the user points at the
+     * document they actually want to scan and the detector locks onto it.
+     *
+     * Default implementation falls back to [detect] for fakes/JVM paths that
+     * don't implement tap-anchoring.
+     */
+    fun detectAt(bitmap: Bitmap, tapX: Float, tapY: Float): DetectionResult = detect(bitmap)
 }
 
 /**
@@ -30,8 +44,12 @@ sealed interface DetectionResult {
      * A document quad was found.
      * Corners are in image-pixel coordinates, ordered: top-left, top-right,
      * bottom-right, bottom-left.
+     *
+     * [confidence] ∈ [0,1] — the detector's normalised quality score for this
+     * quad. UI uses this to choose overlay colour: strong (green) for confident
+     * detections, weak (yellow) for tentative ones below the strong threshold.
      */
-    data class Found(val corners: Quad) : DetectionResult
+    data class Found(val corners: Quad, val confidence: Float = 1f) : DetectionResult
 
     /**
      * No document quad detected in the image.

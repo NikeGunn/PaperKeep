@@ -39,3 +39,40 @@ sealed interface CaptureState {
     /** Something went wrong — [message] is for developer logging, not shown to users. */
     data class Error(val message: String) : CaptureState
 }
+
+/**
+ * Multi-page filter-review state. Used after Google's ML Kit scanner returns
+ * one or more cropped pages: the user picks a single [ImageFilter] that
+ * applies to every page in the batch, previews it page-by-page, and saves
+ * the whole batch in one tap.
+ *
+ * Kept separate from [CaptureState] because the legacy single-capture
+ * pipeline (manual camera → Crop screen) still exists and shouldn't be
+ * coupled to the new multi-page flow.
+ */
+sealed interface FilterReviewState {
+    data object Idle : FilterReviewState
+
+    /**
+     * [pages]              cropped page bitmaps as ML Kit returned them.
+     * [cleanedPages]       same pages with illumination normalisation applied,
+     *                      lazily filled on a background thread so the UI is
+     *                      responsive. Falls back to [pages] when the cleaned
+     *                      version isn't ready yet (or when OpenCV is absent).
+     * [currentIndex]       page being shown in the large preview.
+     * [selectedFilter]     filter applied to every page on save.
+     */
+    data class Reviewing(
+        val pages: List<Bitmap>,
+        val cleanedPages: List<Bitmap?> = List(pages.size) { null },
+        val currentIndex: Int = 0,
+        val selectedFilter: ImageFilter = ImageFilter.DOCUMENT,
+    ) : FilterReviewState {
+        /** The image the user actually sees / picks filters against. */
+        fun previewSourceAt(index: Int): Bitmap =
+            cleanedPages.getOrNull(index) ?: pages[index]
+    }
+
+    /** Background persistence in flight. UI shows a spinner. */
+    data object Saving : FilterReviewState
+}

@@ -71,13 +71,15 @@ class P19CameraVerificationTest {
         assertTrue(TAG_SCANNER_SCREEN.isNotBlank())
     }
 
-    // 2. Edge detection overlay — transitions on document bitmap
+    // 2. Edge detection overlay — first-frame detection enters Settling state
+    //    (was Good before Magic Scan; now every detection passes through the
+    //    StabilityTracker first).
     @Test
-    fun edgeDetection_documentBitmap_yieldsGoodOverlay() = runTest {
+    fun edgeDetection_documentBitmap_yieldsSettlingOverlay() = runTest {
         val vm = EdgeDetectionViewModel(FakeEdgeDetector(), testDispatchers)
         vm.processFrame(makeDocumentBitmap())
         advanceUntilIdle()
-        assertTrue(vm.overlayState.value is EdgeOverlayState.Good)
+        assertTrue(vm.overlayState.value is EdgeOverlayState.Settling)
     }
 
     @Test

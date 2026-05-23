@@ -49,6 +49,8 @@ data class Page(
     val height: Int,
     /** "original" | "magic_color" | "grayscale" | "bw" | "auto". */
     val filter: String,
+    /** Optional per-page title (Edit toolbar — Page Title tool). Null = no title. */
+    val title: String? = null,
 )
 
 /** Domain model for a user-created folder. System folders are derived, not stored. */

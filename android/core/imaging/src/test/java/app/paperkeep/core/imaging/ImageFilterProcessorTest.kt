@@ -225,7 +225,10 @@ class ImageFilterProcessorTest {
     }
 
     @Test
-    fun fiveFiltersExist() {
-        assertEquals(5, ImageFilter.entries.size)
+    fun tenFiltersExist() {
+        // Original + Auto + Magic Color + Grayscale + B&W (the v1 five)
+        // + Document + Lighten + Vivid + Whiteboard + Sepia (added for the
+        // post-ML-Kit filter review screen).
+        assertEquals(10, ImageFilter.entries.size)
     }
 }
