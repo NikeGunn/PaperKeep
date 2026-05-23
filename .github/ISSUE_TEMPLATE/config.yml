@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/NikeGunn/PaperKeep/security/policy
+    about: Report vulnerabilities privately.
+  - name: General questions
+    url: https://github.com/NikeGunn/PaperKeep/issues/new/choose
+    about: Use the templates for focused reports.

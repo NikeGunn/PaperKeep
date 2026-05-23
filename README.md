@@ -2,30 +2,48 @@
 
 # 📄 Paperkeep
 
-### The document scanner that respects your documents.
+### Privacy-first Android document scanner with on-device OCR.
 
-**On‑device. Encrypted. No account. No telemetry. No backend.**
+**On-device. Encrypted. No account. No telemetry. No backend.**
 
 [![Android](https://img.shields.io/badge/Android-26%2B-3DDC84?logo=android&logoColor=white&style=for-the-badge)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white&style=for-the-badge)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material_3-4285F4?logo=jetpackcompose&logoColor=white&style=for-the-badge)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey?style=for-the-badge)](#-license)
 
-[**Features**](#-features) · [**Architecture**](#-architecture) · [**Security**](#-security-model) · [**Build**](#-build--run) · [**Roadmap**](#-roadmap)
+[**About**](#about) · [**Focus**](#focus) · [**Features**](#-features) · [**Architecture**](#-architecture) · [**Security**](#-security-model) · [**Build**](#-build--run) · [**Roadmap**](#-roadmap) · [**Contributing**](#-contributing) · [**Tags**](#tags)
 
 </div>
 
 ---
 
-## 🎯 Why Paperkeep?
+## About
 
-Every scanner app in the Play Store wants your documents. They sync them, OCR them on a server, train models on them, sell ads against them.
+Paperkeep is a privacy-first Android document scanner built for offline capture, on-device OCR, and encrypted storage. It is a CamScanner alternative with no account, no cloud, and no telemetry. Every scan stays on your phone unless you export or back it up.
 
-**Paperkeep doesn't.** It's a single‑purpose Android scanner built around one rule: **your scans never leave your phone unless you explicitly send them.** No background uploads, no analytics, no "tap here to sign in." The OCR runs on your device. The backups are encrypted with a password only you know. The keys live in the hardware Keystore.
+The capture flow uses Google's ML Kit Document Scanner for edge detection, auto-shutter, and multi-page batches. After capture, Paperkeep runs OpenCV cleanup and lets you choose from 10 filters before saving. Exports include searchable PDF with an OCR text layer.
 
-The capture flow is powered by **Google's ML Kit Document Scanner** (same engine as Drive Scan) for industry‑grade edge detection, wrapped in a polished review screen where you pick from **10 hand‑crafted filters** before saving — including a CamScanner‑grade *Document* mode with automatic shadow removal that makes paper read clean enough to submit to a government office.
+Best for:
+- Receipts, invoices, and contracts
+- IDs, cards, and passports
+- Whiteboards and books
 
 ---
+
+## Focus
+
+Paperkeep is deliberately narrow. It optimizes for:
+- Offline capture and on-device OCR
+- Data ownership (no accounts, no cloud)
+- Encryption-by-default storage
+- Fast capture to clean PDF workflow
+- A calm UI with minimal choices
+
+Non-goals:
+- Cloud sync or accounts
+- Telemetry or analytics of any kind
+- Cross-platform parity at the cost of Android quality
+- Background uploads or auto-sharing
 
 ## ✨ Features
 
@@ -37,21 +55,20 @@ The capture flow is powered by **Google's ML Kit Document Scanner** (same engine
 - **Smart classification** picks the best default filter per document type (receipt, ID, letter, whiteboard)
 
 ### 📚 Library
-- **Folder hierarchy** with drag‑and‑drop, colour tags, and **auto‑rules** (e.g. "files with INVOICE in their title go into Bills/")
-- **Full‑text search** across OCR'd document content — runs entirely on‑device against an SQLite FTS5 index
-- **Recent scans widget** + Quick Settings tile + share‑target so any image from any app can be imported as a scan
+- **Folder chips** (All, Favorites, Archive, and user folders) with **auto-rules** based on document type (receipt, ID, whiteboard, book)
+- **Full-text search** across OCR content runs entirely on-device against an SQLite FTS index
+- **Recent scans widget** + Quick Settings tile + share-import so any image or PDF can be imported as a scan
 
 ### 📖 Reader & Edit
-- **Vertical scroll viewer** with per‑page natural aspect ratios — mixed‑orientation documents render correctly
-- **Pinch‑to‑zoom + pan** with smart gesture gating: at zoom=1 vertical drags scroll between pages, at zoom>1 single‑finger drag pans the zoomed page
-- **Edit toolbar**: Reorder pages · Re‑crop · Re‑filter · Retake · Page title
-- **OCR text overlay** — tap to see the recognised text under each page, copy‑pasteable
+- **Horizontal pager** with pinch-to-zoom and pan; single tap hides or shows controls
+- **Edit toolbar**: Reorder pages · Add pages · Rename · Share · Export · Delete
+- **OCR text overlay** with selectable text per page
 
 ### 🔐 Privacy & Security
 - **AES‑256‑GCM encryption** for every page image, thumbnail, OCR blob, signature, and crash log on disk
 - **Hardware‑backed Keystore** with StrongBox where available, automatic TEE fallback
 - **Biometric lock** with configurable timeout (immediate · 1 min · 5 min · 30 min · never)
-- **FLAG_SECURE** prevents screenshots and screen recording of the library
+- **Optional screenshot protection** (FLAG_SECURE) to block screenshots and screen recording
 - **Encrypted backups** via Argon2id (m=128MiB, t=4) + AES‑256‑GCM streamed over a custom ZIP container, with per‑page SHA‑256 integrity verification on restore
 - **Privacy‑first task switcher** — recent‑apps thumbnail shows a static brand colour, not your documents
 
@@ -91,7 +108,7 @@ The capture flow is powered by **Google's ML Kit Document Scanner** (same engine
 
 **Data**
 - Room 2.6 (10 migrations on file)
-- SQLite FTS5 for search
+- SQLite FTS for search
 - DataStore for preferences
 - Argon2id KDF for backup passwords
 
@@ -245,7 +262,18 @@ See [`PROGRESS.md`](PROGRESS.md) for the full task log.
 
 ## 🤝 Contributing
 
-This is currently a solo project under active development. Issues and feedback welcome via the repository's Issues tab.
+This is currently a solo project under active development. Issues and feedback are welcome.
+
+Start here:
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md)
+
+Ways to help:
+- Device testing reports (screenshots, logs, reproduction steps)
+- UI and UX polish suggestions
+- Accessibility or localization fixes
+- Performance profiling or benchmark runs
 
 Before opening a PR:
 1. Read [`CLAUDE.md`](CLAUDE.md) — it documents the architecture and non‑negotiable rules
@@ -261,6 +289,10 @@ Proprietary — © Nikhil Bhagat. All rights reserved.
 The source code in this repository is published for transparency. It is not licensed for redistribution, derivative works, or use outside contributing to this project.
 
 ---
+
+## Tags
+
+android document scanner, offline scanner, OCR, PDF scanner, privacy-first, encrypted storage, on-device OCR, ML Kit document scanner, OpenCV, Kotlin, Jetpack Compose, CamScanner alternative
 
 ## 🙏 Acknowledgements
 
