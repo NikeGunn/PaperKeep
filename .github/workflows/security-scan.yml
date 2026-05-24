@@ -3,6 +3,8 @@ name: Security Scan
 on:
   schedule:
     - cron: '0 3 * * 1'   # Monday 03:00 UTC — weekly
+  pull_request:
+    paths: ['android/**', '.github/workflows/security-scan.yml']
   push:
     branches: [main]
     paths: ['android/**', '.github/workflows/security-scan.yml']
