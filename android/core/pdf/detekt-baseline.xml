@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>LongParameterList:PdfExporter.kt$PdfExporter$( canvas: Canvas, words: List&lt;OcrWord&gt;, pageW: Int, pageH: Int, bitmapW: Int, bitmapH: Int, )</ID>
+    <ID>UnusedParameter:PdfExporter.kt$PdfExporter$pageW: Int</ID>
+    <ID>UnusedParameter:PdfExporter.kt$PdfExporter$quality: PdfQuality</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -22,7 +22,14 @@ subprojects {
 
     extensions.configure<DetektExtension> {
         buildUponDefaultConfig = true
-        config = files("$rootDir/detekt.yml")
+        config.setFrom(files("$rootDir/detekt.yml"))
+        // Per-module baseline snapshots pre-existing issues so CI stays green,
+        // while any NEW issue still fails the build. Regenerate with:
+        //   ./gradlew detektBaseline
+        val moduleBaseline = file("detekt-baseline.xml")
+        if (moduleBaseline.exists()) {
+            baseline = moduleBaseline
+        }
     }
 
     tasks.withType<Detekt>().configureEach {

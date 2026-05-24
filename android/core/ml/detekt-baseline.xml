@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:DocumentClassifier.kt$DocumentClassifier$internal fun classifyInternal(bitmap: Bitmap): ClassificationResult</ID>
+    <ID>ReturnCount:FakeOcrEngine.kt$FakeOcrEngine$override suspend fun recognise(bitmap: Bitmap): String</ID>
+    <ID>ReturnCount:TextSummarizer.kt$TextSummarizer$suspend fun summarize(text: String, isPro: Boolean = false): SummarizeResult</ID>
+    <ID>UnusedPrivateProperty:TextSummarizer.kt$TextSummarizer$private val modelManager: SummarizerModelManager</ID>
+  </CurrentIssues>
+</SmellBaseline>

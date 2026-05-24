@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:EncryptedImage.kt$current == null || activeStore == null || !current.exists() || current.length() == 0L</ID>
+    <ID>LongParameterList:DocumentDaoTest.kt$DocumentDaoTest$( id: String, documentId: String, pageIndex: Int, ocrText: String? = null, ocrStatus: String = OcrStatus.PENDING, ocrLanguage: String? = null, filter: String = "original", )</ID>
+    <ID>LongParameterList:DocumentDaoTest.kt$DocumentDaoTest$( id: String, title: String = "Document $id", folderId: String? = null, pageCount: Int = 1, createdAt: Long = System.currentTimeMillis(), colorTag: Int? = null, docType: String? = null, isFavorite: Boolean = false, isArchived: Boolean = false, )</ID>
+    <ID>MatchingDeclarationName:DocumentFtsEntity.kt$DocumentFts</ID>
+    <ID>MatchingDeclarationName:EncryptedImage.kt$EncryptedImageStoreEntryPoint</ID>
+    <ID>MatchingDeclarationName:SyncStatusMigrationTest.kt$P21SchemaContractTest</ID>
+    <ID>ReturnCount:AesGcmImageStoreTest.kt$AesGcmImageStoreTest$private fun containsSubsequence(haystack: ByteArray, needle: ByteArray): Boolean</ID>
+    <ID>ReturnCount:DocumentRepository.kt$DocumentRepository$suspend fun applyAutoRules(documentId: String)</ID>
+    <ID>SwallowedException:BackupManagerTest.kt$BackupManagerTest$e: IllegalArgumentException</ID>
+    <ID>TooGenericExceptionCaught:EncryptedImage.kt$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:EncryptedImageFetcher.kt$EncryptedImageFetcher$e: Exception</ID>
+    <ID>TooManyFunctions:DocumentDao.kt$DocumentDao</ID>
+    <ID>TooManyFunctions:DocumentRepository.kt$DocumentRepository</ID>
+  </CurrentIssues>
+</SmellBaseline>

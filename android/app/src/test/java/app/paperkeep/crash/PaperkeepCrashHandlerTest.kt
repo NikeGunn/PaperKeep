@@ -4,8 +4,7 @@ import android.content.Context
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -74,8 +73,8 @@ class PaperkeepCrashHandlerTest {
     @Test
     fun `getCrashLogFiles returns only enc files sorted newest first`() {
         val logDir = File(filesDir, "crash").also { it.mkdirs() }
-        val old = File(logDir, "crash_old.enc").also { it.writeBytes(byteArrayOf(1)); it.setLastModified(1_000_000L) }
-        val new = File(logDir, "crash_new.enc").also { it.writeBytes(byteArrayOf(2)); it.setLastModified(2_000_000L) }
+        File(logDir, "crash_old.enc").also { it.writeBytes(byteArrayOf(1)); it.setLastModified(1_000_000L) }
+        File(logDir, "crash_new.enc").also { it.writeBytes(byteArrayOf(2)); it.setLastModified(2_000_000L) }
         // Plain text log from old version — must NOT appear
         File(logDir, "crash_old.log").also { it.writeText("old format") }
 
@@ -131,10 +130,8 @@ class PaperkeepCrashHandlerTest {
     @Test
     fun `readCrashLog returns null for invalid file`() {
         val invalidFile = File(tempFolder.root, "not_a_log.enc").also { it.writeBytes(byteArrayOf(1, 2)) }
-        // Should return null (can't decrypt without Keystore key on JVM)
-        val result = PaperkeepCrashHandler.readCrashLog(invalidFile)
-        // On JVM: null because Keystore is unavailable; on device: also null if tampered
-        // We just assert it doesn't throw
-        assertFalse("readCrashLog must not throw", false)
+        // On JVM: null because Keystore is unavailable; on device: also null if tampered.
+        // The contract is that a corrupt/undecryptable file returns null rather than throwing.
+        assertNull("readCrashLog must return null for an undecryptable file", PaperkeepCrashHandler.readCrashLog(invalidFile))
     }
 }

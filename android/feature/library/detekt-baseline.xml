@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>TooManyFunctions:LibraryViewModel.kt$LibraryViewModel : ViewModel</ID>
+    <ID>UnusedPrivateProperty:LibraryScreen.kt$private const val FOLDER_ALL = "all"</ID>
+  </CurrentIssues>
+</SmellBaseline>

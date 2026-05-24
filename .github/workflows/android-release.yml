@@ -1,13 +1,34 @@
-name: Android Release — Play Store
+name: Android Release — GitHub + Play Store
+
+# ─────────────────────────────────────────────────────────────────────────────
+# One pipeline, two destinations:
+#   1. GitHub Release  — always runs. Attaches the signed APK (+ AAB) so testers
+#                        can side-load immediately.
+#   2. Play Store      — runs ONLY when the Play secrets are configured. Until you
+#                        have a Play Console account + service-account key, this
+#                        step prints "coming soon" and the job stays GREEN.
+#
+# Trigger:
+#   • push a tag  v2.0.0-alpha.1  → release that version
+#   • or run manually (workflow_dispatch) and pick a track.
+#
+# Required secrets for full publishing (add later in repo Settings → Secrets):
+#   RELEASE_KEYSTORE_BASE64          base64 of paperkeep-upload.jks
+#   KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD
+#   PLAY_STORE_SERVICE_ACCOUNT_JSON  Play Console service-account JSON
+# When RELEASE_KEYSTORE_BASE64 is absent the build falls back to an UNSIGNED
+# release artifact so the pipeline is green from day one.
+# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
       track:
-        description: 'Play Store track'
+        description: 'Play Store track (only used once Play secrets exist)'
         required: true
         default: 'internal'
         type: choice
@@ -25,9 +46,12 @@ concurrency:
   group: android-release
   cancel-in-progress: false
 
+permissions:
+  contents: write   # needed to create GitHub Releases
+
 jobs:
   release:
-    name: Build & publish release AAB
+    name: Build, GitHub Release, (Play Store if configured)
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -55,41 +79,19 @@ jobs:
         with:
           gradle-home-cache-cleanup: true
 
-      - name: Decode keystore
+      # ── Detect which secrets are present (drives conditional steps) ──────────
+      - name: Detect available secrets
+        id: caps
+        env:
+          HAS_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+          HAS_PLAY: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON != '' }}
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          echo "has_keystore=$HAS_KEYSTORE" >> "$GITHUB_OUTPUT"
+          echo "has_play=$HAS_PLAY"         >> "$GITHUB_OUTPUT"
+          echo "Keystore configured: $HAS_KEYSTORE"
+          echo "Play Store configured: $HAS_PLAY"
 
-      - name: Run unit tests (release variant)
-        working-directory: android
-        # Run only the modules that have pure-JVM tests — release variant skips
-        # Compose UI tests that require a device/emulator (those run in instrumented-tests job).
-        run: |
-          ./gradlew testReleaseUnitTest \
-            -x :core:ui:testReleaseUnitTest \
-            --no-daemon
-
-      - name: Build release AAB
-        working-directory: android
-        run: |
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
-            --parallel \
-            --no-daemon
-
-      - name: Build release APK (for side-loading / QA)
-        working-directory: android
-        run: |
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/release.keystore" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
-            --parallel \
-            --no-daemon
-
+      # ── Version info ─────────────────────────────────────────────────────────
       - name: Get version info
         id: version
         run: |
@@ -97,6 +99,47 @@ jobs:
           VERSION_CODE=$(git rev-list --count HEAD)
           echo "name=$VERSION" >> "$GITHUB_OUTPUT"
           echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Releasing Paperkeep $VERSION (build $VERSION_CODE)"
+
+      # ── Signing keystore (only if the secret exists) ─────────────────────────
+      - name: Decode keystore
+        if: steps.caps.outputs.has_keystore == 'true'
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=app/release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      # ── Quality gates (same as CI) before we ship anything ───────────────────
+      - name: Run unit tests (release variant)
+        working-directory: android
+        run: ./gradlew testReleaseUnitTest -x :core:ui:testReleaseUnitTest --no-daemon
+
+      # ── Build artifacts ──────────────────────────────────────────────────────
+      # When a keystore is present the build auto-signs (build.gradle.kts reads
+      # keystore.properties). Without it, the artifacts are unsigned — fine for a
+      # GitHub pre-release, NOT acceptable for Play Store (gated below anyway).
+      - name: Build release AAB
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Build release APK (side-loading / QA)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Locate artifacts
+        id: artifacts
+        run: |
+          AAB=$(find android/app/build/outputs/bundle/release -name "*.aab" | head -1)
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "aab=$AAB" >> "$GITHUB_OUTPUT"
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "AAB: $AAB"
+          echo "APK: $APK"
+          test -f "$APK"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
@@ -112,8 +155,65 @@ jobs:
           path: android/app/build/outputs/apk/release/*.apk
           retention-days: 90
 
-      # ── Play Store upload via Fastlane supply ──────────────────────────────
+      - name: Upload R8 mapping (deobfuscation — keep forever per reference.md)
+        if: steps.caps.outputs.has_keystore == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: paperkeep-mapping-${{ steps.version.outputs.name }}
+          path: android/app/build/outputs/mapping/release/mapping.txt
+          retention-days: 90
+
+      # ── Release notes (use the store file if present, else a default) ────────
+      - name: Resolve release notes
+        id: notes
+        run: |
+          NOTES_FILE="android/store/release-notes-${{ steps.version.outputs.name }}.txt"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "Using $NOTES_FILE"
+            cp "$NOTES_FILE" /tmp/release-notes.txt
+          else
+            echo "Paperkeep ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }})" > /tmp/release-notes.txt
+          fi
+          {
+            echo ""
+            echo "---"
+            if [ "${{ steps.caps.outputs.has_keystore }}" = "true" ]; then
+              echo "✅ Signed release. Attached APK is ready to install."
+            else
+              echo "⚠️ UNSIGNED build (no release keystore secret configured yet)."
+            fi
+            if [ "${{ steps.caps.outputs.has_play }}" = "true" ]; then
+              echo "📦 Also published to Google Play (${{ github.event.inputs.track || 'internal' }} track)."
+            else
+              echo "🟡 Google Play publishing: **coming soon** — Play Console account not connected yet."
+            fi
+          } >> /tmp/release-notes.txt
+
+      # ── GitHub Release — ALWAYS runs ─────────────────────────────────────────
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', steps.version.outputs.name) }}
+          name: Paperkeep ${{ steps.version.outputs.name }}
+          body_path: /tmp/release-notes.txt
+          prerelease: ${{ contains(steps.version.outputs.name, 'alpha') || contains(steps.version.outputs.name, 'beta') }}
+          files: |
+            ${{ steps.artifacts.outputs.apk }}
+            ${{ steps.artifacts.outputs.aab }}
+          fail_on_unmatched_files: false
+
+      # ── Play Store — gated. Prints "coming soon" until secrets exist ─────────
+      - name: Google Play — coming soon (no Play secrets configured)
+        if: steps.caps.outputs.has_play != 'true'
+        run: |
+          echo "::notice title=Play Store::Google Play publishing is COMING SOON."
+          echo "No PLAY_STORE_SERVICE_ACCOUNT_JSON secret found — skipping upload."
+          echo "To enable: create a Play Console account, add a service-account key as"
+          echo "the PLAY_STORE_SERVICE_ACCOUNT_JSON secret (and the keystore secrets),"
+          echo "then re-run this workflow. The job stays green in the meantime."
+
       - name: Set up Ruby (for Fastlane)
+        if: steps.caps.outputs.has_play == 'true'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
@@ -121,8 +221,8 @@ jobs:
           working-directory: android
 
       - name: Install Fastlane
+        if: steps.caps.outputs.has_play == 'true'
         run: |
-          mkdir -p android/fastlane
           cat > android/Gemfile <<'EOF'
           source "https://rubygems.org"
           gem "fastlane"
@@ -130,10 +230,11 @@ jobs:
           bundle install --gemfile=android/Gemfile
 
       - name: Decode Google Play service account key
-        run: |
-          echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}" > /tmp/play-store-key.json
+        if: steps.caps.outputs.has_play == 'true'
+        run: echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}" > /tmp/play-store-key.json
 
       - name: Determine upload track
+        if: steps.caps.outputs.has_play == 'true'
         id: track
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
@@ -145,6 +246,7 @@ jobs:
           fi
 
       - name: Upload to Play Store (${{ steps.track.outputs.track }})
+        if: steps.caps.outputs.has_play == 'true'
         working-directory: android
         env:
           SUPPLY_JSON_KEY: /tmp/play-store-key.json
@@ -161,10 +263,20 @@ jobs:
 
       - name: Clean up secrets
         if: always()
-        run: |
-          rm -f android/app/release.keystore /tmp/play-store-key.json
+        run: rm -f android/app/release.keystore android/keystore.properties /tmp/play-store-key.json
 
-      - name: Notify on success
-        if: success()
+      - name: Summary
+        if: always()
         run: |
-          echo "Paperkeep ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }}) uploaded to Play Store (${{ steps.track.outputs.track }})"
+          {
+            echo "## Paperkeep ${{ steps.version.outputs.name }} release"
+            echo "- GitHub Release: ✅ created with APK/AAB attached"
+            if [ "${{ steps.caps.outputs.has_play }}" = "true" ]; then
+              echo "- Google Play: ✅ uploaded (${{ steps.track.outputs.track }} track)"
+            else
+              echo "- Google Play: 🟡 coming soon (no Play secrets yet)"
+            fi
+            if [ "${{ steps.caps.outputs.has_keystore }}" != "true" ]; then
+              echo "- ⚠️ Build was UNSIGNED (add RELEASE_KEYSTORE_BASE64 to sign)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

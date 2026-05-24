@@ -89,6 +89,14 @@ Notes:
 - Do not add new outbound network calls
 - Keep APK signature verification in place
 
+## CI/CD & release
+- docs/DAILY_DEV_GUIDE.md — daily bug-fix → CI-green → push → release loop
+- docs/RELEASE_SECRETS_SETUP.md — how to flip on Play Store later (just add secrets)
+- Release pipeline: .github/workflows/android-release.yml
+  - Always creates a GitHub Release with the APK/AAB attached
+  - Play Store upload auto-enables once PLAY_STORE_SERVICE_ACCOUNT_JSON secret exists
+    (prints "coming soon" and stays green until then)
+
 ## Useful docs
 - docs/PAPERKEEP_DESIGN.md (read only needed sections)
 - docs/PRIVACY_POLICY.md

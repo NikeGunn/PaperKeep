@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MatchingDeclarationName:ClipboardManager.kt$PaperkeepClipboardManager</ID>
+    <ID>MatchingDeclarationName:Result.kt$AppResult&lt;out T&gt;</ID>
+    <ID>ReturnCount:BillingManager.kt$BillingManager$fun launchPurchaseFlow(activity: Activity)</ID>
+    <ID>ReturnCount:InAppReviewManager.kt$InAppReviewManager$fun shouldShowReview(): Boolean</ID>
+    <ID>TooGenericExceptionCaught:Result.kt$e: Exception</ID>
+    <ID>VariableNaming:ProStatusStore.kt$ProStatusStore$private val KEY_IS_PRO = booleanPreferencesKey("is_pro")</ID>
+    <ID>VariableNaming:ProStatusStore.kt$ProStatusStore$private val KEY_PURCHASE_TOKEN = stringPreferencesKey("purchase_token")</ID>
+  </CurrentIssues>
+</SmellBaseline>

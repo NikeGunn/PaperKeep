@@ -41,8 +41,12 @@ class PaperkeepApplication : Application(), SingletonImageLoader.Factory {
             } else {
                 DebugLog.d("Paperkeep.OpenCV", "OpenCV initLocal returned false — using Kotlin fallback")
             }
-        } catch (t: Throwable) {
-            DebugLog.e("Paperkeep.OpenCV", "OpenCV load failed", t)
+        } catch (e: UnsatisfiedLinkError) {
+            // Native OpenCV .so missing/incompatible — fall back to Kotlin pipeline.
+            DebugLog.e("Paperkeep.OpenCV", "OpenCV native lib unavailable", e)
+        } catch (e: ExceptionInInitializerError) {
+            // Static init of OpenCV classes failed — also non-fatal here.
+            DebugLog.e("Paperkeep.OpenCV", "OpenCV init failed", e)
         }
     }
 

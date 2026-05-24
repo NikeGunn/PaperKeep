@@ -2,6 +2,7 @@ package app.paperkeep.core.backup
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import app.paperkeep.core.backup.format.BackupManifest
 import app.paperkeep.core.backup.format.BackupSettings
 import app.paperkeep.core.backup.saf.SafBackupGateway
@@ -63,7 +64,16 @@ class BackupCoordinator @Inject constructor(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
         }.getOrDefault("unknown")
         val versionCode = runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            // longVersionCode is API 28+; minSdk is 26. The backup stores an Int,
+            // so fall back to the legacy versionCode field on API 26/27 to avoid
+            // a NoSuchMethodError crash on those devices.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode
+            }
         }.getOrDefault(0)
 
         val input = BackupInput(

@@ -23,6 +23,9 @@ class UmpConsentHelper @Inject constructor() {
      *
      * Phase 3B stub — always calls [onResult] with `ConsentStatus.NOT_REQUIRED`.
      */
+    // context is part of the production contract (UMP requires an Activity/Context);
+    // the Phase 3B stub doesn't use it yet — wired in Phase 5.
+    @Suppress("UnusedParameter")
     fun requestConsentIfRequired(
         context: Context,
         onResult: (status: ConsentStatus) -> Unit,

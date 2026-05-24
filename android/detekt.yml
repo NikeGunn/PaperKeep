@@ -7,11 +7,23 @@ config:
 style:
   MagicNumber:
     active: false
+  MaxLineLength:
+    # Compose code and string literals run long; 140 matches ktlint's default.
+    maxLineLength: 140
 
 complexity:
   LongMethod:
-    threshold: 80
+    # Compose UI builders and navigation graphs are declarative and naturally
+    # long without being complex. 80 is too aggressive for @Composable trees.
+    threshold: 150
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    # @Composable entry points take several hoisted callbacks/state slots —
+    # that is idiomatic Compose, not a code smell.
+    ignoreAnnotated: ['Composable']
 
 naming:
   FunctionNaming:
     functionPattern: '[a-z][A-Za-z0-9]*'
+    # @Composable functions are PascalCase by Android/Compose convention.
+    ignoreAnnotated: ['Composable']

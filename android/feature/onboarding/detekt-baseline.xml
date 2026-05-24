@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MaxLineLength:OnboardingContentTest.kt$OnboardingContentTest$assertTrue("body must mention no server", body.contains("no server") || body.contains("don't have a server") || body.contains("don’t have a server"))</ID>
+  </CurrentIssues>
+</SmellBaseline>

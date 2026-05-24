@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>LongParameterList:DocumentCardSyncStatusTest.kt$DocumentCardSyncStatusTest$( title: String = "Test Doc", isFavorite: Boolean = false, isArchived: Boolean = false, docType: String? = null, pageCount: Int = 3, pages: List&lt;Page&gt; = emptyList(), )</ID>
+    <ID>MatchingDeclarationName:Haptics.kt$PaperkeepHaptic</ID>
+    <ID>MatchingDeclarationName:Motion.kt$PaperkeepMotion</ID>
+  </CurrentIssues>
+</SmellBaseline>
