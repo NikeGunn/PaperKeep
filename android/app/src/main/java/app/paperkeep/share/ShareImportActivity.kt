@@ -77,20 +77,10 @@ class ShareImportActivity : ComponentActivity() {
         var tooLarge = false
 
         for (uri in uris) {
-            try {
-                val type = contentResolver.getType(uri) ?: continue
-                if (!isMimeAllowed(type)) continue
-
-                // Enforce 50 MB per-file size cap
-                val size = queryFileSize(uri)
-                if (size != null && size > MAX_IMPORT_BYTES) {
-                    tooLarge = true
-                    continue
-                }
-
-                imported.add(uri)
-            } catch (_: Exception) {
-                // Skip URIs we can't read
+            when (classifyUri(uri)) {
+                UriVerdict.ACCEPT -> imported.add(uri)
+                UriVerdict.TOO_LARGE -> tooLarge = true
+                UriVerdict.REJECT -> Unit
             }
         }
 
@@ -116,6 +106,24 @@ class ShareImportActivity : ComponentActivity() {
             }
             finish()
         }
+    }
+
+    private enum class UriVerdict { ACCEPT, TOO_LARGE, REJECT }
+
+    /**
+     * Classify a shared URI against the MIME allowlist and 50 MB size cap.
+     * URIs we can't read are treated as [UriVerdict.REJECT].
+     */
+    private fun classifyUri(uri: Uri): UriVerdict = try {
+        val type = contentResolver.getType(uri)
+        val size = queryFileSize(uri)
+        when {
+            type == null || !isMimeAllowed(type) -> UriVerdict.REJECT
+            size != null && size > MAX_IMPORT_BYTES -> UriVerdict.TOO_LARGE
+            else -> UriVerdict.ACCEPT
+        }
+    } catch (_: Exception) {
+        UriVerdict.REJECT
     }
 
     private fun isMimeAllowed(mime: String): Boolean =

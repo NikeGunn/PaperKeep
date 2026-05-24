@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:CameraPreview.kt$PreviewTap$bx &lt; 0f || bx &gt;= bmp.width || by &lt; 0f || by &gt;= bmp.height</ID>
+    <ID>ComplexCondition:CameraPreview.kt$PreviewTap$viewWidth &lt;= 0f || viewHeight &lt;= 0f || bmp.width &lt;= 0 || bmp.height &lt;= 0</ID>
+    <ID>ComplexCondition:CropCoordinateMapper.kt$imageWidth &lt;= 0 || imageHeight &lt;= 0 || viewportWidth &lt;= 0 || viewportHeight &lt;= 0</ID>
+    <ID>CyclomaticComplexMethod:CaptureViewModel.kt$CaptureViewModel$private suspend fun persistCurrentCapture( state: CaptureState.ReadyToCrop, appendToDocumentId: String?, replacePageId: String? = null, ): PersistResult</ID>
+    <ID>CyclomaticComplexMethod:EdgeDetectionOverlay.kt$@Composable fun EdgeDetectionOverlay( state: EdgeOverlayState, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:CaptureViewModel.kt$CaptureViewModel$( private val edgeDetector: EdgeDetector, private val classifier: DocumentClassifier, private val dispatchers: AppDispatchers, private val savedState: SavedStateHandle, private val documentRepository: DocumentRepository, private val imageStore: EncryptedImageStore, private val scanDao: ScanDao, private val ocrOrchestrator: OcrOrchestrator, @ApplicationContext private val appContext: Context, )</ID>
+    <ID>LongParameterList:CaptureViewModelTest.kt$CaptureViewModelTest$( detector: EdgeDetector = FakeEdgeDetector(), classifier: DocumentClassifier = DocumentClassifier(), savedState: SavedStateHandle = SavedStateHandle(), repo: DocumentRepository = mockk(relaxed = true), imageStore: EncryptedImageStore = mockk(relaxed = true), scanDao: ScanDao = mockk(relaxed = true), ocrOrchestrator: OcrOrchestrator = mockk(relaxed = true), appContext: Context = RuntimeEnvironment.getApplication(), )</ID>
+    <ID>MatchingDeclarationName:EdgeDetectionState.kt$EdgeOverlayState</ID>
+    <ID>MaxLineLength:EdgeDetectionOverlay.kt$quad.bottomRight to Pair(Offset(quad.bottomRight.x - len, quad.bottomRight.y), Offset(quad.bottomRight.x, quad.bottomRight.y - len))</ID>
+    <ID>ReturnCount:CameraPreview.kt$PreviewTap$fun toBitmapXY(): Pair&lt;Float, Float&gt;?</ID>
+    <ID>ReturnCount:CaptureViewModel.kt$CaptureViewModel$fun restoreQuadFromSavedState(): Quad?</ID>
+    <ID>ReturnCount:CaptureViewModel.kt$CaptureViewModel$private fun autoOrientToPortrait(bitmap: Bitmap): Bitmap</ID>
+    <ID>ReturnCount:CaptureViewModel.kt$CaptureViewModel$private fun isDetectionConfident(quad: Quad, imageWidth: Int, imageHeight: Int): Boolean</ID>
+    <ID>SpreadOperator:CameraPreview.kt$(lifecycleOwner, selector, *useCases)</ID>
+    <ID>TooGenericExceptionCaught:CaptureViewModel.kt$CaptureViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:CaptureViewModel.kt$CaptureViewModel : ViewModel</ID>
+    <ID>UnusedPrivateProperty:EdgeDetectionOverlay.kt$private val RedNoDetect = Color(0xFFEF4444)</ID>
+    <ID>UseCheckOrError:CameraPreview.kt$throw IllegalStateException("Unable to decode captured image")</ID>
+    <ID>VariableNaming:EdgeDetectionViewModel.kt$EdgeDetectionViewModel$@Suppress("UNUSED_VARIABLE") val _strong = strong // kept for future overlay routing</ID>
+  </CurrentIssues>
+</SmellBaseline>

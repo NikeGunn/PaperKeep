@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ReaderScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ReaderScreen( documentId: String, onNavigateBack: () -&gt; Unit, onNavigateToReorder: (String) -&gt; Unit = {}, onAddPage: () -&gt; Unit = {}, onRetakePage: (documentId: String, pageId: String) -&gt; Unit = { _, _ -&gt; }, onReCropPage: (documentId: String, pageId: String) -&gt; Unit = { _, _ -&gt; }, modifier: Modifier = Modifier, viewModel: ReaderViewModel = hiltViewModel(), editViewModel: ReaderEditViewModel = hiltViewModel(), )</ID>
+    <ID>CyclomaticComplexMethod:ZoomablePageItem.kt$@OptIn(ExperimentalFoundationApi::class) @Composable fun ZoomablePageItem( pageIndex: Int, imageFile: File?, aspectRatio: Float, ocrText: String?, pageTitle: String?, onSingleTap: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LoopWithTooManyJumpStatements:ZoomablePageItem.kt$do</ID>
+    <ID>TooGenericExceptionCaught:ReaderEditViewModel.kt$ReaderEditViewModel$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ReaderReorderViewModel.kt$ReaderReorderViewModel$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ReaderViewModel.kt$ReaderViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:ReaderViewModel.kt$ReaderViewModel : ViewModel</ID>
+    <ID>VariableNaming:ViewerLogicTest.kt$ViewerLogicTest$val in_ = Offset(120f, -50f)</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ReturnCount:ApkSignatureVerifier.kt$ApkSignatureVerifier$fun verify(context: Context): VerificationResult</ID>
+    <ID>TooGenericExceptionCaught:ApkSignatureVerifier.kt$ApkSignatureVerifier$e: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>

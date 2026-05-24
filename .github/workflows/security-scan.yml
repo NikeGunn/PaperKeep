@@ -3,6 +3,8 @@ name: Security Scan
 on:
   schedule:
     - cron: '0 3 * * 1'   # Monday 03:00 UTC — weekly
+  pull_request:
+    paths: ['android/**', '.github/workflows/security-scan.yml']
   push:
     branches: [main]
     paths: ['android/**', '.github/workflows/security-scan.yml']
@@ -112,13 +114,22 @@ jobs:
         run: ./gradlew detekt
         working-directory: android
 
-      - name: Check for Log.* in release source
+      - name: Check for android.util.Log.* in release source
         run: |
-          COUNT=$(grep -rn "Log\." android/app/src/main android/core/*/src/main android/feature/*/src/main 2>/dev/null | grep -v "//.*Log\." | wc -l)
-          echo "Log.* calls in release source: $COUNT"
+          # Policy: no direct android.util.Log in app code. The only sanctioned
+          # logger is DebugLog (core/common), which is FLAG_DEBUGGABLE-gated and
+          # stripped in release via -assumenosideeffects. So we ban the bare
+          # `Log.<level>(` API while allowing DebugLog.<level>( calls and the
+          # DebugLog.kt wrapper itself (the one place real Log.* is permitted).
+          MATCHES=$(grep -rnE "(^|[^a-zA-Z])Log\.(d|w|e|i|v|wtf)\(" \
+            android/app/src/main android/core/*/src/main android/feature/*/src/main 2>/dev/null \
+            | grep -v "//.*Log\." \
+            | grep -v "/DebugLog.kt:" || true)
+          COUNT=$(printf '%s' "$MATCHES" | grep -c . || true)
+          echo "Direct android.util.Log.* calls in release source: $COUNT"
           if [ "$COUNT" -gt 0 ]; then
-            echo "ERROR: Log.* found in release source (banned by security policy):"
-            grep -rn "Log\." android/app/src/main android/core/*/src/main android/feature/*/src/main 2>/dev/null | grep -v "//.*Log\."
+            echo "ERROR: direct Log.* found in release source (use DebugLog instead — banned by security policy):"
+            printf '%s\n' "$MATCHES"
             exit 1
           fi
 

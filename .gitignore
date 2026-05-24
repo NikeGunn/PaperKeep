@@ -134,3 +134,6 @@ infra/terraform.tfstate.backup
 infra/terraform.tfvars
 infra/*.tfvars
 backend/tmp/
+
+# Claude Code local state
+.claude/scheduled_tasks.lock

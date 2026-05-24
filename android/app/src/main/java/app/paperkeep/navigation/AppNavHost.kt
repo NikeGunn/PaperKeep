@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -97,14 +98,16 @@ fun AppNavHost(
     val startDestination: Any = if (completed) LibraryRoute else OnboardingRoute
 
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
+    val currentDestination = backStackEntry?.destination
 
-    // Bottom nav is visible only on top-level destinations
-    val bottomNavRoutes = setOf(
-        LibraryRoute::class.qualifiedName,
-        SettingsRoute::class.qualifiedName,
-    )
-    val showBottomNav = bottomNavRoutes.any { currentRoute?.contains(it ?: "") == true }
+    // Bottom nav is visible only on the two top-level destinations.
+    // Use type-safe hasRoute<T>() rather than matching KClass.qualifiedName against
+    // the route string — the latter breaks under R8 obfuscation in release builds
+    // (the back-stack route and the reflected qualified name desync), which hid the
+    // bottom bar entirely on the published APK.
+    val isLibrary = currentDestination?.hasRoute<LibraryRoute>() == true
+    val isSettings = currentDestination?.hasRoute<SettingsRoute>() == true
+    val showBottomNav = isLibrary || isSettings
 
     Scaffold(
         bottomBar = {
@@ -114,7 +117,8 @@ fun AppNavHost(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             ) {
                 PaperkeepBottomBar(
-                    currentRoute = currentRoute,
+                    isLibrarySelected = isLibrary,
+                    isSettingsSelected = isSettings,
                     onLibraryClick = {
                         navController.navigate(LibraryRoute) {
                             popUpTo(LibraryRoute) { inclusive = false }
@@ -308,19 +312,17 @@ fun AppNavHost(
 
 @Composable
 private fun PaperkeepBottomBar(
-    currentRoute: String?,
+    isLibrarySelected: Boolean,
+    isSettingsSelected: Boolean,
     onLibraryClick: () -> Unit,
     onScanClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isLibrary = currentRoute?.contains(LibraryRoute::class.qualifiedName ?: "") == true
-    val isSettings = currentRoute?.contains(SettingsRoute::class.qualifiedName ?: "") == true
-
     Box(modifier = modifier) {
         NavigationBar {
             NavigationBarItem(
-                selected = isLibrary,
+                selected = isLibrarySelected,
                 onClick = onLibraryClick,
                 icon = {
                     Icon(
@@ -342,7 +344,7 @@ private fun PaperkeepBottomBar(
             )
 
             NavigationBarItem(
-                selected = isSettings,
+                selected = isSettingsSelected,
                 onClick = onSettingsClick,
                 icon = {
                     Icon(

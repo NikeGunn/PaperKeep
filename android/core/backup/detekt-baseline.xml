@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:PasswordStrengthMeter.kt$PasswordStrengthMeter$fun estimate(password: CharArray): Estimate</ID>
+    <ID>EmptyFunctionBlock:BackupEngineTest.kt$BackupEngineTest.&lt;no name provided&gt;${}</ID>
+    <ID>LongParameterList:BackupEngine.kt$BackupEngine$( input: BackupInput, sink: OutputStream, memoryKib: Int = BackupKdf.MEMORY_KIB, iterations: Int = BackupKdf.ITERATIONS, parallelism: Int = BackupKdf.PARALLELISM, password: CharArray, )</ID>
+    <ID>MaxLineLength:BackupHeaderTest.kt$BackupHeaderTest$val s = """{"format":"paperkeep.backup","schemaVersion":1,"createdAtMs":1,"appVersionName":"x","appVersionCode":1,"documentCount":0,"pageCount":0,"pages":[],"futureField":"unknown"}"""</ID>
+    <ID>NestedBlockDepth:BackupEngine.kt$BackupEngine$fun read( source: InputStream, password: CharArray, consume: BackupReadVisitor, )</ID>
+    <ID>NestedBlockDepth:BackupEngine.kt$BackupEngine$fun write( input: BackupInput, sink: OutputStream, memoryKib: Int = BackupKdf.MEMORY_KIB, iterations: Int = BackupKdf.ITERATIONS, parallelism: Int = BackupKdf.PARALLELISM, password: CharArray, ): BackupOutput</ID>
+    <ID>ReturnCount:StorageReport.kt$StorageReporter.Companion$fun sizeOfDir(dir: File): Long</ID>
+    <ID>SwallowedException:BackupEngineTest.kt$BackupEngineTest$e: Throwable</ID>
+    <ID>ThrowsCount:BackupHeader.kt$BackupHeader.Companion$fun readFrom(input: InputStream): BackupHeader</ID>
+    <ID>UnusedPrivateMember:BackupCoordinator.kt$BackupCoordinator$private fun List&lt;DocumentWithPages&gt;.totalPages(): Int</ID>
+    <ID>UseCheckOrError:BackupCoordinator.kt$BackupCoordinator$throw IllegalStateException("backup is missing manifest.json")</ID>
+    <ID>UseCheckOrError:BackupCoordinator.kt$BackupCoordinator$throw IllegalStateException("backup is missing page ${ref.zipPath}")</ID>
+    <ID>UseCheckOrError:BackupCoordinator.kt$BackupCoordinator$throw IllegalStateException("page ${ref.zipPath} integrity check failed")</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,16 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:BackupScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BackupScreen( onNavigateBack: () -&gt; Unit = {}, modifier: Modifier = Modifier, viewModel: BackupViewModel = hiltViewModel(), )</ID>
+    <ID>MaxLineLength:BackupScreen.kt$enabled = state.mode == BackupUiState.Mode.IDLE || state.mode == BackupUiState.Mode.DONE_BACKUP || state.mode == BackupUiState.Mode.DONE_RESTORE || state.mode == BackupUiState.Mode.ERROR</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$text = "All documents are stored exclusively on your device, encrypted with AES-256-GCM using a key that never leaves Android Keystore."</ID>
+    <ID>MaxLineLength:SettingsScreen.kt$text = "No account is required. No telemetry is collected. No analytics SDKs are included. The only third-party network calls are to Google AdMob (ads) and Play Billing."</ID>
+    <ID>TooGenericExceptionCaught:BackupViewModel.kt$BackupViewModel$t: Throwable</ID>
+    <ID>UnusedParameter:AccountManagementScreen.kt$onAccountDeleted: () -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:AccountManagementScreen.kt$onLoggedOut: () -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:SettingsScreen.kt$contentPadding: PaddingValues = PaddingValues(0.dp)</ID>
+    <ID>UnusedParameter:SettingsScreen.kt$onOpenAbout: () -&gt; Unit = {}</ID>
+    <ID>UnusedPrivateProperty:SettingsViewModel.kt$SettingsViewModel$@ApplicationContext private val context: Context</ID>
+  </CurrentIssues>
+</SmellBaseline>

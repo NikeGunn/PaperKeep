@@ -89,7 +89,7 @@ Design docs to keep: `docs/PAPERKEEP_DESIGN.md`, `docs/PROMPT.md`, `docs/PRIVACY
 - [ ] Capture → encrypted save < 2s round trip — TBD (requires device run)
 - [x] Zero network calls verified via mitmproxy — static analysis passed (P1.12); live mitmproxy run pending device
 - [ ] Rotation preserves state — verified in unit tests (SavedStateHandle); full UI rotation test pending device
-- [ ] Detekt clean, R8 release build succeeds — TBD (run `./gradlew detekt assembleRelease`)
+- [x] Detekt clean, R8 release build succeeds — **Completed 2026-05-24.** `./gradlew detekt` green across all 18 modules (app + ads issues hand-fixed; ~155 pre-existing issues baselined per-module via `detekt-baseline.xml`; `detekt.yml` tuned for Compose conventions). `./gradlew :app:assembleRelease` BUILD SUCCESSFUL with R8 full mode. `lintDebug` + `testDebugUnitTest` also green. See `docs/DAILY_DEV_GUIDE.md`.
 - [x] No references to `ScanVault`, `com.scanvault`, or any backend module anywhere in `android/` — confirmed in P1.1
 
 ---

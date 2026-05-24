@@ -28,6 +28,9 @@ class AdMobManager @Inject constructor() {
      * Must be called from the main thread in production (MobileAds.initialize
      * contract), but the stub has no such restriction.
      */
+    // context is part of the production contract (MobileAds.initialize(context));
+    // the Phase 3B stub doesn't use it yet — wired in Phase 5.
+    @Suppress("UnusedParameter")
     fun initialize(context: Context) {
         if (!initialized) {
             synchronized(this) {

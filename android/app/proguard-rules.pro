@@ -25,6 +25,14 @@
 
 # Kotlin serialization
 -keepattributes *Annotation*, InnerClasses
+
+# Type-safe Navigation Compose routes are @Serializable; Navigation derives the
+# route string from the serial name (the class's qualified name). R8 obfuscation
+# renamed these classes, desyncing the back-stack route from KClass.qualifiedName
+# and breaking the bottom-bar visibility check in release builds. Keep the route
+# class names so the serial name stays stable. (See navigation/AppRoutes.kt.)
+-keep,allowobfuscation,allowshrinking class app.paperkeep.navigation.*Route
+-keepnames @kotlinx.serialization.Serializable class app.paperkeep.navigation.**
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
 -keepclasseswithmembers class **$$serializer { *; }

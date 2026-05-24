@@ -1,0 +1,49 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:OpenCvBridge.kt$OpenCvBridge$!(hasTl &amp;&amp; hasTr &amp;&amp; hasBr &amp;&amp; hasBl)</ID>
+    <ID>CyclomaticComplexMethod:ContourQuadFinder.kt$ContourQuadFinder$fun findScored(luma: IntArray, width: Int, height: Int): Scored?</ID>
+    <ID>CyclomaticComplexMethod:ContourQuadFinder.kt$ContourQuadFinder$private fun findComponents(binary: ByteArray, w: Int, h: Int): List&lt;Component&gt;</ID>
+    <ID>CyclomaticComplexMethod:ContourQuadFinder.kt$ContourQuadFinder$private fun simplifyToQuad(hull: List&lt;IntPoint&gt;): List&lt;IntPoint&gt;?</ID>
+    <ID>CyclomaticComplexMethod:OpenCvBridge.kt$OpenCvBridge$private fun collectCandidates( contours: List&lt;MatOfPoint&gt;, edges: Mat, frameArea: Double, frameCx: Double, frameCy: Double, frameDiag: Double, areaFloor: Double = MIN_AREA_FRACTION, ): ArrayList&lt;ScoredQuad&gt;</ID>
+    <ID>CyclomaticComplexMethod:OpenCvBridge.kt$OpenCvBridge$private fun edgeSupport(pts: Array&lt;Point&gt;, edges: Mat): Double</ID>
+    <ID>LongParameterList:ContourQuadFinderTest.kt$ContourQuadFinderTest$( bgLuma: Int = 230, docLuma: Int = 40, x0: Int = 30, y0: Int = 30, x1: Int = 170, y1: Int = 210, )</ID>
+    <ID>LongParameterList:OpenCvBridge.kt$OpenCvBridge$( contours: List&lt;MatOfPoint&gt;, edges: Mat, frameArea: Double, frameCx: Double, frameCy: Double, frameDiag: Double, areaFloor: Double = MIN_AREA_FRACTION, )</ID>
+    <ID>LongParameterList:OpenCvBridge.kt$OpenCvBridge$( pts: Array&lt;Point&gt;, areaFraction: Double, frameCx: Double, frameCy: Double, frameDiag: Double, edges: Mat, )</ID>
+    <ID>LoopWithTooManyJumpStatements:ContourQuadFinder.kt$ContourQuadFinder$for</ID>
+    <ID>LoopWithTooManyJumpStatements:OpenCvBridge.kt$OpenCvBridge$for</ID>
+    <ID>NestedBlockDepth:ContourQuadFinder.kt$ContourQuadFinder$private fun dilate(src: ByteArray, w: Int, h: Int): ByteArray</ID>
+    <ID>NestedBlockDepth:ContourQuadFinder.kt$ContourQuadFinder$private fun erode(src: ByteArray, w: Int, h: Int): ByteArray</ID>
+    <ID>NestedBlockDepth:ContourQuadFinder.kt$ContourQuadFinder$private fun findComponents(binary: ByteArray, w: Int, h: Int): List&lt;Component&gt;</ID>
+    <ID>NestedBlockDepth:ContourQuadFinder.kt$ContourQuadFinder$private fun simplifyToQuad(hull: List&lt;IntPoint&gt;): List&lt;IntPoint&gt;?</ID>
+    <ID>NestedBlockDepth:ImageCleanupProcessor.kt$ImageCleanupProcessor$fun denoise(source: Bitmap): Bitmap</ID>
+    <ID>NestedBlockDepth:OpenCvBridge.kt$OpenCvBridge$fun detectQuad(bitmap: Bitmap, tapX: Float?, tapY: Float?): Detection?</ID>
+    <ID>NestedBlockDepth:OpenCvBridge.kt$OpenCvBridge$private fun collectCandidates( contours: List&lt;MatOfPoint&gt;, edges: Mat, frameArea: Double, frameCx: Double, frameCy: Double, frameDiag: Double, areaFloor: Double = MIN_AREA_FRACTION, ): ArrayList&lt;ScoredQuad&gt;</ID>
+    <ID>NestedBlockDepth:OpenCvBridge.kt$OpenCvBridge$private fun edgeSupport(pts: Array&lt;Point&gt;, edges: Mat): Double</ID>
+    <ID>ReturnCount:ContourQuadFinder.kt$ContourQuadFinder$fun findScored(luma: IntArray, width: Int, height: Int): Scored?</ID>
+    <ID>ReturnCount:ContourQuadFinder.kt$ContourQuadFinder$private fun scoreQuad(quad: Quad, w: Int, h: Int, gradient: IntArray): Float?</ID>
+    <ID>ReturnCount:ContourQuadFinder.kt$ContourQuadFinder$private fun simplifyToQuad(hull: List&lt;IntPoint&gt;): List&lt;IntPoint&gt;?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$fun detectQuad(bitmap: Bitmap, tapX: Float?, tapY: Float?): Detection?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$fun removeShadow(bitmap: Bitmap): Bitmap?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$private fun detectInRoi(gray: Mat, tap: Point): ScoredQuad?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$private fun findBestQuad(gray: Mat, dilateExtra: Boolean, tap: Point? = null): ScoredQuad?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$private fun pickBestForTap(candidates: List&lt;ScoredQuad&gt;, tap: Point): ScoredQuad?</ID>
+    <ID>ReturnCount:OpenCvBridge.kt$OpenCvBridge$private fun scoreQuad( pts: Array&lt;Point&gt;, areaFraction: Double, frameCx: Double, frameCy: Double, frameDiag: Double, edges: Mat, ): ScoredQuad?</ID>
+    <ID>ReturnCount:OpenCvEdgeDetector.kt$OpenCvEdgeDetector$private fun detectInternal(bitmap: Bitmap, tapX: Float?, tapY: Float?): DetectionResult</ID>
+    <ID>ReturnCount:PerspectiveTransform.kt$PerspectiveTransform$fun warp( bitmap: Bitmap, quad: Quad, outputWidth: Int = naturalOutputWidth(quad), outputHeight: Int = naturalOutputHeight(quad), ): Bitmap</ID>
+    <ID>ReturnCount:StabilityTracker.kt$StabilityTracker$fun update(quad: Quad?, imageW: Int, imageH: Int, nowMs: Long): State</ID>
+    <ID>SpreadOperator:OpenCvBridge.kt$OpenCvBridge$(*contour.toArray())</ID>
+    <ID>SpreadOperator:OpenCvBridge.kt$OpenCvBridge$(*outer)</ID>
+    <ID>SpreadOperator:OpenCvBridge.kt$OpenCvBridge$(*poly)</ID>
+    <ID>SpreadOperator:OpenCvBridge.kt$OpenCvBridge$(*pts)</ID>
+    <ID>SwallowedException:PerspectiveTransform.kt$PerspectiveTransform$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PerspectiveTransform.kt$PerspectiveTransform$e: Exception</ID>
+    <ID>TooManyFunctions:ContourQuadFinder.kt$ContourQuadFinder</ID>
+    <ID>TooManyFunctions:ImageFilterProcessor.kt$ImageFilterProcessor</ID>
+    <ID>TooManyFunctions:OpenCvBridge.kt$OpenCvBridge</ID>
+    <ID>UnusedParameter:ContourQuadFinder.kt$ContourQuadFinder.Component$h: Int</ID>
+    <ID>UnusedParameter:ContourQuadFinder.kt$ContourQuadFinder.Component$w: Int</ID>
+    <ID>UnusedPrivateMember:OpenCvBridge.kt$OpenCvBridge$private fun containsPoint(poly: Array&lt;Point&gt;, pt: Point): Boolean</ID>
+  </CurrentIssues>
+</SmellBaseline>
