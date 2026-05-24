@@ -1,177 +1,213 @@
 name: Android CI
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Smart, cost-aware CI for Paperkeep.
+#
+# Design goals:
+#   • Fast feedback   — the gate you wait on (lint/detekt/unit) finishes in minutes.
+#   • No wasted work  — a `changes` filter skips heavy jobs when only docs change,
+#                       and heavy jobs run on PRs only (main is protected, so the
+#                       PR already tested the exact merge code — no redundant
+#                       post-merge re-run of the 3-emulator matrix).
+#   • DRY             — shared JDK/Gradle setup lives in one composite action
+#                       (.github/actions/setup-android).
+#   • One gate to rule them all — branch protection requires the single `CI Status`
+#                       check, which is correct even when heavy jobs are skipped.
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   pull_request:
-    paths: ['android/**', '.github/workflows/android-ci.yml']
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/android-ci.yml']
   workflow_dispatch:
 
+# Cancel superseded runs on the same ref so a new push doesn't pile up behind an
+# old one (and frees the runner for the latest commit).
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  # ── 0. What changed? Drives every downstream `if:` ──────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # "code" = anything that can affect the build/tests. Docs, store
+          # metadata, and standalone scripts deliberately do NOT trip it, so a
+          # README or release-notes edit skips the whole heavy pipeline.
+          filters: |
+            code:
+              - 'android/**'
+              - '.github/workflows/android-ci.yml'
+              - '.github/actions/setup-android/**'
+
+  # ── 1. The fast gate — runs on EVERY event (PR + push-to-main) ──────────────
   lint-and-test:
     name: Lint, Detekt, Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure Gradle wrapper executable
-        run: chmod +x ./gradlew
+      - name: Setup Android
+        uses: ./.github/actions/setup-android
+
+      # One Gradle invocation runs all four checks: fewer daemon spin-ups, shared
+      # configuration cache, and a single task graph. --build-cache reuses task
+      # outputs across runs.
+      - name: Detekt + Lint + Unit tests + debug APK
         working-directory: android
+        run: ./gradlew detekt lintDebug testDebugUnitTest assembleDebug --build-cache
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Export Gradle Java home
-        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-
-      - name: Gradle setup with cache
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-home-cache-cleanup: true
-
-      - name: Detekt static analysis
-        run: ./gradlew detekt
-        working-directory: android
-
-      - name: Lint (Android)
-        run: ./gradlew lintDebug
-        working-directory: android
-
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest
-        working-directory: android
-
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug
-        working-directory: android
-
-      - name: Upload APK (PR preview)
+      - name: Upload debug APK (PR preview)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ github.event.pull_request.number }}-debug.apk
+          name: pr-${{ github.event.pull_request.number }}-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
       - name: Upload lint & test reports
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: android-ci-reports-${{ github.run_number }}
           path: android/**/build/reports/**
           retention-days: 14
 
+  # ── 2. Heavy: instrumented emulator matrix — PR / manual only ───────────────
   instrumented-tests:
     name: Instrumented Tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: lint-and-test
+    needs: [changes, lint-and-test]
+    # Run when code changed AND this is a PR or a manual run. Skipped on
+    # push-to-main: main is protected (PR-only), so the PR already ran this exact
+    # matrix on the merge result — re-running it post-merge is pure redundancy.
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
+        # minSdk..target span: oldest supported, a mid LTS, and newest.
         api-level: [26, 30, 34]
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure Gradle wrapper executable
-        run: chmod +x ./gradlew
-        working-directory: android
-
-      - uses: actions/setup-java@v4
+      - name: Setup Android
+        uses: ./.github/actions/setup-android
         with:
-          distribution: temurin
-          java-version: 21
+          # Matrix jobs only read the cache — avoids 3 jobs racing to write the
+          # same key. The lint-and-test job above seeds it.
+          cache-read-only: true
 
-      - name: Export Gradle Java home
-        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-
-      - name: Gradle setup with cache
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Enable KVM (for Android emulator)
+      - name: Enable KVM (hardware accel for the emulator)
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: AVD cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-api${{ matrix.api-level }}-${{ runner.os }}
-
-      - name: Run instrumented tests
+      # Single fresh-boot emulator run. We deliberately do NOT cache an AVD
+      # snapshot: the cache-hit path made android-emulator-runner hang on
+      # shutdown (it tries to manage a snapshot that -no-snapshot disabled),
+      # stalling the job for the full timeout. A clean boot adds ~1 min but is
+      # rock-solid. -no-snapshot + -no-snapshot-save = nothing to save on exit.
+      - name: Run instrumented tests (:app only)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
-          # Only :app has instrumented tests (HiltTestRunner + androidTest deps).
-          # Library modules (:core:ads etc.) have no androidTest sources, so a
-          # project-wide connectedDebugAndroidTest builds empty, runner-less test
-          # APKs that crash with ClassNotFoundException on AndroidJUnitRunner.
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest
+          force-avd-creation: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -no-boot-anim -noaudio -camera-back none
+          disable-animations: true
+          # Only :app has androidTest sources (HiltTestRunner + deps). A project-
+          # wide connectedDebugAndroidTest would build empty, runner-less test
+          # APKs for library modules and crash on AndroidJUnitRunner.
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest --build-cache
 
       - name: Upload instrumented test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-results-api${{ matrix.api-level }}-${{ github.run_number }}
           path: android/**/build/reports/androidTests/**
           retention-days: 14
 
+  # ── 3. Heavy: R8/ProGuard release gate — PR / manual only ───────────────────
   release-build:
     name: Assemble Release (R8 + ProGuard gate)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: lint-and-test
-
+    needs: [changes, lint-and-test]
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure Gradle wrapper executable
-        run: chmod +x ./gradlew
-        working-directory: android
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Setup Android
+        uses: ./.github/actions/setup-android
         with:
-          distribution: temurin
-          java-version: 21
+          cache-read-only: true
 
-      - name: Export Gradle Java home
-        run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-
-      - name: Gradle setup with cache
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-home-cache-cleanup: true
-
-      - name: Assemble release (unsigned — signing gate is in android-release.yml)
-        # No keystore in CI: build.gradle.kts only wires a signing config when
-        # keystore.properties exists, so this produces an unsigned release APK.
-        # That's exactly what this gate verifies — that R8/ProGuard rules are
-        # valid and the release variant compiles. (Do NOT inject a /dev/null
-        # keystore: validateSigningRelease fails because /dev/null isn't a real
-        # keystore file.) Real signing happens in android-release.yml.
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Assemble release (unsigned — real signing is in android-release.yml)
+        # No keystore in CI → build.gradle.kts wires no signing config → unsigned
+        # release APK. That's all this gate needs: prove the R8/ProGuard rules are
+        # valid and the release variant compiles. (Never inject a /dev/null
+        # keystore — validateSigningRelease rejects it.)
         working-directory: android
+        run: ./gradlew assembleRelease --build-cache --no-daemon
 
-      - name: Verify APK exists
+      - name: Verify a release APK was produced
         run: |
           APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
-          echo "Release APK: $APK"
-          test -f "$APK"
+          echo "Release APK: ${APK:-<none>}"
+          test -n "$APK" && test -f "$APK"
+
+  # ── 4. Single required status check ─────────────────────────────────────────
+  # Branch protection requires just this one check. It passes when the jobs that
+  # SHOULD have run succeeded — and correctly tolerates jobs that were skipped
+  # (docs-only change, or heavy jobs skipped on push-to-main). It FAILS if any
+  # needed job actually failed or was cancelled.
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: always()
+    needs: [changes, lint-and-test, instrumented-tests, release-build]
+    steps:
+      - name: Verify no required job failed
+        run: |
+          echo "changes:            ${{ needs.changes.result }}"
+          echo "lint-and-test:      ${{ needs.lint-and-test.result }}"
+          echo "instrumented-tests: ${{ needs.instrumented-tests.result }}"
+          echo "release-build:      ${{ needs.release-build.result }}"
+          # A job is OK if it succeeded or was deliberately skipped.
+          # Anything else (failure / cancelled) fails the gate.
+          for r in \
+            "${{ needs.changes.result }}" \
+            "${{ needs.lint-and-test.result }}" \
+            "${{ needs.instrumented-tests.result }}" \
+            "${{ needs.release-build.result }}"; do
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::A required CI job did not pass (result: $r)."
+              exit 1
+            fi
+          done
+          echo "✅ All required CI jobs passed (or were intentionally skipped)."

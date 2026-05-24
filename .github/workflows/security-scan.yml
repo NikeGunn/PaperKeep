@@ -3,8 +3,11 @@ name: Security Scan
 on:
   schedule:
     - cron: '0 3 * * 1'   # Monday 03:00 UTC — weekly
+  # No paths filter on pull_request: the secret-scan + detekt-security checks are
+  # REQUIRED by branch protection, so they must run on every PR or the merge stays
+  # blocked forever (a required check that never reports = permanent block). The
+  # jobs are cheap (~5 min), so running them on all PRs is fine.
   pull_request:
-    paths: ['android/**', '.github/workflows/security-scan.yml']
   push:
     branches: [main]
     paths: ['android/**', '.github/workflows/security-scan.yml']

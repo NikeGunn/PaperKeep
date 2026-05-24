@@ -1,0 +1,45 @@
+name: Setup Android build environment
+description: >
+  Composite action that prepares a job to run Gradle for the Paperkeep Android
+  build: makes the wrapper executable, installs JDK 21 (Temurin), and wires up
+  Gradle with read/write caching. Centralised here so every job stays identical
+  and the setup is defined exactly once (DRY).
+
+inputs:
+  cache-read-only:
+    description: >
+      When 'true', the job reads the Gradle cache but does not write to it.
+      Set true for matrix/fan-out jobs so they don't race to write the same
+      cache entry; leave false for the single job that should seed the cache.
+    required: false
+    default: 'false'
+  java-version:
+    description: JDK major version to install.
+    required: false
+    default: '21'
+
+runs:
+  using: composite
+  steps:
+    - name: Make Gradle wrapper executable
+      shell: bash
+      run: chmod +x ./gradlew
+      working-directory: android
+
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+
+    - name: Export Gradle Java home
+      shell: bash
+      run: echo "ORG_GRADLE_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+    - name: Set up Gradle with build cache
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-home-cache-cleanup: true
+        cache-read-only: ${{ inputs.cache-read-only }}
+        # Build less verbosely and fail fast on a broken cache rather than hang.
+        add-job-summary: on-failure
