@@ -136,9 +136,11 @@ class ManifestAuditTest {
             "applicationId must be \"app.paperkeep\"",
             gradleText.contains("applicationId = \"app.paperkeep\""),
         )
+        // Version-agnostic: assert a well-formed semver versionName exists, not a
+        // specific value — otherwise every release bump breaks this test.
         assertTrue(
-            "versionName must match VERSION file (2.0.0-alpha.1)",
-            gradleText.contains("versionName = \"2.0.0-alpha.1\""),
+            "versionName must be a valid semver string",
+            VERSION_NAME_REGEX.containsMatchIn(gradleText),
         )
     }
 
@@ -147,12 +149,25 @@ class ManifestAuditTest {
         val codeSource = ManifestAuditTest::class.java.protectionDomain?.codeSource
         var f: File? = if (codeSource != null) File(codeSource.location.toURI()) else null
         while (f != null && !File(f, "VERSION").exists()) f = f.parentFile
-        val versionFile = f?.let { File(it, "VERSION") } ?: return
-        if (!versionFile.exists()) return
+        val root = f ?: return
+        val versionFile = File(root, "VERSION")
+        val gradle = File(root, "android/app/build.gradle.kts")
+        if (!versionFile.exists() || !gradle.exists()) return
+        // The real invariant: the VERSION file and build.gradle.kts versionName must
+        // agree. We don't pin a literal version, so releases never break this test.
+        val versionFromFile = versionFile.readText().trim()
+        val versionFromGradle = VERSION_NAME_REGEX
+            .find(gradle.readText())?.groupValues?.get(1)
         assertEquals(
             "VERSION file must equal build.gradle.kts versionName",
-            "2.0.0-alpha.1",
-            versionFile.readText().trim(),
+            versionFromFile,
+            versionFromGradle,
         )
+    }
+
+    private companion object {
+        // Matches: versionName = "2.0.0" or "2.0.0-alpha.2" etc., capturing the value.
+        val VERSION_NAME_REGEX =
+            Regex("""versionName\s*=\s*"(\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?)"""")
     }
 }

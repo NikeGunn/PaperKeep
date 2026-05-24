@@ -321,25 +321,98 @@ else
   git --no-pager diff -- "$VERSION_FILE" "$GRADLE_FILE" | sed 's/^/   /'
 fi
 
-# ── 6. commit, push, tag, push tag ───────────────────────────────────────────
-step "Committing and tagging"
+# ── 5b. TEST GATE — run unit tests with the bumped version BEFORE tagging ─────
+# A version bump can break tests (e.g. a test that pins the version string).
+# Catching it here means we never push a broken tag/release. On failure we revert
+# the version edits so your tree is left clean.
+step "Test gate (unit tests with the new version)"
+if $DRY_RUN; then
+  echo "   ${YELLOW}would run:${RESET} (cd android && ./gradlew testDebugUnitTest)"
+elif [ "${SKIP_TESTS:-false}" = "true" ]; then
+  warn "SKIP_TESTS=true — skipping the test gate (not recommended)."
+else
+  info "Running ./gradlew testDebugUnitTest … (this is your safety net)"
+  if ( cd android && ./gradlew testDebugUnitTest --console=plain -q ); then
+    ok "All unit tests passed with version ${NEW_VERSION}."
+  else
+    err "Unit tests FAILED with the new version. NOT releasing."
+    warn "Reverting the version-file edits so your tree is clean…"
+    git checkout -- "$VERSION_FILE" "$GRADLE_FILE" 2>/dev/null || true
+    rm -f "$NOTES_FILE" 2>/dev/null || true
+    err "Fix the failing tests, then re-run ./scripts/release.sh."
+    err "(To bypass in an emergency: SKIP_TESTS=true ./scripts/release.sh)"
+    exit 1
+  fi
+fi
+
+# ── 6. commit the version bump ───────────────────────────────────────────────
+step "Committing version bump"
 run git add "$VERSION_FILE" "$GRADLE_FILE" "$NOTES_FILE"
 run git commit -m "chore(android): release ${NEW_VERSION}"
-run git push origin main
+
+# Is the default branch protected? If so, a direct push needs admin bypass — we
+# detect it and tell the user clearly rather than silently relying on bypass.
+BRANCH_PROTECTED=false
+if ! $DRY_RUN && command -v gh >/dev/null 2>&1; then
+  REPO_SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
+  if [ -n "$REPO_SLUG" ] && gh api "repos/$REPO_SLUG/branches/main/protection" >/dev/null 2>&1; then
+    BRANCH_PROTECTED=true
+  fi
+fi
+
+step "Pushing to main"
+if $DRY_RUN; then
+  echo "   ${YELLOW}would run:${RESET} git push origin main"
+elif $BRANCH_PROTECTED; then
+  warn "main is a PROTECTED branch. A direct push needs your admin bypass."
+  warn "The cleaner path is a PR. Choose:"
+  echo "   [1] Push directly to main (admin bypass) — fast"
+  echo "   [2] Open a PR for the version bump — clean, but you merge it before the tag"
+  read -r -p "Pick [1/2] (default 1): " pushans
+  if [ "$pushans" = "2" ]; then
+    REL_BRANCH="release/${TAG}"
+    git switch -c "$REL_BRANCH"
+    git push -u origin "$REL_BRANCH"
+    gh pr create --title "chore(android): release ${NEW_VERSION}" \
+      --body "Version bump for ${TAG}. Merge, then run: git tag ${TAG} && git push origin ${TAG}" >/dev/null
+    ok "Opened a PR on ${REL_BRANCH}."
+    warn "MERGE the PR, switch back to main & pull, THEN tag:"
+    echo "   git switch main && git pull && git tag ${TAG} && git push origin ${TAG}"
+    info "Stopping here so you can merge the PR first."
+    exit 0
+  fi
+  git push origin main && ok "Pushed to main (admin bypass)."
+else
+  git push origin main && ok "Pushed to main."
+fi
+
+# ── 7. tag — this is what triggers the release pipeline ──────────────────────
+step "Tagging ${TAG}"
 run git tag "$TAG"
 run git push origin "$TAG"
+$DRY_RUN || ok "Tag ${TAG} pushed — release pipeline triggered."
+
+# ── 8. confirm the pipeline actually started ─────────────────────────────────
+if ! $DRY_RUN && command -v gh >/dev/null 2>&1; then
+  step "Confirming the release pipeline"
+  sleep 5
+  RELRUN="$(gh run list --workflow 'Android Release — GitHub + Play Store' --limit 1 --json databaseId,status --jq '.[0]' 2>/dev/null || true)"
+  if [ -n "$RELRUN" ]; then
+    ok "Release workflow is running."
+    info "Watch it:   gh run watch \$(gh run list --workflow 'Android Release — GitHub + Play Store' --limit 1 --json databaseId --jq '.[0].databaseId')"
+  else
+    warn "Couldn't confirm the run started — check the Actions tab."
+  fi
+fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
 step "Done"
 if $DRY_RUN; then
   warn "DRY-RUN complete. Nothing was changed. Re-run without --dry-run to release for real."
 else
-  ok "Released ${NEW_VERSION}!"
+  ok "Released ${NEW_VERSION}! 🎉"
   echo
-  info "The release pipeline is now running. Watch it here:"
-  echo "   https://github.com/NikeGunn/PaperKeep/actions/workflows/android-release.yml"
-  echo
-  info "When it finishes you'll get a GitHub Release with the APK attached:"
+  info "GitHub Release (APK attached when the pipeline finishes):"
   echo "   https://github.com/NikeGunn/PaperKeep/releases/tag/${TAG}"
   echo
   info "Play Store upload happens automatically once Play secrets are set"
