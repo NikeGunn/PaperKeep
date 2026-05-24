@@ -122,37 +122,19 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: AVD snapshot cache
-        uses: actions/cache@v4
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-api${{ matrix.api-level }}-${{ runner.os }}-v2
-
-      # Cold-boot once to create + cache the AVD snapshot. On a cache hit this is
-      # skipped, so subsequent runs boot from snapshot (much faster).
-      - name: Create AVD & cache snapshot
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          profile: pixel_6
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: echo "AVD snapshot created"
-
+      # Single fresh-boot emulator run. We deliberately do NOT cache an AVD
+      # snapshot: the cache-hit path made android-emulator-runner hang on
+      # shutdown (it tries to manage a snapshot that -no-snapshot disabled),
+      # stalling the job for the full timeout. A clean boot adds ~1 min but is
+      # rock-solid. -no-snapshot + -no-snapshot-save = nothing to save on exit.
       - name: Run instrumented tests (:app only)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-boot-anim -noaudio
+          force-avd-creation: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -no-boot-anim -noaudio -camera-back none
           disable-animations: true
           # Only :app has androidTest sources (HiltTestRunner + deps). A project-
           # wide connectedDebugAndroidTest would build empty, runner-less test
