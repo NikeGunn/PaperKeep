@@ -134,12 +134,25 @@ jobs:
         id: artifacts
         run: |
           AAB=$(find android/app/build/outputs/bundle/release -name "*.aab" | head -1)
-          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          # Prefer a signed APK; fall back to whatever exists so we can fail loudly below.
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" ! -name "*-unsigned.apk" | head -1)
+          [ -z "$APK" ] && APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           echo "aab=$AAB" >> "$GITHUB_OUTPUT"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
           echo "AAB: $AAB"
           echo "APK: $APK"
           test -f "$APK"
+          # Guard: when a keystore secret is configured, the release APK MUST be signed.
+          # An unsigned APK installs nowhere ("package appears to be invalid") — never ship it.
+          if [ "${{ steps.caps.outputs.has_keystore }}" = "true" ]; then
+            case "$APK" in
+              *-unsigned.apk)
+                echo "::error title=Unsigned APK::Keystore secret is set but assembleRelease produced an UNSIGNED APK ($APK). Check the keystore secrets — refusing to publish."
+                exit 1
+                ;;
+            esac
+            echo "Release APK is signed: $APK"
+          fi
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

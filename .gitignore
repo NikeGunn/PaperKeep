@@ -120,6 +120,10 @@ ScanVault_credentials.csv
 
 ScanVault_accessKeys.csv
 
+# Paperkeep signing credentials (local-only reference for Play Store upload)
+SIGNING_CREDENTIALS.txt
+PAPERKEEP_SIGNING.txt
+
 # -----------------------------------------------------------------------------
 # AWS / Terraform generated files
 # -----------------------------------------------------------------------------
